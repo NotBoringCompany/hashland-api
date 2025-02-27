@@ -12,14 +12,18 @@ var RDB *redis.Client
 
 // Initializes a connection to Redis.
 func InitRedis() {
-	RDB = redis.NewClient(&redis.Options{
-		Addr: os.Getenv("REDIS_URL"),
-		DB:   0,
-	})
+	redisURL := os.Getenv("REDIS_URL")
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("(InitRedis) Failed to parse Redis URL: %v", err)
+	}
 
-	_, err := RDB.Ping(context.Background()).Result()
+	RDB := redis.NewClient(opt)
+
+	_, err = RDB.Ping(context.Background()).Result()
 	if err != nil {
 		log.Fatalf("(InitRedis) Unable to connect to Redis: %v", err)
 	}
+
 	log.Println("(InitRedis) Connected to Redis")
 }
