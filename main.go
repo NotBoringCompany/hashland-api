@@ -20,7 +20,11 @@ func main() {
 	cfg.InitDB()
 	cfg.InitRedis()
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		Network:      "tcp",
+		ServerHeader: "Fiber",
+		AppName:      "Hashland API",
+	})
 
 	app.Use(logger.New()) // logs all requests
 	app.Use(cors.New())   // allows FE connections
