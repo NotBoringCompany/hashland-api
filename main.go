@@ -4,7 +4,8 @@ import (
 	"log"
 	"os"
 
-	cfg "github.com/NotBoringCompany/hashland-api/cfg"
+	"github.com/NotBoringCompany/hashland-api/pkg/db"
+	"github.com/NotBoringCompany/hashland-api/pkg/redis"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -17,8 +18,8 @@ func main() {
 	}
 
 	// init DB and redis
-	cfg.InitDB()
-	cfg.InitRedis()
+	db.InitDB()
+	redis.InitRedis()
 
 	app := fiber.New(fiber.Config{
 		Network:      "tcp",
