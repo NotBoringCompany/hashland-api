@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	db "github.com/NotBoringCompany/hashland-api/pkg"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -11,10 +12,12 @@ import (
 
 func main() {
 	port := os.Getenv("PORT")
-
 	if port == "" {
 		port = "8080"
 	}
+
+	// init DB
+	db.InitDB()
 
 	app := fiber.New()
 
