@@ -22,13 +22,5 @@ CREATE TABLE operator_wallets (
     signature TEXT NULL
 );
 
--- Operator Drill Association Table (Many-to-Many Relationship)
-CREATE TABLE operator_drills (
-    operator_id UUID NOT NULL REFERENCES operators(operator_id) ON DELETE CASCADE,
-    drill_id UUID NOT NULL REFERENCES drills(drill_id) ON DELETE CASCADE,
-    PRIMARY KEY (operator_id, drill_id)
-);
-
--- Indexes for Faster Lookups
+-- Index for Faster Lookups
 CREATE INDEX idx_operator_wallets_operator_id ON operator_wallets(operator_id);
-CREATE INDEX idx_operator_drills_operator_id ON operator_drills(operator_id);

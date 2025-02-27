@@ -42,3 +42,13 @@ CREATE TABLE drilling_cycles (
     cycle_complexity INT DEFAULT 1 CHECK (cycle_complexity >= 1),
     issued_hash FLOAT DEFAULT 0.0 CHECK (issued_hash >= 0)
 );
+
+-- Operator Drill Association Table (Many-to-Many Relationship)
+CREATE TABLE operator_drills (
+    operator_id UUID NOT NULL REFERENCES operators(operator_id) ON DELETE CASCADE,
+    drill_id UUID NOT NULL REFERENCES drills(drill_id) ON DELETE CASCADE,
+    PRIMARY KEY (operator_id, drill_id)
+);
+
+-- Index for Faster Lookups
+CREATE INDEX idx_operator_drills_operator_id ON operator_drills(operator_id);
