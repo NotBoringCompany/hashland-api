@@ -13,7 +13,7 @@ var DB *pgxpool.Pool
 // Initializes a connection to the Postgres database.
 func InitDB() {
 	connStr := os.Getenv("DATABASE_URL")
-	log.Fatalf("connStr: %v", connStr)
+	log.Printf("connStr: %v", connStr)
 	var err error
 	DB, err = pgxpool.New(context.Background(), connStr)
 	if err != nil {
