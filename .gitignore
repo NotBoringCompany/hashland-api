@@ -1,54 +1,54 @@
 .env
 
-# Ignore Rust build artifacts inside computation/
-computation/target/
-computation/debug/
-computation/release/
-computation/bench/
-computation/build/
+# Ignore Rust build artifacts inside `computation-rs/`
+computation-rs/target/
+computation-rs/debug/
+computation-rs/release/
+computation-rs/bench/
+computation-rs/build/
 
 # Ignore Rust dependency and temporary files
-computation/Cargo.lock
-computation/.cargo/
-computation/*.cache
-computation/*.tmp
+computation-rs/Cargo.lock
+computation-rs/.cargo/
+computation-rs/*.cache
+computation-rs/*.tmp
 
 # Ignore Rust compilation artifacts
-computation/**/*.rs.bk
-computation/*.rmeta
-computation/*.rlib
+computation-rs/**/*.rs.bk
+computation-rs/*.rmeta
+computation-rs/*.rlib
 
-# Ignore IDE/editor-specific files in computation
-computation/.idea/
-computation/.vscode/
-computation/*.iml
+# Ignore IDE/editor-specific files in computation-rs
+computation-rs/.idea/
+computation-rs/.vscode/
+computation-rs/*.iml
 
 # Ignore Rust debugging and tooling files
-computation/rustup-toolchain
-computation/rust-toolchain
-computation/rust-toolchain.toml
+computation-rs/rustup-toolchain
+computation-rs/rust-toolchain
+computation-rs/rust-toolchain.toml
 
-# Ignore logs and dumps in computation
-computation/*.log
-computation/*.stderr
-computation/*.stdout
+# Ignore logs and dumps in computation-rs
+computation-rs/*.log
+computation-rs/*.stderr
+computation-rs/*.stdout
 
 # Ignore ctags and other indexing files
-computation/tags
-computation/ctags
-computation/*.swp
-computation/*.swo
+computation-rs/tags
+computation-rs/ctags
+computation-rs/*.swp
+computation-rs/*.swo
 
 # Ignore Rust binary files
-computation/*.exe
-computation/*.dll
-computation/*.dylib
-computation/*.so
+computation-rs/*.exe
+computation-rs/*.dll
+computation-rs/*.dylib
+computation-rs/*.so
 
-# Ignore MacOS and Linux-specific files inside computation
-computation/.DS_Store
-computation/*.dSYM
-computation/Thumbs.db
+# Ignore MacOS and Linux-specific files inside computation-rs
+computation-rs/.DS_Store
+computation-rs/*.dSYM
+computation-rs/Thumbs.db
 
 # Ignore core dumps
-computation/core
+computation-rs/core
