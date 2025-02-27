@@ -13,9 +13,8 @@ var RDB *redis.Client
 // Initializes a connection to Redis.
 func InitRedis() {
 	RDB = redis.NewClient(&redis.Options{
-		Addr:     "redis.railway.internal:6379",
-		Password: os.Getenv("REDIS_PASSWORD"),
-		DB:       0,
+		Addr: os.Getenv("REDIS_URL"),
+		DB:   0,
 	})
 
 	_, err := RDB.Ping(context.Background()).Result()
