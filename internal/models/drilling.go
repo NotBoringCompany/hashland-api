@@ -1,12 +1,16 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // A drilling session is a period of time during which an operator starts drilling for $HASH
 // per drilling cycle.
 type DrillingSession struct {
-	SessionID  string    `json:"session_id" db:"session_id"`   // The session's database ID.
-	OperatorID string    `json:"operator_id" db:"operator_id"` // The database ID of the operator who started the session.
+	SessionID  int       `json:"session_id" db:"session_id"`   // The session's auto-incrementing database ID.
+	OperatorID uuid.UUID `json:"operator_id" db:"operator_id"` // The database ID of the operator who started the session.
 	StartTime  time.Time `json:"start_time" db:"start_time"`   // The session's start time.
 
 	// The session's end time.
@@ -19,11 +23,10 @@ type DrillingSession struct {
 // A drilling cycle is a period of time during which operators are able to compete to extract $HASH from the land.
 // This shares a similar concept to a "block" in blockchain mining.
 type DrillingCycle struct {
-	CycleID     string     `json:"cycle_id" db:"cycle_id"`           // The cycle's database ID.
-	Cycle       uint       `json:"cycle" db:"cycle"`                 // The cycle number.
+	CycleID     int        `json:"cycle_id" db:"cycle_id"`           // The cycle's auto-incrementing database ID. Also used to determine the cycle number since the genesis cycle.
 	StartTime   time.Time  `json:"start_time" db:"start_time"`       // The cycle's start time.
 	EndTime     *time.Time `json:"end_time,omitempty" db:"end_time"` // The cycle's end time.
-	ExtractorID string     `json:"extractor_id" db:"extractor_id"`   // The database ID of the drill that successfully extracted the $HASH of this cycle.
+	ExtractorID uuid.UUID  `json:"extractor_id" db:"extractor_id"`   // The database ID of the drill that successfully extracted the $HASH of this cycle.
 
 	// The number of operators who participated in this cycle.
 	// This also includes operators who start or end in the middle of the cycle and thus are ineligible to earn extractor rewards.
@@ -36,7 +39,7 @@ type DrillingCycle struct {
 // A drill is an equipment that operators use to extract $HASH from the land.
 // Think of it similar to a mining rig in blockchain mining.
 type Drill struct {
-	DrillID          string       `json:"drill_id" db:"drill_id"`                   // The drill's database ID.
+	DrillID          uuid.UUID    `json:"drill_id" db:"drill_id"`                   // The drill's database ID.
 	Version          DrillVersion `json:"version" db:"version"`                     // The drill's version.
 	Config           DrillConfig  `json:"config" db:"config"`                       // The drill's configuration.
 	ExtractorAllowed bool         `json:"extractor_allowed" db:"extractor_allowed"` // Whether this drill is allowed to be an extractor.
