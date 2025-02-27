@@ -1,1 +1,54 @@
 .env
+
+# Ignore Rust build artifacts inside computation/
+computation/target/
+computation/debug/
+computation/release/
+computation/bench/
+computation/build/
+
+# Ignore Rust dependency and temporary files
+computation/Cargo.lock
+computation/.cargo/
+computation/*.cache
+computation/*.tmp
+
+# Ignore Rust compilation artifacts
+computation/**/*.rs.bk
+computation/*.rmeta
+computation/*.rlib
+
+# Ignore IDE/editor-specific files in computation
+computation/.idea/
+computation/.vscode/
+computation/*.iml
+
+# Ignore Rust debugging and tooling files
+computation/rustup-toolchain
+computation/rust-toolchain
+computation/rust-toolchain.toml
+
+# Ignore logs and dumps in computation
+computation/*.log
+computation/*.stderr
+computation/*.stdout
+
+# Ignore ctags and other indexing files
+computation/tags
+computation/ctags
+computation/*.swp
+computation/*.swo
+
+# Ignore Rust binary files
+computation/*.exe
+computation/*.dll
+computation/*.dylib
+computation/*.so
+
+# Ignore MacOS and Linux-specific files inside computation
+computation/.DS_Store
+computation/*.dSYM
+computation/Thumbs.db
+
+# Ignore core dumps
+computation/core
