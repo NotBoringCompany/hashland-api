@@ -39,46 +39,22 @@ type DrillingCycle struct {
 // A drill is an equipment that operators use to extract $HASH from the land.
 // Think of it similar to a mining rig in blockchain mining.
 type Drill struct {
-	DrillID          uuid.UUID    `json:"drill_id" db:"drill_id"`                   // The drill's database ID.
-	Version          DrillVersion `json:"version" db:"version"`                     // The drill's version.
-	Config           DrillConfig  `json:"config" db:"config"`                       // The drill's configuration.
-	ExtractorAllowed bool         `json:"extractor_allowed" db:"extractor_allowed"` // Whether this drill is allowed to be an extractor.
-	Level            uint8        `json:"level" db:"level"`                         // The drill's level. Defaults to 1.
-	ActualEff        uint32       `json:"actual_eff" db:"actual_eff"`               // The drill's actual efficiency rating.
+	DrillID          uuid.UUID `json:"drill_id" db:"drill_id"`                   // The drill's database ID.
+	ConfigID         int       `json:"config_id" db:"config_id"`                 // FK (foreign key) to drill_configs table.
+	VersionID        int       `json:"version_id" db:"version_id"`               // FK to drill_versions table.
+	ExtractorAllowed bool      `json:"extractor_allowed" db:"extractor_allowed"` // Whether this drill can be an extractor.
+	Level            uint8     `json:"level" db:"level"`                         // The drill's current level. Defaults to 1.
+	ActualEff        uint32    `json:"actual_eff" db:"actual_eff"`               // The drill's actual efficiency rating.
 }
 
-// Represents a drill version.
-type DrillVersion string
-
-// Represents a drill configuration.
-type DrillConfig string
-
-const (
-	BasicConfig       DrillConfig = "BASIC_CONFIG"
-	IronboreConfig    DrillConfig = "IRONBORE_CONFIG"
-	BulwarkConfig     DrillConfig = "BULWARK_CONFIG"
-	TitanConfig       DrillConfig = "TITAN_CONFIG"
-	DreadnoughtConfig DrillConfig = "DREADNOUGHT_CONFIG"
-)
-
-const (
-	BasicVersion   DrillVersion = "BASIC_VERSION"
-	PremiumVersion DrillVersion = "PREMIUM_VERSION"
-)
-
-// A map of drill configurations. Using a struct avoids
-// unnecessary string comparisons and allows direct key lookups.
-var DrillConfigs = map[DrillConfig]struct{}{
-	BasicConfig:       {},
-	IronboreConfig:    {},
-	BulwarkConfig:     {},
-	TitanConfig:       {},
-	DreadnoughtConfig: {},
+// DrillConfig represents different drill configurations stored dynamically in the database.
+type DrillConfig struct {
+	ConfigID   int    `json:"config_id" db:"config_id"`     // Auto-incrementing ID.
+	ConfigName string `json:"config_name" db:"config_name"` // Name of the drill config (e.g., BASIC_CONFIG, TITAN_CONFIG).
 }
 
-// A map of drill versions. Using a struct avoids
-// unnecessary string comparisons and allows direct key lookups.
-var DrillVersions = map[DrillVersion]struct{}{
-	BasicVersion:   {},
-	PremiumVersion: {},
+// DrillVersion represents different drill versions stored dynamically in the database.
+type DrillVersion struct {
+	VersionID   int    `json:"version_id" db:"version_id"`     // Auto-incrementing ID.
+	VersionName string `json:"version_name" db:"version_name"` // Drill version (e.g., BASIC_VERSION, PREMIUM_VERSION).
 }

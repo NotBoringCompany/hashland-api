@@ -15,13 +15,13 @@ type Operator struct {
 	MaxEffAllowed       uint       `json:"max_eff_allowed" db:"max_eff_allowed"`             // Max cumulative efficiency rating.
 	MaxFuel             uint       `json:"max_fuel" db:"max_fuel"`                           // Maximum fuel capacity for all of the operator's drills.
 	CurrentFuel         uint       `json:"current_fuel" db:"current_fuel"`                   // Current fuel available for all of the operator's drills.
-	TGProfile           *TGProfile `json:"tg_profile,omitempty" db:"tg_profile"`             // Telegram profile (nullable); only if operator logs in via Telegram.
+	TGProfile           *TGProfile `json:"tg_profile,omitempty" db:"tg_profile"`             // Optional Telegram profile stored as JSONB.
 }
 
-// TGProfile stores optional Telegram authentication data.
+// TGProfile represents Telegram authentication data stored as JSONB in the database.
 type TGProfile struct {
-	TgID       string `json:"tg_id" db:"tg_id"`                       // The operator's Telegram ID.
-	TgUsername string `json:"tg_username,omitempty" db:"tg_username"` // Telegram username.
+	TGID       string `json:"tg_id"`                 // Telegram ID.
+	TGUsername string `json:"tg_username,omitempty"` // Telegram username.
 }
 
 // OperatorWallet represents a wallet instance linked to an operator after wallet connection/linking.
