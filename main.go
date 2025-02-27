@@ -18,7 +18,7 @@ func main() {
 
 	// init DB and redis
 	cfg.InitDB()
-	cfg.InitRedis()
+	// cfg.InitRedis()
 
 	app := fiber.New()
 
