@@ -3,7 +3,6 @@ package cfg
 import (
 	"context"
 	"log"
-	"net"
 	"os"
 
 	"github.com/redis/go-redis/v9"
@@ -13,28 +12,15 @@ var RDB *redis.Client
 
 // Initializes a connection to Redis.
 func InitRedis() {
-	redisURL := os.Getenv("REDIS_URL")
-	log.Printf("(DEBUG) Resolving: %s\n", redisURL)
+	RDB = redis.NewClient(&redis.Options{
+		Addr:     os.Getenv("REDIS_URL"),
+		Password: "",
+		DB:       0,
+	})
 
-	ips, err := net.LookupIP(redisURL)
+	_, err := RDB.Ping(context.Background()).Result()
 	if err != nil {
-		log.Fatalf("(InitRedis) Unable to resolve Redis URL: %v", err)
-	}
-
-	for _, ip := range ips {
-		log.Printf("(DEBUG) Redis resolved to: %s\n", ip.String())
-	}
-
-	opt, err := redis.ParseURL(redisURL)
-	if err != nil {
-		log.Fatalf("(InitRedis) Unable to parse Redis URL: %v", err)
-	}
-
-	RDB = redis.NewClient(opt)
-
-	_, err = RDB.Ping(context.Background()).Result()
-	if err != nil {
-		log.Fatalf("(InitRedis) Unable to connect to Redis: %v", err)
+		log.Fatalf("Unable to connect to Redis: %v", err)
 	}
 	log.Println("(InitRedis) Connected to Redis")
 }
