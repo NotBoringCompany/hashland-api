@@ -10,6 +10,7 @@ import (
 
 var RDB *redis.Client
 
+// Initializes a connection to Redis.
 func InitRedis() {
 	RDB = redis.NewClient(&redis.Options{
 		Addr:     os.Getenv("REDIS_URL"),
