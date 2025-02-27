@@ -13,6 +13,7 @@ var RDB *redis.Client
 // Initializes a connection to Redis.
 func InitRedis() {
 	redisURL := os.Getenv("REDIS_URL")
+	// parse the URL into an options struct
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		log.Fatalf("(InitRedis) Failed to parse Redis URL: %v", err)
