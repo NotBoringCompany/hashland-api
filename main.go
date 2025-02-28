@@ -18,7 +18,7 @@ func main() {
 	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Println("(main) Error loading .env file")
+		log.Fatal("(main) Error loading .env file (ignore if running on VPS)")
 	}
 
 	port := os.Getenv("PORT")
@@ -37,7 +37,9 @@ func main() {
 	})
 
 	app.Use(logger.New()) // logs all requests
-	app.Use(cors.New())   // allows FE connections
+	app.Use(cors.New(cors.Config{
+		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+	})) // allows FE connections
 
 	api.SetupRoutes(app) // setup API routes
 
