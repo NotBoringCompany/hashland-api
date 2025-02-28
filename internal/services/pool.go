@@ -33,15 +33,18 @@ func CreatePoolAdminService(adminPassword string, leaderIDStr string, maxOperato
 		maxOps = sql.NullInt64{Valid: false} // NULL in DB
 	}
 
-	// Parse RewardSystem and JoinPrerequisites from JSON
+	// Parse RewardSystem JSON into struct
 	var rewardSystem models.PoolRewardSystem
-	var joinPrerequisites models.PoolJoinPrerequisites
-
 	if err := json.Unmarshal([]byte(rewardSystemJSON), &rewardSystem); err != nil {
 		return 0, fmt.Errorf("(CreatePoolAdminService) invalid reward_system JSON: %w", err)
 	}
-	if err := json.Unmarshal([]byte(joinPrerequisitesJSON), &joinPrerequisites); err != nil {
-		return 0, fmt.Errorf("(CreatePoolAdminService) invalid join_prerequisites JSON: %w", err)
+
+	// Parse JoinPrerequisites JSON into struct (preserving individual null fields)
+	var joinPrerequisites models.PoolJoinPrerequisites
+	if joinPrerequisitesJSON != "" {
+		if err := json.Unmarshal([]byte(joinPrerequisitesJSON), &joinPrerequisites); err != nil {
+			return 0, fmt.Errorf("(CreatePoolAdminService) invalid join_prerequisites JSON: %w", err)
+		}
 	}
 
 	// Prepare pool model
