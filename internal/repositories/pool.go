@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/NotBoringCompany/hashland-api/internal/models"
@@ -16,13 +17,25 @@ func CreatePoolAdmin(pool models.Pool) (int, error) {
 		VALUES ($1, $2, $3, $4) RETURNING pool_id
 	`
 
-	err := db.GetDB().QueryRow(
+	// Convert PoolRewardSystem and PoolJoinPrerequisites to JSONB
+	rewardSystemJSON, err := json.Marshal(pool.RewardSystem)
+	if err != nil {
+		return 0, fmt.Errorf("(CreatePoolAdmin) Failed to serialize reward system: %w", err)
+	}
+
+	joinPrerequisitesJSON, err := json.Marshal(pool.JoinPrerequisites)
+	if err != nil {
+		return 0, fmt.Errorf("(CreatePoolAdmin) Failed to serialize join prerequisites: %w", err)
+	}
+
+	// Execute query
+	err = db.DB.QueryRow(
 		context.Background(),
 		query,
 		pool.LeaderID,
 		pool.MaxOperators,
-		pool.RewardSystem,
-		pool.JoinPrerequisites,
+		rewardSystemJSON,
+		joinPrerequisitesJSON,
 	).Scan(&poolID)
 
 	if err != nil {
