@@ -38,6 +38,7 @@ func main() {
 
 	app.Use(logger.New()) // logs all requests
 	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
 		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
 	})) // allows FE connections
 
