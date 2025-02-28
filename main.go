@@ -18,7 +18,7 @@ func main() {
 	// Load environment variables from .env file
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("(main) Error loading .env file (ignore if running on VPS)")
+		fmt.Println("(main) Error loading .env file (ignore if running on VPS)")
 	}
 
 	port := os.Getenv("PORT")
