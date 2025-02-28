@@ -8,5 +8,6 @@ CREATE TABLE shop_drills (
     purchase_cost FLOAT NOT NULL CHECK (purchase_cost >= 0),
     base_eff INT NOT NULL CHECK (base_eff >= 0),
     max_level SMALLINT NOT NULL CHECK (max_level > 0),
-    upgrade_costs JSONB NOT NULL -- Stores level-based upgrade costs as JSONB
+    upgrade_costs JSONB NOT NULL, -- Stores level-based upgrade costs as JSONB
+    UNIQUE (drill_config_id) -- Ensure uniqueness for `ON CONFLICT`
 );

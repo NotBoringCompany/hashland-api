@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Pools Table (Stores pools and reward settings)
 CREATE TABLE pools (
     pool_id SERIAL PRIMARY KEY,
-    leader_id UUID NOT NULL REFERENCES operators(operator_id) ON DELETE CASCADE,
+    leader_id UUID UNIQUE NOT NULL REFERENCES operators(operator_id) ON DELETE CASCADE,
     max_operators INT DEFAULT NULL, -- NULL means unlimited members
     reward_system JSONB NOT NULL, -- Reward distribution stored as JSONB
     join_prerequisites JSONB NOT NULL -- Prerequisites stored as JSONB
