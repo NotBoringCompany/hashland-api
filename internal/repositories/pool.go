@@ -10,6 +10,7 @@ import (
 )
 
 // CreatePoolAdmin is a version of `CreatePool` that bypasses the prerequisites for opening a pool. Only callable by admin.
+// Handles the database query and logic for creating a new pool.
 func CreatePoolAdmin(pool models.Pool) (int, error) {
 	var poolID int
 	query := `

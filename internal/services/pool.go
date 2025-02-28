@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// CreatePoolAdminService handles the logic for admin pool creation.
+// CreatePoolAdminService handles the validation and business logic for `CreatePoolAdmin`.
 func CreatePoolAdminService(adminPassword string, leaderIDStr string, maxOperators int, rewardSystemJSON, joinPrerequisitesJSON string) (int, error) {
 	// Validate Admin Password
 	if adminPassword != os.Getenv("ADMIN_PASSWORD") {
