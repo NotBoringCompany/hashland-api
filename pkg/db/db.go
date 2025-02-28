@@ -21,3 +21,11 @@ func InitDB() {
 
 	log.Println("(InitDB) Connected to Postgres")
 }
+
+// GetDB returns the Postgres connection.
+func GetDB() *pgxpool.Pool {
+	if DB == nil {
+		log.Fatal("(GetDB) Database not initialized. Call InitDB() first.")
+	}
+	return DB
+}
