@@ -45,6 +45,10 @@ func main() {
 		return c.JSON(fiber.Map{"message": "Hashland API is running!"})
 	})
 
+	for _, route := range app.GetRoutes() {
+		fmt.Println(route.Method, route.Path)
+	}
+
 	// start the server
 	log.Println("🚀 Server running on port", port)
 	log.Fatal(app.Listen(":" + port))
