@@ -1,4 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { DrillConfig, DrillVersion } from 'common/enums/drill.enum';
 import { Document } from 'mongoose';
 
 /**
@@ -14,17 +15,17 @@ export class Drill extends Document {
 
   @Prop({
     type: String,
-    enum: ['BASIC', 'PREMIUM'],
+    enum: DrillVersion,
     required: true,
-    default: 'BASIC',
+    default: DrillVersion.BASIC,
   })
   version: string;
 
   @Prop({
     type: String,
-    enum: ['BASIC', 'IRONBORE', 'BULWARK', 'TITAN', 'DREADNOUGHT'],
+    enum: DrillConfig,
     required: true,
-    default: 'BASIC',
+    default: DrillConfig.BASIC,
   })
   config: string;
 
