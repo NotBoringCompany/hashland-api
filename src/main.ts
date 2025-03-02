@@ -22,6 +22,8 @@ async function bootstrap() {
     allowedHeaders: '*',
   });
 
+  console.log(`Mongo URI: ${process.env.MONGO_URI}`);
+
   // Start Fastify server
   const PORT = process.env.PORT || 8080;
   await app.listen(PORT, '0.0.0.0');
