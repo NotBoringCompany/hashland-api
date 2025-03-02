@@ -23,6 +23,6 @@ import { DatabaseService } from './database.service';
     }),
   ],
   providers: [DatabaseService], // Registers the DatabaseService for managing connection events
-  exports: [MongooseModule], // Exports Mongoose so other modules can use it
+  exports: [MongooseModule, DatabaseService], // Exports Mongoose so other modules can use it
 })
 export class DatabaseModule {}
