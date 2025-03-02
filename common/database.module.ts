@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DatabaseService } from './database.service';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 
 /**
  * DatabaseModule initializes MongoDB connection
@@ -11,7 +11,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   imports: [
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
+      useFactory: () => {
         console.log(`Mongo URI: ${process.env.MONGO_URI}`);
 
         if (!process.env.MONGO_URI) {
@@ -19,11 +19,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         }
 
         return {
-          uri: configService.get<string>('MONGO_URI'),
-          dbName: configService.get<string>('DATABASE_NAME', 'test'),
+          uri: process.env.MONGO_URI,
+          dbName: process.env.DATABASE_NAME || 'test',
           connectionFactory: (connection) => {
             console.log(
-              `✅ MongoDB Connected: ${configService.get<string>('MONGO_URI')}`,
+              `✅ MongoDB Connected: ${process.env.MONGO_URI}/${process.env.DATABASE_NAME}`,
             );
             return connection;
           },
