@@ -57,4 +57,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     console.log('🔌 Closing MongoDB Connection...');
     await this.connection.close();
   }
+
+  getPoolStatus() {
+    return {
+      maxPoolSize: this.connection.getClient().options.maxPoolSize,
+      minPoolSize: this.connection.getClient().options.minPoolSize,
+      isConnected:
+        this.connection.readyState === 1 ? '✅ Connected' : '❌ Not Connected',
+    };
+  }
 }

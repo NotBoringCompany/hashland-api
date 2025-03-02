@@ -3,26 +3,33 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { DatabaseService } from './database.service';
 
 /**
- * The DatabaseModule is responsible for establishing a MongoDB connection
- * and managing database-related services.
- *
- * It uses `MongooseModule.forRootAsync()` to dynamically load MongoDB connection settings
- * from environment variables, ensuring flexibility and best practices.
+ * DatabaseModule initializes MongoDB connection
+ * and applies connection pooling.
  */
 @Module({
   imports: [
-    /**
-     * Configures MongoDB connection using `MongooseModule.forRootAsync()`.
-     * This allows dynamic configuration, making it more flexible for different environments.
-     */
     MongooseModule.forRootAsync({
       useFactory: () => ({
         uri: process.env.MONGO_URI,
         dbName: process.env.DATABASE_NAME ?? 'test',
+        connectionFactory: (connection) => {
+          console.log(`✅ MongoDB Connected: ${process.env.MONGO_URI}`);
+          return connection;
+        },
+        // ✅ Connection Pooling Settings (optimized for high concurrency)
+        maxPoolSize: parseInt(process.env.MONGO_MAX_POOL_SIZE) || 50, // Default: 50 connections
+        minPoolSize: parseInt(process.env.MONGO_MIN_POOL_SIZE) || 5, // Keep at least 5 connections active
+        serverSelectionTimeoutMS:
+          parseInt(process.env.MONGO_SERVER_SELECTION_TIMEOUT) || 30000,
+        socketTimeoutMS: parseInt(process.env.MONGO_SOCKET_TIMEOUT) || 45000,
+        waitQueueTimeoutMS:
+          parseInt(process.env.MONGO_WAIT_QUEUE_TIMEOUT) || 5000,
+        heartbeatFrequencyMS:
+          parseInt(process.env.MONGO_HEARTBEAT_FREQUENCY) || 10000,
       }),
     }),
   ],
-  providers: [DatabaseService], // Registers the DatabaseService for managing connection events
-  exports: [MongooseModule, DatabaseService], // Exports Mongoose so other modules can use it
+  providers: [DatabaseService], // Registers DatabaseService for event handling
+  exports: [MongooseModule, DatabaseService], // Exports both Mongoose & DatabaseService
 })
 export class DatabaseModule {}
