@@ -12,9 +12,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
-        console.log(`Mongo URI: ${configService.get<string>('MONGO_URI')}`);
+        console.log(`Mongo URI: ${process.env.MONGO_URI}`);
 
-        if (!configService.get<string>('MONGO_URI')) {
+        if (!process.env.MONGO_URI) {
           throw new Error('❌ MONGO_URI is missing. Check your .env file.');
         }
 

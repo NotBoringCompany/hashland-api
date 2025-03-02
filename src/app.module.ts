@@ -8,6 +8,7 @@ import { ConfigModule } from '@nestjs/config';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true, // Makes ConfigModule available throughout the application
+      envFilePath: '.env', // Load environment variables from .env file
     }),
     DatabaseModule,
   ],
