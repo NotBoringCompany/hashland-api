@@ -1,13 +1,15 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from 'common/database.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // ✅ Ensure ConfigModule is globally available
-    DatabaseModule, // ✅ Import DatabaseModule instead of MongooseModule
+    ConfigModule.forRoot({
+      isGlobal: true, // Makes ConfigModule available throughout the application
+    }),
+    DatabaseModule,
   ],
   controllers: [AppController],
   providers: [AppService],
