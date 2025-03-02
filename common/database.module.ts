@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DatabaseService } from './database.service';
 
+console.log(`🔍 MONGO_URI: ${process.env.MONGO_URI || 'Not Found!'}`); // ✅ Debugging log
+
 /**
  * DatabaseModule initializes MongoDB connection
  * and applies connection pooling.
