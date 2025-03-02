@@ -42,6 +42,6 @@ import { ConfigModule } from '@nestjs/config';
     }),
   ],
   providers: [DatabaseService], // Registers DatabaseService for event handling
-  exports: [MongooseModule], // Exports MongooseModule
+  exports: [MongooseModule, DatabaseService], // Exports MongooseModule and DatabaseService to be used by other modules
 })
 export class DatabaseModule {}
