@@ -4,7 +4,7 @@ import { Document } from 'mongoose';
 /**
  * `Operator` represents users who participate in drilling for $HASH.
  */
-@Schema({ timestamps: true })
+@Schema({ timestamps: true, collection: 'Operators' })
 export class Operator extends Document {
   /**
    * A unique username accompanying the operator.

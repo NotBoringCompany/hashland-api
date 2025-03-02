@@ -4,12 +4,12 @@ import { Document, Types } from 'mongoose';
 /**
  * `OperatorWallet` represents a wallet linked by an operator to calculate asset equity, amongst other things.
  */
-@Schema({ timestamps: true }) // ✅ Adds createdAt & updatedAt
+@Schema({ timestamps: true, collection: 'OperatorWallets' })
 export class OperatorWallet extends Document {
   /**
    * The operator's database ID.
    */
-  @Prop({ type: Types.ObjectId, required: true, index: true })
+  @Prop({ type: Types.ObjectId, required: true, index: true, ref: 'Operators' })
   operatorId: Types.ObjectId;
 
   /**
