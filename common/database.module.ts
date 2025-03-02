@@ -12,9 +12,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
-        console.log(`Mongo URI: ${process.env.MONGO_URI}`);
+        console.log(`Mongo URI: ${configService.get<string>('MONGO_URI')}`);
 
-        if (!process.env.MONGO_URI) {
+        if (!configService.get<string>('MONGO_URI')) {
           throw new Error('❌ MONGO_URI is missing. Check your .env file.');
         }
 
@@ -22,7 +22,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
           uri: configService.get<string>('MONGO_URI'),
           dbName: configService.get<string>('DATABASE_NAME', 'test'),
           connectionFactory: (connection) => {
-            console.log(`✅ MongoDB Connected: ${process.env.MONGO_URI}`);
+            console.log(
+              `✅ MongoDB Connected: ${configService.get<string>('MONGO_URI')}`,
+            );
             return connection;
           },
           // ✅ Connection Pooling Settings (optimized for high concurrency)
