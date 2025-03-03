@@ -28,7 +28,7 @@ export class AppController {
   }
 
   /**
-   * Health check API for Redis/Bull queue.
+   * GET `/queue-status` - Health check API for Bull queue.
    */
   @Get('/queue-status')
   async getQueueStatus() {

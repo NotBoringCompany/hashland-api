@@ -15,6 +15,7 @@ import Redis from 'ioredis';
         const redisUri = new URL(process.env.REDIS_URI);
 
         const redis = new Redis({
+          family: 0,
           host: redisUri.hostname,
           port: parseInt(redisUri.port),
           username: redisUri.username,
