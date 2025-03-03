@@ -29,18 +29,6 @@ export class Operator extends Document {
   maxEffAllowed: number;
 
   /**
-   * The maximum fuel capacity of the operator's drills.
-   */
-  @Prop({ required: true, default: 100 })
-  maxFuel: number;
-
-  /**
-   * The current fuel capacity of the operator's drills.
-   */
-  @Prop({ required: true, default: 100 })
-  currentFuel: number;
-
-  /**
    * An optional Telegram profile. Should only be set if the operator logs in via Telegram.
    */
   @Prop({

@@ -13,6 +13,9 @@ export class Drill extends Document {
   @Prop({ type: String, required: true })
   operatorId: string;
 
+  /**
+   * The version of the drill.
+   */
   @Prop({
     type: String,
     enum: DrillVersion,
@@ -21,6 +24,9 @@ export class Drill extends Document {
   })
   version: string;
 
+  /**
+   * The configuration of the drill.
+   */
   @Prop({
     type: String,
     enum: DrillConfig,
@@ -29,12 +35,21 @@ export class Drill extends Document {
   })
   config: string;
 
+  /**
+   * If this drill is allowed to be an extractor.
+   */
   @Prop({ type: Boolean, required: true, default: false })
   extractorAllowed: boolean;
 
+  /**
+   * The level of the drill.
+   */
   @Prop({ type: Number, required: true, default: 1 })
   level: number;
 
+  /**
+   * The current EFF rating of the drill.
+   */
   @Prop({ type: Number, required: true, default: 0 })
   actualEff: number;
 }

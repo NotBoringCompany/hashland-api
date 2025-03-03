@@ -15,7 +15,7 @@ export class OperatorWallet extends Document {
   /**
    * The operator's wallet address.
    */
-  @Prop({ required: true })
+  @Prop({ required: true, index: true })
   address: string;
 
   /**
