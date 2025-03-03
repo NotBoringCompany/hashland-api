@@ -5,7 +5,7 @@ import { DatabaseModule } from 'src/common/database.module';
 import { ConfigModule } from '@nestjs/config';
 import { PoolsModule } from './pools/pools.module';
 import { ShopDrillsModule } from './shops/shop-drill.module';
-import { BullQueueModule } from './common/bull-queue';
+import { BullQueueModule } from './common/bull-queue.module';
 
 @Module({
   imports: [
