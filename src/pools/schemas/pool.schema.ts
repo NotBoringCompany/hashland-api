@@ -9,8 +9,13 @@ export class Pool extends Document {
   /**
    * The database ID of the leader, who is an operator responsible for managing the pool.
    */
-  @Prop({ type: Types.ObjectId, required: true, ref: 'Operators' })
-  leaderId: Types.ObjectId;
+  @Prop({
+    type: Types.ObjectId,
+    ref: 'Operators',
+    default: null,
+    required: false,
+  })
+  leaderId?: Types.ObjectId | null;
 
   /**
    * The name of the pool.
@@ -45,6 +50,7 @@ export class Pool extends Document {
       activePoolOperators: { type: Number, required: true, default: 48.0 },
     },
     required: true,
+    _id: false,
   })
   rewardSystem: {
     extractorOperator: number;
@@ -61,6 +67,7 @@ export class Pool extends Document {
     },
     required: false,
     default: null,
+    _id: false,
   })
   joinPrerequisites?: {
     tgChannelId?: string | null;
