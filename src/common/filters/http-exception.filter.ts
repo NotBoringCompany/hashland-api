@@ -5,14 +5,14 @@ import {
   HttpException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { FastifyReply } from 'fastify';
 import { ApiResponse } from '../dto/response.dto';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
+    const response = ctx.getResponse<FastifyReply>(); // Correctly using Fastify's response object
 
     let status = 500;
     let message = 'An unexpected error occurred';
@@ -25,14 +25,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
           ? exceptionResponse
           : (exceptionResponse as any).message;
     } else {
-      // ✅ Log the full exception details for debugging
       console.error('❌ Unhandled Exception:', exception);
-
-      // ✅ If the exception is not an HttpException, wrap it in an InternalServerErrorException
       exception = new InternalServerErrorException(message);
     }
 
-    // ✅ Ensure `message` is always a string
-    response.status(status).json(new ApiResponse<null>(status, message));
+    // Fastify uses `response.code(status).send()`
+    response.code(status).send(new ApiResponse<null>(status, message));
   }
 }
