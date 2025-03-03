@@ -66,7 +66,6 @@ export class PoolsService {
     projection?: string | Record<string, 1 | 0>,
   ): Promise<ApiResponse<{ pools: Partial<Pool[]> }>> {
     try {
-      // return this.poolModel.find().select(projection).exec();
       const pools = await this.poolModel.find().select(projection).exec();
 
       return new ApiResponse<{ pools: Partial<Pool[]> }>(
