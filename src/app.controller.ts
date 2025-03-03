@@ -1,12 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import { DatabaseService } from 'src/common/database.service';
+import { BullQueueService } from './common/bull-queue.service';
 
 @Controller()
 export class AppController {
   constructor(
     private readonly appService: AppService,
     private readonly databaseService: DatabaseService,
+    private readonly bullQueueService: BullQueueService,
   ) {}
 
   /**
@@ -23,5 +25,13 @@ export class AppController {
   @Get('health')
   checkDatabaseHealth() {
     return this.databaseService.getPoolStatus();
+  }
+
+  /**
+   * Health check API for Redis/Bull queue.
+   */
+  @Get('/queue-status')
+  async getQueueStatus() {
+    return this.bullQueueService.getQueueStatus();
   }
 }

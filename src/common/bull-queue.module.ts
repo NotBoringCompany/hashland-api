@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule } from '@nestjs/config';
+import { BullQueueService } from './bull-queue.service';
 
 /**
  * `BullQueueModule` initializes the Redis connection for Bull job queues.
@@ -20,7 +21,9 @@ import { ConfigModule } from '@nestjs/config';
         };
       },
     }),
+    BullModule.registerQueue({ name: 'drilling-cycles' }), // Registers the queue
   ],
-  exports: [BullModule], // ✅ Allow other modules to use Bull queues
+  providers: [BullQueueService], // Provides BullQueueService
+  exports: [BullModule, BullQueueService], // Allow other modules to use Bull queues
 })
 export class BullQueueModule {}
