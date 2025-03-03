@@ -17,7 +17,7 @@ import { BullQueueService } from './bull-queue.service';
         }
 
         return {
-          redis: `${process.env.REDIS_URI}`,
+          redis: `${process.env.REDIS_URI + '?family=0'}`, // `family=0` forces IPv4 and IPv6 lookup
         };
       },
     }),
