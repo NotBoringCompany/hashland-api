@@ -5,7 +5,11 @@ import { Document } from 'mongoose';
 /**
  * `ShopDrill` represents a drill that can be purchased from the shop.
  */
-@Schema({ timestamps: true, collection: 'ShopDrills' })
+@Schema({
+  timestamps: true,
+  collection: 'ShopDrills',
+  versionKey: false,
+})
 export class ShopDrill extends Document {
   /**
    * The version of the drill.

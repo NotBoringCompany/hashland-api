@@ -5,12 +5,12 @@ import { Document } from 'mongoose';
 /**
  * `Drill` represents a drill owned by an operator to drill and extract $HASH.
  */
-@Schema({ collection: 'Drills' })
+@Schema({ collection: 'Drills', versionKey: false })
 export class Drill extends Document {
   /**
    * The database ID of the operator who owns the drill.
    */
-  @Prop({ type: String, required: true })
+  @Prop({ type: String, required: true, index: true })
   operatorId: string;
 
   /**

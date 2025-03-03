@@ -4,7 +4,11 @@ import { Document, Types } from 'mongoose';
 /**
  * `PoolOperator` keeps track of an operator's pool, in case they've joined one.
  */
-@Schema({ timestamps: true, collection: 'PoolOperators' })
+@Schema({
+  timestamps: true,
+  collection: 'PoolOperators',
+  versionKey: false,
+})
 export class PoolOperator extends Document {
   /**
    * The database ID of the operator who joined the pool.
@@ -14,6 +18,7 @@ export class PoolOperator extends Document {
     required: true,
     ref: 'Operators',
     unique: true,
+    index: true,
   })
   operatorId: Types.ObjectId;
 

@@ -4,7 +4,11 @@ import { Document, Types } from 'mongoose';
 /**
  * `OperatorWallet` represents a wallet linked by an operator to calculate asset equity, amongst other things.
  */
-@Schema({ timestamps: true, collection: 'OperatorWallets' })
+@Schema({
+  timestamps: true,
+  collection: 'OperatorWallets',
+  versionKey: false,
+})
 export class OperatorWallet extends Document {
   /**
    * The operator's database ID.

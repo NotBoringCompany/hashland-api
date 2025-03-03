@@ -4,12 +4,12 @@ import { Document, Types } from 'mongoose';
 /**
  * `DrillingSession` represents a period of time where an operator starts drilling for $HASH until they end the session or run out of fuel.
  */
-@Schema({ collection: 'DrillingSessions' })
+@Schema({ collection: 'DrillingSessions', versionKey: false })
 export class DrillingSession extends Document {
   /**
    * The database ID of the operator who started the drilling session.
    */
-  @Prop({ type: Types.ObjectId, ref: 'Operators', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'Operators', required: true, index: true })
   operatorId: Types.ObjectId;
 
   /**

@@ -1,5 +1,37 @@
 import { Prop } from '@nestjs/mongoose';
-import { TxParsedMessage } from 'src/shops/schemas/shop-purchase.schema';
+
+/**
+ * `TxParsedMessage` represents the parsed message body from a transaction made in TON (in the future, this will be branched to support other blockchains).
+ *
+ * Some fields are shortened to reduce the amount of bytes in the payload to reduce TX costs.
+ *
+ * Used for verifying transactions.
+ */
+export class TxParsedMessage {
+  /**
+   * The name or any identifier of the item being purchased.
+   */
+  @Prop({ required: false })
+  item: string;
+
+  /**
+   * The amount of the item being purchased.
+   */
+  @Prop({ required: false })
+  amt: number;
+
+  /**
+   * The cost of the item being purchased.
+   */
+  @Prop({ required: false })
+  cost: number;
+
+  /**
+   * The currency used to purchase the item.
+   */
+  @Prop({ required: false })
+  curr: string;
+}
 
 /**
  * `BlockchainData` represents the data received from the blockchain when a user purchases an item from the shop using crypto.

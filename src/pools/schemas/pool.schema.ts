@@ -4,7 +4,7 @@ import { Document, Types } from 'mongoose';
 /**
  * `Pool` represents a group where operators can join to increase cumulative EFF ratings and have a higher chance to extract more $HASH per cycle.
  */
-@Schema({ timestamps: true, collection: 'Pools' })
+@Schema({ timestamps: true, collection: 'Pools', versionKey: false })
 export class Pool extends Document {
   /**
    * The database ID of the leader, who is an operator responsible for managing the pool.

@@ -2,75 +2,16 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { ShopItem } from 'src/common/enums/shop.enum';
 import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
 import { Document, Types } from 'mongoose';
-
-/**
- * `TxParsedMessage` represents the parsed message body from a transaction made in TON (in the future, this will be branched to support other blockchains).
- *
- * Some fields are shortened to reduce the amount of bytes in the payload to reduce TX costs.
- *
- * Used for verifying transactions.
- */
-export class TxParsedMessage {
-  /**
-   * The name or any identifier of the item being purchased.
-   */
-  @Prop({ required: false })
-  item: string;
-
-  /**
-   * The amount of the item being purchased.
-   */
-  @Prop({ required: false })
-  amt: number;
-
-  /**
-   * The cost of the item being purchased.
-   */
-  @Prop({ required: false })
-  cost: number;
-
-  /**
-   * The currency used to purchase the item.
-   */
-  @Prop({ required: false })
-  curr: string;
-}
-
-/**
- * `TGStarsData` represents the data received from the Telegram payment provider when a user purchases an item from the shop using Telegram Stars.
- */
-export class TGStarsData {
-  /**
-   * The invoice payload of the payment (contains the metadata/details of the purchase).
-   */
-  @Prop({ required: true })
-  invoicePayload: string;
-
-  /**
-   * The Telegram payment charge ID.
-   *
-   */
-  @Prop({ required: true })
-  telegramPaymentChargeId: string;
-
-  /**
-   * The provider payment charge ID.
-   *
-   */
-  @Prop({ required: true })
-  providerPaymentChargeId: string;
-
-  /**
-   * If the initial payment was successful; otherwise, it needs to be handled manually.
-   */
-  @Prop({ required: true })
-  success: boolean;
-}
+import { TGStarsData } from 'src/common/schemas/telegram-payment.schema';
 
 /**
  * `ShopPurchase` represents a purchase made in the shop.
  */
-@Schema({ timestamps: true, collection: 'ShopPurchases' })
+@Schema({
+  timestamps: true,
+  collection: 'ShopPurchases',
+  versionKey: false,
+})
 export class ShopPurchase extends Document {
   /**
    * The database ID of the operator who made the purchase.

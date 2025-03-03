@@ -7,8 +7,14 @@ import { Document, Types } from 'mongoose';
  * Each cycle lasts a specific amount of seconds. Towards the end of the cycle, one drill will be selected as the 'extractor' (similar to a miner or a validator in a blockchain) to extract $HASH.
  * Other operators may or may not earn $HASH based on a few factors.
  */
-@Schema({ collection: 'DrillingCycles' })
+@Schema({ collection: 'DrillingCycles', versionKey: false })
 export class DrillingCycle extends Document {
+  /**
+   * The current cycle number.
+   */
+  @Prop({ type: Number, required: true, default: 1, index: true })
+  cycleNumber: number;
+
   /**
    * The start time of the drilling cycle.
    */

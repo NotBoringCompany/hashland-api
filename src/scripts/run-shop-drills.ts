@@ -9,9 +9,9 @@ export async function runShopDrills() {
 
   const result = await shopDrillsService.createShopDrill(
     DrillVersion.PREMIUM,
-    DrillConfig.DREADNOUGHT,
-    35,
-    40000,
+    DrillConfig.IRONBORE,
+    5.5,
+    15400,
     20,
   );
   console.log('✅ createShopDrill result:', result);
