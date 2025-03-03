@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { ShopItem } from 'common/enums/shop.enum';
-import { BlockchainData } from 'common/schemas/blockchain-payment.schema';
+import { ShopItem } from 'src/common/enums/shop.enum';
+import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
 import { Document, Types } from 'mongoose';
 
 /**

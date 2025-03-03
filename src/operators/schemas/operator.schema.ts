@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { GAME_CONSTANTS } from 'common/constants/game.constants';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { Document } from 'mongoose';
 
 /**

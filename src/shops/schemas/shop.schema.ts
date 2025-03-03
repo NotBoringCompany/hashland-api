@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { DrillConfig } from 'common/enums/drill.enum';
+import { DrillConfig } from 'src/common/enums/drill.enum';
 import { Document } from 'mongoose';
 
 /**

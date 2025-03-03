@@ -15,7 +15,18 @@ export class Pool extends Document {
   /**
    * The name of the pool.
    */
-  @Prop({ type: String, required: true, index: true, unique: true })
+  @Prop({
+    type: String,
+    required: true,
+    unique: true,
+    index: true,
+    maxlength: 16, // Ensures name is at most 16 characters
+    validate: {
+      validator: (v: string) => /^[a-zA-Z0-9-_]+$/.test(v), // Allows only letters, numbers, hyphens, and underscores
+      message:
+        'Pool name can only contain letters, numbers, hyphens (-), and underscores (_), and must be max 16 characters.',
+    },
+  })
   name: string;
 
   /**
