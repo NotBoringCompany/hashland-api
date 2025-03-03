@@ -5,6 +5,7 @@ import { DatabaseModule } from 'src/common/database.module';
 import { ConfigModule } from '@nestjs/config';
 import { PoolsModule } from './pools/pools.module';
 import { ShopDrillsModule } from './shops/shop-drill.module';
+import { BullQueueModule } from './common/bull-queue';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { ShopDrillsModule } from './shops/shop-drill.module';
       envFilePath: '.env', // Load environment variables from .env file
     }),
     DatabaseModule,
+    BullQueueModule,
     PoolsModule,
     ShopDrillsModule,
   ],
