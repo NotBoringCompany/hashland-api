@@ -6,6 +6,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PoolsModule } from './pools/pools.module';
 import { ShopDrillsModule } from './shops/shop-drill.module';
 import { BullQueueModule } from './common/bull-queue.module';
+import { RedisModule } from './common/redis.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { BullQueueModule } from './common/bull-queue.module';
       envFilePath: '.env', // Load environment variables from .env file
     }),
     DatabaseModule,
+    RedisModule,
     BullQueueModule,
     PoolsModule,
     ShopDrillsModule,

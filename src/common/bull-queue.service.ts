@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import { RedisService } from './redis.service';
 
 @Injectable()
 export class BullQueueService implements OnModuleInit, OnModuleDestroy {
@@ -13,6 +14,7 @@ export class BullQueueService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     @InjectQueue('drilling-cycles') private drillingCycleQueue: Queue,
+    private readonly redisService: RedisService, // ✅ Inject RedisService
   ) {}
 
   /**
@@ -23,6 +25,12 @@ export class BullQueueService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.drillingCycleQueue.getJobCounts();
       this.logger.log('✅ Bull Queue "drilling-cycles" is available.');
+
+      // ✅ Log Redis status
+      const redisStatus = await this.redisService.get('drilling-cycle:current');
+      this.logger.log(
+        `🔍 Current Drilling Cycle in Redis: ${redisStatus || 'Not Set'}`,
+      );
     } catch (error) {
       this.logger.error('❌ Bull Queue initialization failed:', error);
     }
@@ -56,5 +64,13 @@ export class BullQueueService implements OnModuleInit, OnModuleDestroy {
         error: error.message,
       };
     }
+  }
+
+  /**
+   * Returns the current cycle number from Redis.
+   */
+  async getCurrentCycleNumber(): Promise<number> {
+    const cycle = await this.redisService.get('drilling-cycle:current');
+    return cycle ? parseInt(cycle, 10) : 0;
   }
 }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule } from '@nestjs/config';
 import { BullQueueService } from './bull-queue.service';
+import { RedisModule } from './redis.module';
 
 /**
  * `BullQueueModule` initializes the Redis connection for Bull job queues.
@@ -10,7 +11,7 @@ import { BullQueueService } from './bull-queue.service';
   imports: [
     ConfigModule, // ✅ Ensure environment variables are loaded
     BullModule.forRootAsync({
-      imports: [ConfigModule],
+      imports: [ConfigModule, RedisModule], // Inject RedisModule for Redis configuration
       useFactory: async () => {
         if (!process.env.REDIS_URI) {
           throw new Error('❌ REDIS_URI is missing. Check your .env file.');
