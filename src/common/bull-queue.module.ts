@@ -16,8 +16,16 @@ import { BullQueueService } from './bull-queue.service';
           throw new Error('❌ REDIS_URI is missing. Check your .env file.');
         }
 
+        const redisUri = new URL(process.env.REDIS_URI);
+
         return {
-          redis: `${process.env.REDIS_URI + '?family=0'}`, // `family=0` forces IPv4 and IPv6 lookup
+          redis: {
+            family: 0,
+            host: redisUri.hostname,
+            port: parseInt(redisUri.port),
+            username: redisUri.username,
+            password: redisUri.password,
+          },
         };
       },
     }),
