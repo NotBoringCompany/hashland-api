@@ -1,4 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { GAME_CONSTANTS } from 'common/constants/game.constants';
 import { Document } from 'mongoose';
 
 /**
@@ -27,6 +28,24 @@ export class Operator extends Document {
    */
   @Prop({ required: true, default: 0 })
   maxEffAllowed: number;
+
+  /**
+   * The maximum fuel capacity of the operator's drills.
+   */
+  @Prop({
+    required: true,
+    default: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
+  })
+  maxFuel: number;
+
+  /**
+   * The current fuel capacity of the operator's drills.
+   */
+  @Prop({
+    required: true,
+    default: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
+  })
+  currentFuel: number;
 
   /**
    * An optional Telegram profile. Should only be set if the operator logs in via Telegram.
