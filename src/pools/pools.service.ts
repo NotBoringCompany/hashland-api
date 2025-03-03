@@ -66,7 +66,7 @@ export class PoolsService {
     projection?: string | Record<string, 1 | 0>,
   ): Promise<ApiResponse<{ pools: Partial<Pool[]> }>> {
     try {
-      const pools = await this.poolModel.find().select(projection).exec();
+      const pools = await this.poolModel.find().select(projection).lean();
 
       return new ApiResponse<{ pools: Partial<Pool[]> }>(
         200,
@@ -94,7 +94,7 @@ export class PoolsService {
       const pool = await this.poolModel
         .findById(poolId)
         .select(projection)
-        .exec();
+        .lean();
 
       if (!pool) {
         throw new NotFoundException(
@@ -124,8 +124,6 @@ export class PoolsService {
    * Update pool settings (e.g., maxOperators, joinPrerequisites).
    */
   async updatePool(poolId: string, updates: Partial<Pool>) {
-    return this.poolModel
-      .findByIdAndUpdate(poolId, updates, { new: true })
-      .exec();
+    return this.poolModel.findByIdAndUpdate(poolId, updates, { new: true });
   }
 }

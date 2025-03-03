@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { DrillConfig } from 'src/common/enums/drill.enum';
+import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Document } from 'mongoose';
 
 /**
@@ -7,6 +7,12 @@ import { Document } from 'mongoose';
  */
 @Schema({ timestamps: true, collection: 'ShopDrills' })
 export class ShopDrill extends Document {
+  /**
+   * The version of the drill.
+   */
+  @Prop({ required: true, enum: DrillVersion, default: DrillVersion.BASIC })
+  version: string;
+
   /**
    * The drill configuration.
    */
@@ -16,7 +22,7 @@ export class ShopDrill extends Document {
     required: true,
     default: DrillConfig.BASIC,
   })
-  drillConfig: string;
+  config: string;
 
   /**
    * The purchase cost of the drill (in TON).
