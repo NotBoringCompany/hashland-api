@@ -46,12 +46,6 @@ export class Drill extends Document {
    */
   @Prop({ type: Number, required: true, default: 1 })
   level: number;
-
-  /**
-   * The current EFF rating of the drill.
-   */
-  @Prop({ type: Number, required: true, default: 0 })
-  actualEff: number;
 }
 
 export const DrillSchema = SchemaFactory.createForClass(Drill);

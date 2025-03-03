@@ -1,6 +1,9 @@
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
+/**
+ * `OperatorEquity` represents the equity data of an operator, which is used to calculate the maximum cumulative EFF rating allowed for all drills owned by the operator.
+ */
 @Schema({ collection: 'OperatorEquities' })
 export class OperatorEquity extends Document {
   /**
