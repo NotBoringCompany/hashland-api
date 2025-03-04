@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
@@ -12,12 +13,22 @@ export class TelegramAuthService {
 
     constructor(
         private configService: ConfigService,
+        private jwtService: JwtService,
         @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     ) {
         this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
         if (!this.botToken) {
             throw new Error('TELEGRAM_BOT_TOKEN is not defined in environment variables');
         }
+    }
+
+    generateToken(operator: Operator) {
+        const payload = {
+            sub: operator._id,
+            username: operator.username,
+            telegram_id: operator.tgProfile?.tgId
+        };
+        return this.jwtService.sign(payload);
     }
 
     /**
