@@ -8,6 +8,7 @@ import {
 } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -25,6 +26,9 @@ async function bootstrap() {
     credentials: true,
     allowedHeaders: '*',
   });
+
+  // Use the Socket.IO adapter
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   // Start Fastify server
   const PORT = process.env.PORT || 8080;
