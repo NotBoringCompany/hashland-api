@@ -7,6 +7,7 @@ import { PoolsModule } from './pools/pools.module';
 import { ShopDrillsModule } from './shops/shop-drill.module';
 import { BullQueueModule } from './common/bull-queue.module';
 import { AuthModule } from './auth/auth.module';
+import { WebSocketModule } from './websocket/websocket.module';
 import { RedisModule } from './common/redis.module';
 
 
@@ -22,6 +23,7 @@ import { RedisModule } from './common/redis.module';
     PoolsModule,
     ShopDrillsModule,
     AuthModule,
+    WebSocketModule,
   ],
   controllers: [AppController],
   providers: [AppService],
