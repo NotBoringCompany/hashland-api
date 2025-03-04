@@ -6,7 +6,9 @@ import { ConfigModule } from '@nestjs/config';
 import { PoolsModule } from './pools/pools.module';
 import { ShopDrillsModule } from './shops/shop-drill.module';
 import { BullQueueModule } from './common/bull-queue.module';
+import { AuthModule } from './auth/auth.module';
 import { RedisModule } from './common/redis.module';
+
 
 @Module({
   imports: [
@@ -19,8 +21,9 @@ import { RedisModule } from './common/redis.module';
     BullQueueModule,
     PoolsModule,
     ShopDrillsModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
