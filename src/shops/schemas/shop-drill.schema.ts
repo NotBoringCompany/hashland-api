@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 /**
  * `ShopDrill` represents a drill that can be purchased from the shop.
@@ -11,6 +11,12 @@ import { Document } from 'mongoose';
   versionKey: false,
 })
 export class ShopDrill extends Document {
+  /**
+   * The database ID of the drill.
+   */
+  @Prop({ required: true, index: true, default: () => new Types.ObjectId() })
+  _id: Types.ObjectId;
+
   /**
    * The version of the drill.
    */

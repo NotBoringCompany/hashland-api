@@ -11,6 +11,17 @@ import { Document, Types } from 'mongoose';
 })
 export class PoolOperator extends Document {
   /**
+   * The database ID of the pool operator.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    required: true,
+    index: true,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
+  /**
    * The database ID of the operator who joined the pool.
    */
   @Prop({

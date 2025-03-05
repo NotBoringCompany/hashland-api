@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac } from 'crypto';
 import { Operator } from '../operators/schemas/operator.schema';
@@ -73,7 +73,7 @@ export class TelegramAuthService {
    */
   async authenticateWithTelegram(
     authData: TelegramAuthDto,
-  ): Promise<string | null> {
+  ): Promise<Types.ObjectId | null> {
     // Validate the authentication data
     if (!this.validateTelegramAuth(authData)) {
       return null;
@@ -90,7 +90,7 @@ export class TelegramAuthService {
     );
 
     if (operator) {
-      return String(operator._id);
+      return operator._id;
     }
 
     // If no operator was found, create a new one.
@@ -113,7 +113,7 @@ export class TelegramAuthService {
       },
     });
 
-    return String(operator._id);
+    return operator._id;
   }
 
   /**
@@ -148,7 +148,7 @@ export class TelegramAuthService {
       return new ApiResponse<{ operatorId: string; accessToken: string }>(
         200,
         '(telegramLogin) Successfully authenticated with Telegram.',
-        { operatorId, accessToken },
+        { operatorId: operatorId.toString(), accessToken },
       );
     } catch (err: any) {
       throw new InternalServerErrorException(

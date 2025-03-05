@@ -7,6 +7,17 @@ import { Document, Types } from 'mongoose';
 @Schema({ timestamps: true, collection: 'Pools', versionKey: false })
 export class Pool extends Document {
   /**
+   * The database ID of the pool.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    required: true,
+    index: true,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
+  /**
    * The database ID of the leader, who is an operator responsible for managing the pool.
    */
   @Prop({

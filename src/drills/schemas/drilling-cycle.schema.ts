@@ -11,6 +11,17 @@ import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 @Schema({ collection: 'DrillingCycles', versionKey: false })
 export class DrillingCycle extends Document {
   /**
+   * The database ID of the drilling cycle.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    required: true,
+    index: true,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
+  /**
    * The current cycle number.
    */
   @Prop({ type: Number, required: true, default: 1, index: true, unique: true })

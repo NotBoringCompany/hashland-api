@@ -1,12 +1,23 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 /**
  * `Operator` represents users who participate in drilling for $HASH.
  */
 @Schema({ timestamps: true, collection: 'Operators', versionKey: false })
 export class Operator extends Document {
+  /**
+   * The database ID of the operator.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    required: true,
+    index: true,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
   /**
    * A unique username accompanying the operator.
    */
