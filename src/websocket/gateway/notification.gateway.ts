@@ -24,7 +24,8 @@ import { JwtService } from '@nestjs/jwt';
 })
 @Injectable()
 export class NotificationGateway
-  implements OnGatewayConnection, OnGatewayDisconnect {
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(NotificationGateway.name);
 
   @WebSocketServer()
@@ -34,7 +35,7 @@ export class NotificationGateway
     private readonly connectionManager: ConnectionManagerService,
     private readonly notificationService: NotificationService,
     private readonly jwtService: JwtService,
-  ) { }
+  ) {}
 
   afterInit(server: Server) {
     this.notificationService.setServer(server);

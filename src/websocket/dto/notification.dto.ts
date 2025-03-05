@@ -1,9 +1,4 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsEnum,
-  IsOptional,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsOptional } from 'class-validator';
 import { NotificationType } from '../notification.interface';
 
 export class AuthenticateUserDto {

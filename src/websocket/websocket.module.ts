@@ -38,4 +38,4 @@ import { SchedulerBridgeService } from './services/scheduler-bridge.service';
     SchedulerBridgeService,
   ],
 })
-export class WebSocketModule { }
+export class WebSocketModule {}
