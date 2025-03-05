@@ -26,8 +26,7 @@ interface DrillSessionPayload {
 })
 @Injectable()
 export class DrillingSessionGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(DrillingSessionGateway.name);
   private activeSessions = new Map<
     string,
@@ -48,33 +47,22 @@ export class DrillingSessionGateway
     private readonly connectionManager: ConnectionManagerService,
     private readonly jwtService: JwtService,
     private readonly notificationService: NotificationService,
-  ) {}
+  ) { }
 
   async handleConnection(client: Socket) {
     this.logger.log(`Client connected to drilling session: ${client.id}`);
 
     try {
       // Extract token from headers
-      // const authHeader = client.handshake.headers.authorization;
-      // if (!authHeader) {
-      //     this.logger.warn(`Client ${client.id} has no authorization header`);
-      //     client.disconnect();
-      //     return;
-      // }
-
-      // const token = authHeader.split(' ')[1];
-      // const payload = this.jwtService.verify(token);
-
-      // if (!payload || !payload.sub) {
-      //     this.logger.warn(`Client ${client.id} has invalid token payload`);
-      //     client.disconnect();
-      //     return;
-      // }
-
+      const operatorId = this.extractUserId(client);
+      if (!operatorId) {
+        client.emit('error', { message: 'Authentication failed' });
+        return;
+      }
       // We don't register the connection here yet, as we want to wait for startDrilling
       // This just validates the connection is authenticated
 
-      this.logger.log(`Client ${client.id} authenticated as user`);
+      this.logger.log(`Client ${client.id} authenticated as user ${operatorId.toString()}`);
     } catch (error) {
       this.logger.error(
         `WebSocket authentication error: ${error.message}`,
@@ -99,15 +87,8 @@ export class DrillingSessionGateway
   @SubscribeMessage('startDrilling')
   async handleStartDrilling(
     client: Socket,
-    payload: DrillSessionPayload,
   ): Promise<void> {
     try {
-      // Validate payload
-      if (!payload.operatorId) {
-        client.emit('error', { message: 'operatorId is required' });
-        return;
-      }
-
       // Check if this client already has an active session
       if (this.activeSessions.has(client.id)) {
         client.emit('error', {
@@ -115,17 +96,12 @@ export class DrillingSessionGateway
         });
         return;
       }
-
-      // Ensure operatorId is a valid ObjectId
-      let operatorId: Types.ObjectId;
-      try {
-        operatorId = new Types.ObjectId(payload.operatorId);
-      } catch (error) {
-        client.emit('error', { message: 'Invalid operatorId format' });
+      const startTime = new Date();
+      const operatorId = this.extractUserId(client);
+      if (!operatorId) {
+        client.emit('error', { message: 'Authentication failed' });
         return;
       }
-
-      const startTime = new Date();
 
       // Create a new drilling session in the database
       const newSession = await this.drillingSessionModel.create({
@@ -144,7 +120,7 @@ export class DrillingSessionGateway
 
       // Register the user connection with the connection manager
       this.connectionManager.registerUserConnection(
-        payload.operatorId,
+        operatorId.toString(),
         client,
         newSession._id,
       );
@@ -152,7 +128,7 @@ export class DrillingSessionGateway
       // Send a notification to the user
       try {
         await this.notificationService.sendDrillingNotification(
-          payload.operatorId,
+          operatorId.toString(),
           'Drilling Started',
           'Your drilling session has started successfully.',
           {
@@ -175,7 +151,7 @@ export class DrillingSessionGateway
       });
 
       this.logger.log(
-        `Operator ${payload.operatorId} started drilling session ${newSession._id}`,
+        `Operator ${operatorId.toString()} started drilling session ${newSession._id}`,
       );
     } catch (error) {
       this.logger.error(
@@ -242,5 +218,28 @@ export class DrillingSessionGateway
     this.logger.log(
       `Drilling session ${session.sessionId} ended after ${duration}ms, earned ${session.earnedHASH} HASH`,
     );
+  }
+
+  private extractUserId(client: Socket): Types.ObjectId | null {
+    try {
+      const authHeader = client.handshake.headers.authorization;
+      if (!authHeader) {
+        this.logger.warn(`Client ${client.id} has no authorization header`);
+        return null;
+      }
+
+      const token = authHeader.split(' ')[1];
+      const payload = this.jwtService.verify(token);
+
+      if (!payload || !payload.sub) {
+        this.logger.warn(`Client ${client.id} has invalid token payload`);
+        return null;
+      }
+
+      return new Types.ObjectId(payload.sub.toString());
+    } catch (error) {
+      this.logger.error(`Failed to extract user ID: ${error.message}`, error.stack);
+      return null;
+    }
   }
 }
