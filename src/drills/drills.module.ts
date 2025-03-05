@@ -6,7 +6,6 @@ import {
   DrillingCycle,
   DrillingCycleSchema,
 } from './schemas/drilling-cycle.schema';
-import { ExtractorSelectionService } from './services/extractor-selection.service';
 
 @Module({
   imports: [
@@ -14,7 +13,5 @@ import { ExtractorSelectionService } from './services/extractor-selection.servic
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
     ]),
   ],
-  providers: [ExtractorSelectionService],
-  exports: [ExtractorSelectionService],
 })
 export class DrillsModule {}
