@@ -3,10 +3,7 @@ import {
   IsNotEmpty,
   IsEnum,
   IsOptional,
-  ValidateNested,
-  IsDate,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { NotificationType } from '../notification.interface';
 
 export class AuthenticateUserDto {

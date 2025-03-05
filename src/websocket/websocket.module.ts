@@ -11,7 +11,7 @@ import { NotificationGateway } from './gateway/notification.gateway';
 import { ConnectionManagerService } from './services/connection-manager.service';
 import { NotificationService } from './services/notification.service';
 import { SchedulerBridgeService } from './services/scheduler-bridge.service';
-import { DrillingCycleMockService } from '../drills/drilling-cycle-mock.service';
+// import { DrillingCycleMockService } from '../drills/drilling-cycle-mock.service';
 
 @Module({
   imports: [
@@ -38,4 +38,4 @@ import { DrillingCycleMockService } from '../drills/drilling-cycle-mock.service'
     SchedulerBridgeService,
   ],
 })
-export class WebSocketModule {}
+export class WebSocketModule { }

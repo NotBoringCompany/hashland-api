@@ -6,7 +6,7 @@ import {
   SubscribeMessage,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, UseGuards, Injectable } from '@nestjs/common';
+import { Logger, Injectable } from '@nestjs/common';
 import { ConnectionManagerService } from '../services/connection-manager.service';
 import { NotificationService } from '../services/notification.service';
 import {
@@ -24,8 +24,7 @@ import { JwtService } from '@nestjs/jwt';
 })
 @Injectable()
 export class NotificationGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(NotificationGateway.name);
 
   @WebSocketServer()
@@ -35,7 +34,7 @@ export class NotificationGateway
     private readonly connectionManager: ConnectionManagerService,
     private readonly notificationService: NotificationService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   afterInit(server: Server) {
     this.notificationService.setServer(server);

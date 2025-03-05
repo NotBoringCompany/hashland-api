@@ -2,14 +2,14 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+// import { Model } from 'mongoose';
 import { ExtractorSelectionService } from './extractor-selection.service';
 import { DrillingCycle } from '../schemas/drilling-cycle.schema';
 import { DrillConfig } from '../../common/enums/drill.enum';
 
 describe('ExtractorSelectionService', () => {
   let service: ExtractorSelectionService;
-  let model: Model<DrillingCycle>;
+  // let model: Model<DrillingCycle>;
 
   const mockDrillingCycleModel = {
     findById: jest.fn(),
@@ -28,7 +28,7 @@ describe('ExtractorSelectionService', () => {
     }).compile();
 
     service = module.get<ExtractorSelectionService>(ExtractorSelectionService);
-    model = module.get<Model<DrillingCycle>>(getModelToken(DrillingCycle.name));
+    // model = module.get<Model<DrillingCycle>>(getModelToken(DrillingCycle.name));
   });
 
   describe('selectExtractorForCycle', () => {
