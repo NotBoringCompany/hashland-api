@@ -3,7 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from 'src/common/database.module';
 import { ConfigModule } from '@nestjs/config';
-import { PoolModule } from './pools/pools.module';
+import { PoolModule } from './pools/pool.module';
 import { ShopDrillModule } from './shops/shop-drill.module';
 import { BullQueueModule } from './common/bull-queue.module';
 import { AuthModule } from './auth/auth.module';
