@@ -29,4 +29,17 @@ export class DrillingCycleController {
   toggleCycles(@Body() body: { enabled: boolean; password: string }) {
     return this.drillingCycleService.toggleCycle(body.enabled, body.password);
   }
+
+  /**
+   * Resets the cycle number in Redis.
+   */
+  @Post('reset')
+  async resetCycleNumber(
+    @Body() body: { cycleNumber: number; password: string },
+  ) {
+    return await this.drillingCycleService.resetCycleNumber(
+      body.cycleNumber,
+      body.password,
+    );
+  }
 }

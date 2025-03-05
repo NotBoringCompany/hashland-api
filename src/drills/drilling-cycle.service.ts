@@ -37,7 +37,11 @@
 //   }
 // }
 
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { DrillingCycle } from './schemas/drilling-cycle.schema';
@@ -118,9 +122,36 @@ export class DrillingCycleService {
   /**
    * Resets the cycle number in Redis (only if required, for example for debugging/testing).
    */
-  async resetCycleNumber(newCycleNumber: number) {
-    await this.redisService.set(this.redisCycleKey, newCycleNumber.toString());
-    this.logger.warn(`🔄 Drilling Cycle Number Reset to: ${newCycleNumber}`);
+  async resetCycleNumber(
+    newCycleNumber: number,
+    password: string,
+  ): Promise<ApiResponse<null>> {
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return new ApiResponse<null>(
+        403,
+        `(resetCycleNumber) Invalid password provided. Cycle number not reset.`,
+      );
+    }
+
+    try {
+      await this.redisService.set(
+        this.redisCycleKey,
+        newCycleNumber.toString(),
+      );
+      this.logger.warn(`🔄 Drilling Cycle Number Reset to: ${newCycleNumber}`);
+
+      return new ApiResponse<null>(
+        200,
+        `(resetCycleNumber) Cycle number reset to ${newCycleNumber}.`,
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(resetCycleNumber) Error resetting cycle number: ${err.message}`,
+        ),
+      );
+    }
   }
 
   /**
