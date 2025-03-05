@@ -7,6 +7,7 @@ import { createHash, createHmac } from 'crypto';
 import { Operator } from '../operators/schemas/operator.schema';
 import { TelegramAuthDto } from '../common/dto/telegram-auth.dto';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { OperatorService } from 'src/operators/operator.service';
 
 @Injectable()
 export class TelegramAuthService {
@@ -15,6 +16,7 @@ export class TelegramAuthService {
   constructor(
     private configService: ConfigService,
     private jwtService: JwtService,
+    private operatorService: OperatorService,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
   ) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -65,7 +67,7 @@ export class TelegramAuthService {
   }
 
   /**
-   * Authenticates a user with Telegram data
+   * Authenticates a user with Telegram data.
    * @param authData - The authentication data from Telegram
    * @returns The operator's ID or null if authentication fails
    */
@@ -115,7 +117,7 @@ export class TelegramAuthService {
   }
 
   /**
-   * Called when an operator attempts to login via Telegram.
+   * Handles Telegram login authentication if an operator logs in via Telegram.
    */
   async telegramLogin(authData: TelegramAuthDto): Promise<
     ApiResponse<{
@@ -124,24 +126,29 @@ export class TelegramAuthService {
     }>
   > {
     try {
-      const operatorId = await this.authenticateWithTelegram(authData);
-      if (!operatorId) {
+      if (!this.validateTelegramAuth(authData)) {
         return new ApiResponse<null>(
           401,
           '(telegramLogin) Unauthorized: Invalid Telegram authentication data',
         );
       }
 
-      // Generate JWT token
+      // Call OperatorService to find or create the operator
+      const operatorId =
+        await this.operatorService.findOrCreateOperator(authData);
+      if (!operatorId) {
+        return new ApiResponse<null>(
+          500,
+          '(telegramLogin) Failed to create or retrieve operator',
+        );
+      }
+
       const accessToken = this.generateToken({ _id: operatorId });
 
       return new ApiResponse<{ operatorId: string; accessToken: string }>(
         200,
         '(telegramLogin) Successfully authenticated with Telegram.',
-        {
-          operatorId,
-          accessToken,
-        },
+        { operatorId, accessToken },
       );
     } catch (err: any) {
       throw new InternalServerErrorException(
