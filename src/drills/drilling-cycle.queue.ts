@@ -21,6 +21,13 @@ export class DrillingCycleQueue implements OnModuleInit {
   async onModuleInit() {
     await this.drillingCycleService.initializeCycleNumber();
 
+    if (!GAME_CONSTANTS.CYCLES.ENABLED) {
+      this.logger.warn(
+        '🚨 (DrillingCycleQueue) Drilling Cycles are disabled. No cycles will be created.',
+      );
+      return;
+    }
+
     // ✅ Start the recurring job if it doesn't already exist
     const jobs = await this.drillingCycleQueue.getRepeatableJobs();
     if (jobs.length === 0) {
@@ -42,6 +49,13 @@ export class DrillingCycleQueue implements OnModuleInit {
    */
   @Process('new-drilling-cycle')
   async handleNewDrillingCycle() {
+    if (!GAME_CONSTANTS.CYCLES.ENABLED) {
+      this.logger.warn(
+        '🚨 (handleNewDrillingCycle) Drilling Cycle is disabled. Skipping this cycle.',
+      );
+      return;
+    }
+
     this.logger.log(`⛏️ Processing new drilling cycle...`);
     await this.drillingCycleService.createDrillingCycle();
   }

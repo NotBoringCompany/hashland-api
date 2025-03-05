@@ -10,6 +10,12 @@ export const GAME_CONSTANTS = {
      * The duration of a drilling cycle in seconds.
      */
     CYCLE_DURATION: 10,
+    /**
+     * If drilling cycle creation is enabled.
+     *
+     * If this is `false`, no new drilling cycles will be created.
+     */
+    ENABLED: false,
   },
 
   /**
