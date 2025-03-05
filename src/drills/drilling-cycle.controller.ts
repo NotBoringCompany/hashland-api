@@ -17,6 +17,14 @@ export class DrillingCycleController {
   }
 
   /**
+   * Fetches the latest drilling cycle number from Redis.
+   */
+  @Get('cycle-number')
+  async getCurrentCycleNumber() {
+    return this.drillingCycleService.getCurrentCycleNumber();
+  }
+
+  /**
    * Enables or disables the drilling cycle system.
    * Requires `ADMIN_PASSWORD` for security.
    */

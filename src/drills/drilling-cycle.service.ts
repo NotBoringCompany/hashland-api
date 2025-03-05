@@ -101,9 +101,14 @@ export class DrillingCycleService {
   /**
    * Fetches the latest drilling cycle number from Redis.
    */
-  async getCurrentCycleNumber(): Promise<number> {
+  async getCurrentCycleNumber(): Promise<ApiResponse<number>> {
     const cycle = await this.redisService.get(this.redisCycleKey);
-    return cycle ? parseInt(cycle, 10) : 0;
+    // return cycle ? parseInt(cycle, 10) : 0;
+    return new ApiResponse<number>(
+      200,
+      `(getCurrentCycleNumber) Current Drilling Cycle Number: ${cycle || 0}`,
+      cycle ? parseInt(cycle, 10) : 0,
+    );
   }
 
   /**
@@ -112,6 +117,21 @@ export class DrillingCycleService {
   async resetCycleNumber(newCycleNumber: number) {
     await this.redisService.set(this.redisCycleKey, newCycleNumber.toString());
     this.logger.warn(`🔄 Drilling Cycle Number Reset to: ${newCycleNumber}`);
+  }
+
+  /**
+   * Returns the current status of the drilling cycle (either enabled or disabled).
+   */
+  async getCycleStatus(): Promise<
+    ApiResponse<{
+      cycleEnabled: boolean;
+    }>
+  > {
+    return new ApiResponse<{ cycleEnabled: boolean }>(
+      200,
+      `(getCycleStatus) Cycle status fetched.`,
+      { cycleEnabled: GAME_CONSTANTS.CYCLES.ENABLED },
+    );
   }
 
   /**
@@ -131,7 +151,7 @@ export class DrillingCycleService {
     );
     return new ApiResponse<null>(
       200,
-      `(toggleCycle) Drilling Cycles ${enabled ? 'Enabled' : 'Disabled'}.`,
+      `(toggleCycle) Drilling Cycles are now ${enabled ? 'enabled' : 'disabled'}.`,
     );
   }
 }
