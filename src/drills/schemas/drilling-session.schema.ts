@@ -12,6 +12,7 @@ export class DrillingSession extends Document {
   */
   @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
   _id: Types.ObjectId;
+
   /**
    * The database ID of the operator who started the drilling session.
    */

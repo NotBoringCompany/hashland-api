@@ -94,8 +94,6 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
                 return;
             }
 
-            // In a real application, you would check if the sender has permission to send to the target user
-
             const success = this.notificationService.sendToUser(payload.userId, {
                 type: payload.type,
                 title: payload.title,

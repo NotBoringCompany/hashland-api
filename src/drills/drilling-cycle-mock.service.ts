@@ -8,7 +8,6 @@ interface CycleData {
     activeOperators: number;
     totalHashMined: number;
     cycleProgress: number;
-    topMiners: Array<{ operatorId: string; hashMined: number }>;
 }
 
 @Injectable()
@@ -54,10 +53,6 @@ export class DrillingCycleMockService implements OnModuleInit {
             activeOperators: Math.floor(Math.random() * 20) + 5,
             totalHashMined: Math.floor(Math.random() * 1000000),
             cycleProgress: this.currentCycle,
-            topMiners: Array(5).fill(null).map((_, index) => ({
-                operatorId: `operator-${index + 1}`,
-                hashMined: Math.floor(Math.random() * 100000),
-            })),
         };
     }
 

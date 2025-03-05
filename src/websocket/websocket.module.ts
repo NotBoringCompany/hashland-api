@@ -1,7 +1,6 @@
-// src/websocket/websocket.module.ts
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AuthModule } from '../auth/auth.module';
 import { DrillingCycleGateway } from './gateway/drilling-cycle.gateway';
 import { DrillingSessionGateway } from './gateway/drilling-session.gateway';
 import { DrillingSession, DrillingSessionSchema } from '../drills/schemas/drilling-session.schema';
@@ -13,10 +12,7 @@ import { DrillingCycleMockService } from '../drills/drilling-cycle-mock.service'
 
 @Module({
     imports: [
-        JwtModule.register({
-            secret: process.env.JWT_SECRET || 'your-secret-key',
-            signOptions: { expiresIn: '1d' },
-        }),
+        AuthModule, // Import AuthModule instead of JwtModule
         MongooseModule.forFeature([
             { name: DrillingSession.name, schema: DrillingSessionSchema }
         ])
@@ -26,7 +22,7 @@ import { DrillingCycleMockService } from '../drills/drilling-cycle-mock.service'
         NotificationGateway,
         DrillingSessionGateway,
 
-        DrillingCycleMockService,
+        // DrillingCycleMockService,
         NotificationService,
         ConnectionManagerService,
         SchedulerBridgeService,
@@ -35,6 +31,7 @@ import { DrillingCycleMockService } from '../drills/drilling-cycle-mock.service'
         DrillingCycleGateway,
         DrillingSessionGateway,
         NotificationService,
+        ConnectionManagerService,
         SchedulerBridgeService,
     ],
 })
