@@ -7,6 +7,12 @@ import { Document, Types } from 'mongoose';
 @Schema({ collection: 'DrillingSessions', versionKey: false })
 export class DrillingSession extends Document {
   /**
+  * The unique identifier for the drilling session.
+  * This is used to track the drilling session across different cycles.
+  */
+  @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
+  _id: Types.ObjectId;
+  /**
    * The database ID of the operator who started the drilling session.
    */
   @Prop({ type: Types.ObjectId, ref: 'Operators', required: true, index: true })

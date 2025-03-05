@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
-import { DrillingCycleGateway } from '../websocket/drilling-cycle.websocket';
+import { DrillingCycleGateway } from '../websocket/gateway/drilling-cycle.gateway';
 
 interface CycleData {
     cycleId: string;
