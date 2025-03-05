@@ -8,6 +8,7 @@ import {
 } from './schemas/drilling-cycle.schema';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule } from '@nestjs/config';
+import { DrillingCycleController } from './drilling-cycle.controller';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ConfigModule } from '@nestjs/config';
     ]),
     BullModule.registerQueue({ name: 'drilling-cycles' }), // Register Bull queue
   ],
+  controllers: [DrillingCycleController],
   providers: [DrillingCycleService, DrillingCycleQueue],
   exports: [DrillingCycleService], // Export so other modules can use DrillingCycleService
 })
