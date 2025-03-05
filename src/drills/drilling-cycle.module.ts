@@ -7,9 +7,11 @@ import {
   DrillingCycleSchema,
 } from './schemas/drilling-cycle.schema';
 import { BullModule } from '@nestjs/bull';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
+    ConfigModule, // Load environment variables
     MongooseModule.forFeature([
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
     ]),

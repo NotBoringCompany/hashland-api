@@ -36,13 +36,4 @@ export class AppController {
   async getQueueStatus() {
     return this.bullQueueService.getQueueStatus();
   }
-
-  /**
-   * API to get the current cycle number.
-   */
-  @Get('/cycle-number')
-  async getCycleNumber() {
-    const cycleNumber = await this.drillingCycleService.getCurrentCycleNumber();
-    return { status: 'success', cycleNumber };
-  }
 }

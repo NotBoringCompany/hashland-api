@@ -43,6 +43,7 @@ import { Model } from 'mongoose';
 import { DrillingCycle } from './schemas/drilling-cycle.schema';
 import { RedisService } from 'src/common/redis.service';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { ApiResponse } from 'src/common/dto/response.dto';
 
 @Injectable()
 export class DrillingCycleService {
@@ -111,5 +112,26 @@ export class DrillingCycleService {
   async resetCycleNumber(newCycleNumber: number) {
     await this.redisService.set(this.redisCycleKey, newCycleNumber.toString());
     this.logger.warn(`🔄 Drilling Cycle Number Reset to: ${newCycleNumber}`);
+  }
+
+  /**
+   * Toggles the creation of new drilling cycles on or off.
+   */
+  toggleCycle(enabled: boolean, password: string): ApiResponse<null> {
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return new ApiResponse<null>(
+        403,
+        `(toggleCycle) Invalid password provided. Cycle state not changed.`,
+      );
+    }
+
+    GAME_CONSTANTS.CYCLES.ENABLED = enabled;
+    this.logger.log(
+      `🔄 Drilling Cycles ${enabled ? 'Enabled' : 'Disabled'} by password.`,
+    );
+    return new ApiResponse<null>(
+      200,
+      `(toggleCycle) Drilling Cycles ${enabled ? 'Enabled' : 'Disabled'}.`,
+    );
   }
 }
