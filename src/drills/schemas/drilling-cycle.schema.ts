@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { Drill } from './drill.schema';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 
 /**
  * A drilling cycle represents a period of time where operators can have a chance to extract $HASH. This is similar to how a block works in a blockchain.
@@ -25,7 +25,7 @@ export class DrillingCycle extends Document {
   /**
    * The end time of the drilling cycle.
    */
-  @Prop({ type: Date, required: true })
+  @Prop({ type: Date, required: true, default: null })
   endTime: Date;
 
   /**
@@ -49,12 +49,12 @@ export class DrillingCycle extends Document {
   /**
    * The total amount of $HASH that was issued during this cycle.
    */
-  @Prop({ type: Number, required: true })
+  @Prop({
+    type: Number,
+    required: true,
+    default: GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE,
+  })
   issuedHASH: number;
-
-  /** Active drills at certain cycle */
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Drill' }] })
-  activeDrills: Drill[];
 }
 
 export const DrillingCycleSchema = SchemaFactory.createForClass(DrillingCycle);
