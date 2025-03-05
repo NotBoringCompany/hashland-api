@@ -1,6 +1,5 @@
 import { Controller, Get, Post, Body } from '@nestjs/common';
 import { DrillingCycleService } from './drilling-cycle.service';
-import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 
 @Controller('drilling-cycles')
 export class DrillingCycleController {
@@ -11,9 +10,7 @@ export class DrillingCycleController {
    */
   @Get('status')
   getCycleStatus() {
-    return {
-      cycleEnabled: GAME_CONSTANTS.CYCLES.ENABLED,
-    };
+    return this.drillingCycleService.getCycleStatus();
   }
 
   /**

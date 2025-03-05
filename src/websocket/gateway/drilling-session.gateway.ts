@@ -14,9 +14,9 @@ import { ConnectionManagerService } from '../services/connection-manager.service
 import { JwtService } from '@nestjs/jwt';
 import { NotificationService } from '../services/notification.service';
 
-interface DrillSessionPayload {
-  operatorId: string;
-}
+// interface DrillSessionPayload {
+//   operatorId: string;
+// }
 
 @WebSocketGateway({
   cors: {
@@ -26,7 +26,8 @@ interface DrillSessionPayload {
 })
 @Injectable()
 export class DrillingSessionGateway
-  implements OnGatewayConnection, OnGatewayDisconnect {
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(DrillingSessionGateway.name);
   private activeSessions = new Map<
     string,
@@ -47,7 +48,7 @@ export class DrillingSessionGateway
     private readonly connectionManager: ConnectionManagerService,
     private readonly jwtService: JwtService,
     private readonly notificationService: NotificationService,
-  ) { }
+  ) {}
 
   async handleConnection(client: Socket) {
     this.logger.log(`Client connected to drilling session: ${client.id}`);
@@ -62,7 +63,9 @@ export class DrillingSessionGateway
       // We don't register the connection here yet, as we want to wait for startDrilling
       // This just validates the connection is authenticated
 
-      this.logger.log(`Client ${client.id} authenticated as user ${operatorId.toString()}`);
+      this.logger.log(
+        `Client ${client.id} authenticated as user ${operatorId.toString()}`,
+      );
     } catch (error) {
       this.logger.error(
         `WebSocket authentication error: ${error.message}`,
@@ -85,9 +88,7 @@ export class DrillingSessionGateway
   }
 
   @SubscribeMessage('startDrilling')
-  async handleStartDrilling(
-    client: Socket,
-  ): Promise<void> {
+  async handleStartDrilling(client: Socket): Promise<void> {
     try {
       // Check if this client already has an active session
       if (this.activeSessions.has(client.id)) {
@@ -238,7 +239,10 @@ export class DrillingSessionGateway
 
       return new Types.ObjectId(payload.sub.toString());
     } catch (error) {
-      this.logger.error(`Failed to extract user ID: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to extract user ID: ${error.message}`,
+        error.stack,
+      );
       return null;
     }
   }

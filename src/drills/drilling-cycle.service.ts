@@ -101,14 +101,18 @@ export class DrillingCycleService {
   /**
    * Fetches the latest drilling cycle number from Redis.
    */
-  async getCurrentCycleNumber(): Promise<ApiResponse<number>> {
+  async getCurrentCycleNumber(): Promise<
+    ApiResponse<{
+      cycleNumber: number;
+    }>
+  > {
     const cycle = await this.redisService.get(this.redisCycleKey);
     // return cycle ? parseInt(cycle, 10) : 0;
-    return new ApiResponse<number>(
-      200,
-      `(getCurrentCycleNumber) Current Drilling Cycle Number: ${cycle || 0}`,
-      cycle ? parseInt(cycle, 10) : 0,
-    );
+    return new ApiResponse<{
+      cycleNumber: number;
+    }>(200, `(getCurrentCycleNumber) Fetched.`, {
+      cycleNumber: cycle ? parseInt(cycle, 10) : 0,
+    });
   }
 
   /**
