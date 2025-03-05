@@ -48,6 +48,8 @@ import { DrillingCycle } from './schemas/drilling-cycle.schema';
 import { RedisService } from 'src/common/redis.service';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { performance } from 'perf_hooks'; // Import high-precision timer
+import { DrillingSessionService } from './drilling-session.service';
 
 @Injectable()
 export class DrillingCycleService {
@@ -58,6 +60,7 @@ export class DrillingCycleService {
   constructor(
     @InjectModel(DrillingCycle.name)
     private drillingCycleModel: Model<DrillingCycle>,
+    private readonly drillingSessionService: DrillingSessionService,
     private readonly redisService: RedisService,
   ) {}
 
@@ -82,9 +85,6 @@ export class DrillingCycleService {
     }
   }
 
-  /**
-   * Creates a new drilling cycle.
-   */
   async createDrillingCycle(): Promise<number> {
     const newCycleNumber = await this.redisService.increment(
       this.redisCycleKey,
@@ -95,13 +95,29 @@ export class DrillingCycleService {
     this.logger.log(`🛠 Creating Drilling Cycle: #${newCycleNumber}...`);
 
     try {
+      // Measure execution time for fetching active drilling sessions
+      const startFetchTime = performance.now();
+      const activeOperators =
+        await this.drillingSessionService.fetchActiveDrillingSessions();
+      const endFetchTime = performance.now();
+      const fetchTime = (endFetchTime - startFetchTime).toFixed(2); // Convert to milliseconds
+
+      this.logger.log(`⏳ Fetching active sessions took ${fetchTime}ms.`);
+
+      // Create the drilling cycle with active operator count
       const cycle = await this.drillingCycleModel.create({
         cycleNumber: newCycleNumber,
         startTime: now,
         endTime: new Date(now.getTime() + this.cycleDuration),
+        activeOperators, // Track active operators
+        extractorId: null,
+        difficulty: 0,
+        issuedHASH: GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE,
       });
 
-      this.logger.log(`✅ New Drilling Cycle Created: #${cycle.cycleNumber}`);
+      this.logger.log(
+        `✅ New Drilling Cycle Created: #${cycle.cycleNumber} with ${activeOperators} active operators.`,
+      );
       return newCycleNumber;
     } catch (error) {
       this.logger.error(`❌ Error Creating Drilling Cycle: ${error.message}`);
