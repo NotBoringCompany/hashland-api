@@ -89,8 +89,8 @@ export class DrillingCycleService {
 
     await this.drillingCycleModel.create({
       cycleNumber: newCycleNumber,
-      startTimestamp: now,
-      endTimestamp: new Date(now.getTime() + this.cycleDuration),
+      startTime: now,
+      endTime: new Date(now.getTime() + this.cycleDuration),
     });
 
     this.logger.log(`✅ New Drilling Cycle Started: #${newCycleNumber}`);
