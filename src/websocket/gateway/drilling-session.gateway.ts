@@ -128,7 +128,7 @@ export class DrillingSessionGateway implements OnGatewayConnection, OnGatewayDis
             // Send a notification to the user
             try {
                 await this.notificationService.sendDrillingNotification(
-                    newSession._id.toString(),
+                    payload.operatorId,
                     'Drilling Started',
                     'Your drilling session has started successfully.',
                     {
@@ -169,7 +169,7 @@ export class DrillingSessionGateway implements OnGatewayConnection, OnGatewayDis
 
             // Send a notification to the user
             await this.notificationService.sendDrillingNotification(
-                client.id,
+                session.operatorId.toString(),
                 'Drilling Completed',
                 'Your drilling session has ended successfully.',
                 {

@@ -46,11 +46,14 @@ export class NotificationService {
             // Send to all connections for this user
             let sent = false;
             for (const connection of connections) {
-                const socket = this.server.sockets.sockets.get(connection.socketId);
-                if (socket) {
-                    socket.emit('notification', userNotification);
-                    sent = true;
-                    this.logger.debug(`Notification sent to user ${userId} via socket ${connection.socketId}`);
+                const connectedSockets = this.server.sockets.sockets;
+                if (connectedSockets) {
+                    const socket = connectedSockets.get(connection.socketId);
+                    if (socket) {
+                        socket.emit('notification', userNotification);
+                        sent = true;
+                        this.logger.debug(`Notification sent to user ${userId} via socket ${connection.socketId}`);
+                    }
                 }
             }
 
