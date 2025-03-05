@@ -7,10 +7,12 @@ import { TelegramAuthService } from './telegram-auth.service';
 import { TelegramAuthController } from './telegram-auth.controller';
 import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
 import { JwtStrategy } from './jwt/jwt.strategy';
+import { OperatorModule } from 'src/operators/operator.module';
 
 @Module({
   imports: [
     ConfigModule,
+    OperatorModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

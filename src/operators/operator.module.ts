@@ -13,4 +13,4 @@ import { OperatorService } from './operator.service';
   providers: [OperatorService], // Business logic for Operators
   exports: [MongooseModule, OperatorService], // Allow usage in other modules
 })
-export class OperatorsModule {}
+export class OperatorModule {}
