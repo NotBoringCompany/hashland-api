@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import { DatabaseService } from 'src/common/database.service';
 import { BullQueueService } from './common/bull-queue.service';
+import { DrillingCycleService } from './drills/drilling-cycle.service';
 
 @Controller()
 export class AppController {
@@ -9,6 +10,7 @@ export class AppController {
     private readonly appService: AppService,
     private readonly databaseService: DatabaseService,
     private readonly bullQueueService: BullQueueService,
+    private readonly drillingCycleService: DrillingCycleService,
   ) {}
 
   /**
@@ -33,5 +35,14 @@ export class AppController {
   @Get('/queue-status')
   async getQueueStatus() {
     return this.bullQueueService.getQueueStatus();
+  }
+
+  /**
+   * API to get the current cycle number.
+   */
+  @Get('/cycle-number')
+  async getCycleNumber() {
+    const cycleNumber = await this.drillingCycleService.getCurrentCycleNumber();
+    return { status: 'success', cycleNumber };
   }
 }

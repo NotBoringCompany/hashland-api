@@ -1,0 +1,115 @@
+// import { Injectable } from '@nestjs/common';
+// import { ExtractorSelectionService } from './services/extractor-selection.service';
+// import { SchedulerBridgeService } from 'src/websocket/services/scheduler-bridge.service';
+
+// @Injectable()
+// export class DrillingCycleService {
+//   constructor(
+//     private readonly extractorSelectionService: ExtractorSelectionService,
+//     private readonly schedulerBridgeService: SchedulerBridgeService,
+//   ) {}
+
+//   async completeCycle(cycleId: string) {
+//     // Select extractor at the end of the cycle
+//     await this.extractorSelectionService.selectExtractorForCycle(cycleId);
+
+//     // Get cycle completion data
+//     const cycleData = await this.getCycleCompletionData(cycleId);
+
+//     // Send notifications about cycle completion
+//     this.schedulerBridgeService.processCycleCompletion(cycleData);
+//   }
+
+//   private async getCycleCompletionData(cycleId: string) {
+//     // This is a placeholder - implement your actual data retrieval logic
+//     return {
+//       cycleId,
+//       timestamp: Math.floor(Date.now() / 1000),
+//       totalHashMined: 1000000, // Example value
+//       topMiners: [
+//         { operatorId: 'operator-1', hashMined: 50000 },
+//         { operatorId: 'operator-2', hashMined: 40000 },
+//         { operatorId: 'operator-3', hashMined: 30000 },
+//         { operatorId: 'operator-4', hashMined: 20000 },
+//         { operatorId: 'operator-5', hashMined: 10000 },
+//       ],
+//     };
+//   }
+// }
+
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { DrillingCycle } from './schemas/drilling-cycle.schema';
+import { RedisService } from 'src/common/redis.service';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+
+@Injectable()
+export class DrillingCycleService {
+  private readonly logger = new Logger(DrillingCycleService.name);
+  private readonly redisCycleKey = 'drilling-cycle:current';
+  private readonly cycleDuration = GAME_CONSTANTS.CYCLES.CYCLE_DURATION * 1000; // Convert to ms
+
+  constructor(
+    @InjectModel(DrillingCycle.name)
+    private drillingCycleModel: Model<DrillingCycle>,
+    private readonly redisService: RedisService,
+  ) {}
+
+  /**
+   * Initializes the cycle number in Redis if not already set.
+   */
+  async initializeCycleNumber() {
+    const cycleNumber = await this.redisService.get(this.redisCycleKey);
+
+    if (!cycleNumber) {
+      const latestCycle = await this.drillingCycleModel
+        .findOne()
+        .sort({ cycleNumber: -1 })
+        .exec();
+      const newCycleNumber = latestCycle ? latestCycle.cycleNumber + 1 : 1;
+
+      await this.redisService.set(
+        this.redisCycleKey,
+        newCycleNumber.toString(),
+      );
+      this.logger.log(`🔄 Redis Cycle Number Initialized: ${newCycleNumber}`);
+    }
+  }
+
+  /**
+   * Creates a new drilling cycle.
+   */
+  async createDrillingCycle(): Promise<number> {
+    const newCycleNumber = await this.redisService.increment(
+      this.redisCycleKey,
+      1,
+    );
+    const now = new Date();
+
+    await this.drillingCycleModel.create({
+      cycleNumber: newCycleNumber,
+      startTimestamp: now,
+      endTimestamp: new Date(now.getTime() + this.cycleDuration),
+    });
+
+    this.logger.log(`✅ New Drilling Cycle Started: #${newCycleNumber}`);
+    return newCycleNumber;
+  }
+
+  /**
+   * Fetches the latest drilling cycle number from Redis.
+   */
+  async getCurrentCycleNumber(): Promise<number> {
+    const cycle = await this.redisService.get(this.redisCycleKey);
+    return cycle ? parseInt(cycle, 10) : 0;
+  }
+
+  /**
+   * Resets the cycle number in Redis (only if required, for example for debugging/testing).
+   */
+  async resetCycleNumber(newCycleNumber: number) {
+    await this.redisService.set(this.redisCycleKey, newCycleNumber.toString());
+    this.logger.warn(`🔄 Drilling Cycle Number Reset to: ${newCycleNumber}`);
+  }
+}

@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { DrillingCycle } from '../schemas/drilling-cycle.schema';
 import { DrillConfig } from '../../common/enums/drill.enum';
 import { ApiResponse } from '../../common/dto/response.dto';

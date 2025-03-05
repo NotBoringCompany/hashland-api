@@ -9,6 +9,7 @@ import { BullQueueModule } from './common/bull-queue.module';
 import { AuthModule } from './auth/auth.module';
 import { WebSocketModule } from './websocket/websocket.module';
 import { RedisModule } from './common/redis.module';
+import { DrillingCycleModule } from './drills/drilling-cycle.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RedisModule } from './common/redis.module';
     BullQueueModule,
     PoolModule,
     ShopDrillModule,
+    DrillingCycleModule,
     AuthModule,
     WebSocketModule,
   ],

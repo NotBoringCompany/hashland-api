@@ -1,73 +1,48 @@
-// import { Processor, Process } from '@nestjs/bull';
-// import { Job } from 'bull';
-// import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-// import { InjectModel } from '@nestjs/mongoose';
-// import { Model } from 'mongoose';
-// import { DrillingCycle } from './schemas/drilling-cycle.schema';
-// import { GAME_CONSTANTS } from '../config/game.constants';
-// import { RedisService } from '../common/redis.service'; // ✅ Import Redis Service
+import { Processor, Process, InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { DrillingCycleService } from './drilling-cycle.service';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 
-// @Injectable()
-// @Processor('drilling-cycles') // ✅ Registers this class as a Bull queue processor
-// export class DrillingCycleQueue implements OnModuleInit {
-//   private readonly logger = new Logger(DrillingCycleQueue.name);
-//   private readonly cycleDuration = GAME_CONSTANTS.CYCLES.CYCLE_DURATION * 1000; // Convert to ms
-//   private readonly redisCycleKey = 'drilling-cycle:current';
+@Injectable()
+@Processor('drilling-cycles')
+export class DrillingCycleQueue implements OnModuleInit {
+  private readonly logger = new Logger(DrillingCycleQueue.name);
+  private readonly cycleDuration = GAME_CONSTANTS.CYCLES.CYCLE_DURATION * 1000;
 
-//   constructor(
-//     @InjectModel(DrillingCycle.name)
-//     private drillingCycleModel: Model<DrillingCycle>,
-//     private readonly redisService: RedisService, // ✅ Inject Redis service
-//   ) {}
+  constructor(
+    private readonly drillingCycleService: DrillingCycleService,
+    @InjectQueue('drilling-cycles') private readonly drillingCycleQueue: Queue, // ✅ Inject Bull Queue
+  ) {}
 
-//   /**
-//    * Called on startup to ensure Redis cycle number is initialized.
-//    */
-//   async onModuleInit() {
-//     const cycleNumber = await this.redisService.get(this.redisCycleKey);
+  /**
+   * Called when the module initializes. Ensures cycle tracking starts.
+   */
+  async onModuleInit() {
+    await this.drillingCycleService.initializeCycleNumber();
 
-//     if (!cycleNumber) {
-//       const latestCycle = await this.drillingCycleModel
-//         .findOne()
-//         .sort({ cycleNumber: -1 })
-//         .exec();
-//       const newCycleNumber = latestCycle ? latestCycle.cycleNumber : 1;
+    // ✅ Start the recurring job if it doesn't already exist
+    const jobs = await this.drillingCycleQueue.getRepeatableJobs();
+    if (jobs.length === 0) {
+      this.logger.log(
+        `⏳ Starting Drilling Cycle job every ${this.cycleDuration / 1000} seconds.`,
+      );
+      await this.drillingCycleQueue.add(
+        'new-drilling-cycle',
+        {},
+        { repeat: { every: this.cycleDuration } }, // ✅ Use cycleDuration here
+      );
+    } else {
+      this.logger.log(`🔄 Drilling Cycle job already scheduled.`);
+    }
+  }
 
-//       await this.redisService.set(
-//         this.redisCycleKey,
-//         newCycleNumber.toString(),
-//       );
-//       this.logger.log(`🔄 Redis Cycle Number Initialized: ${newCycleNumber}`);
-//     }
-//   }
-
-//   /**
-//    * Handles each drilling cycle generation.
-//    */
-//   @Process('new-drilling-cycle') // ✅ Tells Bull to process 'new-drilling-cycle' jobs
-//   async handleNewDrillingCycle(job: Job) {
-//     this.logger.log(`⛏️ Processing drilling cycle job...`);
-//     await this.createNewDrillingCycle();
-//   }
-
-//   /**
-//    * Creates a new drilling cycle and stores it in MongoDB.
-//    */
-//   private async createNewDrillingCycle() {
-//     // ✅ Fetch and increment cycle number in Redis
-//     const newCycleNumber = await this.redisService.increment(
-//       this.redisCycleKey,
-//       1,
-//     );
-
-//     // ✅ Create new cycle in MongoDB
-//     const now = new Date();
-//     await this.drillingCycleModel.create({
-//       cycleNumber: newCycleNumber,
-//       startTimestamp: now,
-//       endTimestamp: new Date(now.getTime() + this.cycleDuration),
-//     });
-
-//     this.logger.log(`✅ New Drilling Cycle Started: #${newCycleNumber}`);
-//   }
-// }
+  /**
+   * Handles new drilling cycle creation.
+   */
+  @Process('new-drilling-cycle')
+  async handleNewDrillingCycle() {
+    this.logger.log(`⛏️ Processing new drilling cycle...`);
+    await this.drillingCycleService.createDrillingCycle();
+  }
+}
