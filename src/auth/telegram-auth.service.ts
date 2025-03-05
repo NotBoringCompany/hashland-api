@@ -68,52 +68,50 @@ export class TelegramAuthService {
   /**
    * Authenticates a user with Telegram data
    * @param authData - The authentication data from Telegram
-   * @returns The operator document or null if authentication fails
+   * @returns The operator's ID or null if authentication fails
    */
   async authenticateWithTelegram(
     authData: TelegramAuthDto,
-  ): Promise<Operator | null> {
+  ): Promise<string | null> {
     // Validate the authentication data
     if (!this.validateTelegramAuth(authData)) {
       return null;
     }
 
-    // Check if user exists with this Telegram ID
-    let operator = await this.operatorModel.findOne({
-      'tgProfile.tgId': authData.id,
-    });
+    // Try to update the operator if it exists.
+    // This will update tgUsername if authData.username is provided.
+    let operator = await this.operatorModel.findOneAndUpdate(
+      { 'tgProfile.tgId': authData.id },
+      authData.username
+        ? { $set: { 'tgProfile.tgUsername': authData.username } }
+        : {},
+      { new: true },
+    );
 
     if (operator) {
-      // Update the existing operator if needed
-      if (
-        authData.username &&
-        operator.tgProfile.tgUsername !== authData.username
-      ) {
-        operator.tgProfile.tgUsername = authData.username;
-        await operator.save();
-      }
-    } else {
-      // Create a new operator if one doesn't exist
-      // Generate a unique username based on Telegram username or ID
-      const baseUsername = authData.username || `tg_${authData.id}`;
-      let username = baseUsername;
-      let counter = 1;
-
-      // Ensure username is unique
-      while (await this.operatorModel.findOne({ username })) {
-        username = `${baseUsername}_${counter}`;
-        counter++;
-      }
-
-      operator = await this.operatorModel.create({
-        username,
-        tgProfile: {
-          tgId: authData.id,
-          tgUsername: authData.username || `user_${authData.id}`,
-        },
-      });
+      return String(operator._id);
     }
 
-    return operator;
+    // If no operator was found, create a new one.
+    // Generate a unique username based on the Telegram username or ID.
+    const baseUsername = authData.username || `tg_${authData.id}`;
+    let username = baseUsername;
+    let counter = 1;
+
+    // Check for uniqueness using exists() which is more efficient than a full findOne.
+    while (await this.operatorModel.exists({ username })) {
+      username = `${baseUsername}_${counter}`;
+      counter++;
+    }
+
+    operator = await this.operatorModel.create({
+      username,
+      tgProfile: {
+        tgId: authData.id,
+        tgUsername: authData.username || `user_${authData.id}`,
+      },
+    });
+
+    return String(operator._id);
   }
 }
