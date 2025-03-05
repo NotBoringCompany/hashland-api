@@ -13,7 +13,7 @@ export class DrillingCycle extends Document {
   /**
    * The current cycle number.
    */
-  @Prop({ type: Number, required: true, default: 1, index: true })
+  @Prop({ type: Number, required: true, default: 1, index: true, unique: true })
   cycleNumber: number;
 
   /**
@@ -25,13 +25,13 @@ export class DrillingCycle extends Document {
   /**
    * The end time of the drilling cycle.
    */
-  @Prop({ type: Date, required: true, default: null })
+  @Prop({ type: Date, default: null })
   endTime: Date;
 
   /**
    * The database ID of the drill that was selected as the extractor for this cycle.
    */
-  @Prop({ type: Types.ObjectId, ref: 'Drills', required: true, default: null })
+  @Prop({ type: Types.ObjectId, ref: 'Drills', default: null })
   extractorId: Types.ObjectId | null;
 
   /**
