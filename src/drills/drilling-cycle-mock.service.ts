@@ -1,5 +1,6 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DrillingCycleGateway } from '../websocket/gateway/drilling-cycle.gateway';
+import { SchedulerBridgeService } from '../websocket/services/scheduler-bridge.service';
 
 interface CycleData {
     cycleId: string;
@@ -7,10 +8,7 @@ interface CycleData {
     activeOperators: number;
     totalHashMined: number;
     cycleProgress: number;
-    topMiners: Array<{
-        operatorId: string;
-        hashMined: number;
-    }>;
+    topMiners: Array<{ operatorId: string; hashMined: number }>;
 }
 
 @Injectable()
@@ -19,7 +17,10 @@ export class DrillingCycleMockService implements OnModuleInit {
     private currentCycle: number = 0;
     private cycleInterval: NodeJS.Timeout;
 
-    constructor(private readonly drillingCycleGateway: DrillingCycleGateway) { }
+    constructor(
+        private readonly drillingCycleGateway: DrillingCycleGateway,
+        private readonly schedulerBridgeService: SchedulerBridgeService,
+    ) { }
 
     onModuleInit() {
         this.startCycleMockData();
@@ -30,22 +31,32 @@ export class DrillingCycleMockService implements OnModuleInit {
 
         this.cycleInterval = setInterval(() => {
             const mockData = this.generateMockCycleData();
+
+            // Send via WebSocket gateway
             this.drillingCycleGateway.sendCycleUpdate(mockData);
-        }, 6000);
+
+            // Also process through the notification system
+            this.schedulerBridgeService.processCycleUpdate(mockData);
+
+            // Simulate cycle completion when reaching 100%
+            if (mockData.cycleProgress === 100) {
+                this.schedulerBridgeService.processCycleCompletion(mockData);
+            }
+        }, 5000); // Update every 5 seconds
     }
 
     private generateMockCycleData(): CycleData {
-        this.currentCycle = (this.currentCycle + 1) % 100;
+        this.currentCycle = (this.currentCycle + 5) % 105; // 0-100 with 5% increments
 
         return {
             cycleId: `cycle-${Date.now()}`,
             timestamp: Math.floor(Date.now() / 1000),
-            activeOperators: Math.floor(Math.random() * 100) + 50,
-            totalHashMined: Math.floor(Math.random() * 1000),
+            activeOperators: Math.floor(Math.random() * 20) + 5,
+            totalHashMined: Math.floor(Math.random() * 1000000),
             cycleProgress: this.currentCycle,
             topMiners: Array(5).fill(null).map((_, index) => ({
                 operatorId: `operator-${index + 1}`,
-                hashMined: Math.floor(Math.random() * 100),
+                hashMined: Math.floor(Math.random() * 100000),
             })),
         };
     }
