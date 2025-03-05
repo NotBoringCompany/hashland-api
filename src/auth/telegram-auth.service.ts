@@ -1,11 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac } from 'crypto';
 import { Operator } from '../operators/schemas/operator.schema';
-import { TelegramAuthDto } from './telegram-auth.dto';
+import { TelegramAuthDto } from '../common/dto/telegram-auth.dto';
+import { ApiResponse } from 'src/common/dto/response.dto';
 
 @Injectable()
 export class TelegramAuthService {
@@ -24,11 +25,9 @@ export class TelegramAuthService {
     }
   }
 
-  generateToken(operator: Operator) {
+  generateToken(operator: Partial<Operator>): string {
     const payload = {
-      sub: operator._id,
-      username: operator.username,
-      telegram_id: operator.tgProfile?.tgId,
+      operatorId: operator._id,
     };
     return this.jwtService.sign(payload);
   }
@@ -113,5 +112,44 @@ export class TelegramAuthService {
     });
 
     return String(operator._id);
+  }
+
+  /**
+   * Called when an operator attempts to login via Telegram.
+   */
+  async telegramLogin(authData: TelegramAuthDto): Promise<
+    ApiResponse<{
+      operatorId: string;
+      accessToken: string;
+    }>
+  > {
+    try {
+      const operatorId = await this.authenticateWithTelegram(authData);
+      if (!operatorId) {
+        return new ApiResponse<null>(
+          401,
+          '(telegramLogin) Unauthorized: Invalid Telegram authentication data',
+        );
+      }
+
+      // Generate JWT token
+      const accessToken = this.generateToken({ _id: operatorId });
+
+      return new ApiResponse<{ operatorId: string; accessToken: string }>(
+        200,
+        '(telegramLogin) Successfully authenticated with Telegram.',
+        {
+          operatorId,
+          accessToken,
+        },
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(telegramLogin) Error authenticating with Telegram: ${err.message}`,
+        ),
+      );
+    }
   }
 }
