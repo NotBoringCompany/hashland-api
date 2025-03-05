@@ -9,10 +9,12 @@ import {
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule } from '@nestjs/config';
 import { DrillingCycleController } from './drilling-cycle.controller';
+import { DrillingSessionModule } from './drilling-session.module';
 
 @Module({
   imports: [
     ConfigModule, // Load environment variables
+    DrillingSessionModule, // Import DrillingSessionModule
     MongooseModule.forFeature([
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
     ]),
