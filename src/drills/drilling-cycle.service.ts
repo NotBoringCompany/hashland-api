@@ -92,14 +92,21 @@ export class DrillingCycleService {
     );
     const now = new Date();
 
-    await this.drillingCycleModel.create({
-      cycleNumber: newCycleNumber,
-      startTime: now,
-      endTime: new Date(now.getTime() + this.cycleDuration),
-    });
+    this.logger.log(`🛠 Creating Drilling Cycle: #${newCycleNumber}...`);
 
-    this.logger.log(`✅ New Drilling Cycle Started: #${newCycleNumber}`);
-    return newCycleNumber;
+    try {
+      const cycle = await this.drillingCycleModel.create({
+        cycleNumber: newCycleNumber,
+        startTime: now,
+        endTime: new Date(now.getTime() + this.cycleDuration),
+      });
+
+      this.logger.log(`✅ New Drilling Cycle Created: #${cycle.cycleNumber}`);
+      return newCycleNumber;
+    } catch (error) {
+      this.logger.error(`❌ Error Creating Drilling Cycle: ${error.message}`);
+      throw error;
+    }
   }
 
   /**
