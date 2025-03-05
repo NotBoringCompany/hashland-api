@@ -21,7 +21,12 @@ module.exports = {
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
-    'linebreak-style': ['error', 'unix'],
+    "prettier/prettier": [
+      "error",
+      {
+        "endOfLine": "auto"
+      },
+    ],
     '@typescript-eslint/no-empty-function': 'off', // Allows empty functions
     curly: ['error', 'multi-line'], // Only force braces for multi-line
   },
