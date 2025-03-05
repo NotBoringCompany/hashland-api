@@ -15,7 +15,7 @@ export const GAME_CONSTANTS = {
      *
      * If this is `false`, no new drilling cycles will be created.
      */
-    ENABLED: false,
+    ENABLED: true,
   },
 
   /**
