@@ -1,11 +1,11 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { PoolsService } from './pools.service';
+import { PoolService } from './pool.service';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 
 @Controller('pools') // Base route: `/pools`
-export class PoolsController {
-  constructor(private readonly poolsService: PoolsService) {}
+export class PoolController {
+  constructor(private readonly poolService: PoolService) {}
 
   /**
    * GET `/pools`
@@ -23,6 +23,6 @@ export class PoolsController {
           .reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
       : undefined;
 
-    return this.poolsService.getAllPools(projectionObj);
+    return this.poolService.getAllPools(projectionObj);
   }
 }

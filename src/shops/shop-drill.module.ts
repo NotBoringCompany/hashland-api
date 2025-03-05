@@ -13,4 +13,4 @@ import { ShopDrillsService } from './shop-drill.service';
   providers: [ShopDrillsService], // Business logic for ShopDrills
   exports: [MongooseModule, ShopDrillsService], // Allow usage in other modules
 })
-export class ShopDrillsModule {}
+export class ShopDrillModule {}

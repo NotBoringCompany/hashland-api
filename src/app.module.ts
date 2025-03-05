@@ -3,8 +3,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from 'src/common/database.module';
 import { ConfigModule } from '@nestjs/config';
-import { PoolsModule } from './pools/pools.module';
-import { ShopDrillsModule } from './shops/shop-drill.module';
+import { PoolModule } from './pools/pools.module';
+import { ShopDrillModule } from './shops/shop-drill.module';
 import { BullQueueModule } from './common/bull-queue.module';
 import { AuthModule } from './auth/auth.module';
 import { WebSocketModule } from './websocket/websocket.module';
@@ -19,8 +19,8 @@ import { RedisModule } from './common/redis.module';
     DatabaseModule,
     RedisModule,
     BullQueueModule,
-    PoolsModule,
-    ShopDrillsModule,
+    PoolModule,
+    ShopDrillModule,
     AuthModule,
     WebSocketModule,
   ],

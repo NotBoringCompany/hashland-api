@@ -9,7 +9,7 @@ import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 
 @Injectable()
-export class PoolsService {
+export class PoolService {
   constructor(@InjectModel(Pool.name) private poolModel: Model<Pool>) {}
 
   /**

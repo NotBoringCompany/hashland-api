@@ -21,7 +21,7 @@ import { RedisModule } from './redis.module';
 
         return {
           redis: {
-            family: 0,
+            family: 0, // added family: 0 for IPv4 and IPv6 support
             host: redisUri.hostname,
             port: parseInt(redisUri.port),
             username: redisUri.username,
