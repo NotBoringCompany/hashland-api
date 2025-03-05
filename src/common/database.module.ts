@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DatabaseService } from './database.service';
 import { ConfigModule } from '@nestjs/config';
@@ -7,6 +7,7 @@ import { ConfigModule } from '@nestjs/config';
  * DatabaseModule initializes MongoDB connection
  * and applies connection pooling.
  */
+@Global() // ✅ Makes DatabaseModule available globally (no need to import in every module)
 @Module({
   imports: [
     MongooseModule.forRootAsync({

@@ -9,25 +9,25 @@ import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
 import { JwtStrategy } from './jwt/jwt.strategy';
 
 @Module({
-    imports: [
-        ConfigModule,
-        PassportModule.register({ defaultStrategy: 'jwt' }),
-        JwtModule.registerAsync({
-            imports: [ConfigModule],
-            useFactory: async (configService: ConfigService) => ({
-                secret: configService.get<string>('JWT_SECRET'),
-                signOptions: {
-                    expiresIn: configService.get<string>('JWT_EXPIRATION', '24h'),
-                },
-            }),
-            inject: [ConfigService],
-        }),
-        MongooseModule.forFeature([
-            { name: Operator.name, schema: OperatorSchema },
-        ]),
-    ],
-    controllers: [TelegramAuthController],
-    providers: [TelegramAuthService, JwtStrategy],
-    exports: [TelegramAuthService, JwtStrategy, JwtModule],
+  imports: [
+    ConfigModule,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: {
+          expiresIn: configService.get<string>('JWT_EXPIRATION', '24h'),
+        },
+      }),
+      inject: [ConfigService],
+    }),
+    MongooseModule.forFeature([
+      { name: Operator.name, schema: OperatorSchema },
+    ]),
+  ],
+  controllers: [TelegramAuthController],
+  providers: [TelegramAuthService, JwtStrategy],
+  exports: [TelegramAuthService, JwtStrategy, JwtModule],
 })
-export class AuthModule { }
+export class AuthModule {}

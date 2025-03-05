@@ -7,9 +7,9 @@ import { Document, Types } from 'mongoose';
 @Schema({ collection: 'DrillingSessions', versionKey: false })
 export class DrillingSession extends Document {
   /**
-  * The unique identifier for the drilling session.
-  * This is used to track the drilling session across different cycles.
-  */
+   * The unique identifier for the drilling session.
+   * This is used to track the drilling session across different cycles.
+   */
   @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
   _id: Types.ObjectId;
 

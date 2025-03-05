@@ -10,7 +10,6 @@ import { AuthModule } from './auth/auth.module';
 import { WebSocketModule } from './websocket/websocket.module';
 import { RedisModule } from './common/redis.module';
 
-
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -28,4 +27,4 @@ import { RedisModule } from './common/redis.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
