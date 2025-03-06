@@ -16,6 +16,11 @@ import { PoolModule } from './pool.module';
   ],
   controllers: [], // Expose API endpoints
   providers: [PoolOperatorService], // Business logic for pool operators
-  exports: [MongooseModule, PoolOperatorService], // Allow usage in other modules
+  exports: [
+    MongooseModule.forFeature([
+      { name: PoolOperator.name, schema: PoolOperatorSchema },
+    ]),
+    PoolOperatorService,
+  ], // Allow usage in other modules
 })
 export class PoolOperatorModule {}

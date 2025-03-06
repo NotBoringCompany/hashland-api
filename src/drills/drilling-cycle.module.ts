@@ -12,6 +12,7 @@ import { DrillingCycleController } from './drilling-cycle.controller';
 import { DrillingSessionModule } from './drilling-session.module';
 import { OperatorModule } from 'src/operators/operator.module';
 import { DrillModule } from './drill.module';
+import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { DrillModule } from './drill.module';
     DrillingSessionModule, // Import DrillingSessionModule
     OperatorModule, // Import OperatorModule
     DrillModule, // Import DrillModule
+    PoolOperatorModule, // Import PoolOperatorModule
     MongooseModule.forFeature([
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
     ]),

@@ -5,18 +5,14 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TelegramAuthService } from './telegram-auth.service';
 import { TelegramAuthController } from './telegram-auth.controller';
-import { JwtAuthController } from './jwt-auth.controller';
 import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
 import { JwtStrategy } from './jwt/jwt.strategy';
 import { OperatorModule } from 'src/operators/operator.module';
-import { OperatorService } from 'src/operators/operator.service';
-import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 
 @Module({
   imports: [
     ConfigModule,
     OperatorModule,
-    PoolOperatorModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -32,8 +28,8 @@ import { PoolOperatorModule } from 'src/pools/pool-operator.module';
       { name: Operator.name, schema: OperatorSchema },
     ]),
   ],
-  controllers: [TelegramAuthController, JwtAuthController],
-  providers: [TelegramAuthService, JwtStrategy, OperatorService],
+  controllers: [TelegramAuthController],
+  providers: [TelegramAuthService, JwtStrategy],
   exports: [TelegramAuthService, JwtStrategy, JwtModule],
 })
 export class AuthModule {}
