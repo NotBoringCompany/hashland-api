@@ -18,6 +18,7 @@ import { WalletValidationService } from '../services/wallet-validation.service';
 import { Operator } from '../../operators/schemas/operator.schema';
 import { Wallet } from '../schemas/wallet.schema';
 import { TonClientService } from '../services/ton-client.service';
+import { OperatorWallet } from '../../operators/schemas/operator-wallet.schema';
 
 @Injectable()
 export class TelegramWalletStrategy extends BaseWalletStrategy {
@@ -30,6 +31,7 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
     private tonClientService: TonClientService,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel(Wallet.name) private walletModel: Model<Wallet>,
+    @InjectModel(OperatorWallet.name) private operatorWalletModel: Model<OperatorWallet>,
   ) {
     super();
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -116,6 +118,20 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
           walletConnection,
           operatorId,
         );
+
+      // Create operator-wallet relationship
+      const operatorWallet = new this.operatorWalletModel({
+        operatorId,
+        walletId: savedWallet.id,
+        chain: 'TON', // Using TON as the chain name for Telegram wallets
+        address: telegramData.address,
+        signature: telegramData.signature,
+        signatureMessage: telegramData.message,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await operatorWallet.save();
 
       // Log the connection event
       this.logConnectionEvent(

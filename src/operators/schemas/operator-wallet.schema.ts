@@ -11,6 +11,15 @@ import { Document, Types } from 'mongoose';
 })
 export class OperatorWallet extends Document {
   /**
+   * The database ID of the operator wallet.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
+  /**
    * The operator's database ID.
    */
   @Prop({ type: Types.ObjectId, required: true, index: true, ref: 'Operators' })
