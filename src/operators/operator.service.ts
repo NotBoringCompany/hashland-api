@@ -62,6 +62,18 @@ export class OperatorService {
       ],
     );
 
+    // **🔴 NEW: Stop drilling sessions for operators who drop below threshold**
+    await this.drillingSessionModel.updateMany(
+      {
+        operatorId: { $in: Array.from(activeOperatorIds) },
+        endTime: null, // ✅ Only stop sessions that are still running
+        currentFuel: {
+          $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
+        }, // ✅ Below depletion threshold
+      },
+      { $set: { endTime: new Date() } }, // ✅ Mark session as ended
+    );
+
     const endTime = performance.now(); // ⏳ End timing
     const executionTime = (endTime - startTime).toFixed(2);
 
@@ -69,6 +81,7 @@ export class OperatorService {
       `⚡ Fuel Processing Completed: 
      ⛏ Depleted ${fuelUsed} for ${activeOperatorIds.size} active operators.
      🔋 Replenished up to ${fuelGained} for inactive operators.
+     🛑 Stopped drilling sessions for operators who dropped below fuel threshold.
      ⏱ Execution Time: ${executionTime}ms`,
     );
   }
@@ -194,3 +207,4 @@ export class OperatorService {
     return operator;
   }
 }
+
