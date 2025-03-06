@@ -12,15 +12,6 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 export class PoolService {
   constructor(@InjectModel(Pool.name) private poolModel: Model<Pool>) {}
 
-  // /**
-  //  * Checks if the operator has met the pool prerequisites before joining.
-  //  */
-  // checkPoolPrequisites(
-  //   prerequisites:
-  // ) {
-
-  // }
-
   /**
    * Creates a new pool. Bypasses prerequisites and costs. Admin only.
    */
