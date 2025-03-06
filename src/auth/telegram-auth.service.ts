@@ -52,38 +52,6 @@ export class TelegramAuthService {
   }
 
   /**
-   * Registers a new operator from Telegram credentials
-   * @param user - Telegram user credentials
-   * @returns Newly created operator or null if registration fails
-   * @throws Error if operator already exists
-   */
-  async registerNewOperator(user: TelegramCreds): Promise<Operator | null> {
-    if (await this.operatorModel.exists({ 'tgProfile.tgId': user.id })) {
-      throw new Error('Operator already exists');
-    }
-
-    const baseUsername = user.username || `tg_${user.id}`;
-    let username = baseUsername;
-    let counter = 1;
-
-    // Generate unique username by appending counter if needed
-    while (await this.operatorModel.exists({ username })) {
-      username = `${baseUsername}_${counter}`;
-      counter++;
-    }
-
-    const operator = await this.operatorModel.create({
-      username,
-      tgProfile: {
-        tgId: user.id,
-        tgUsername: user.username || user.id,
-      },
-    });
-
-    return operator;
-  }
-
-  /**
    * Handles Telegram login authentication
    * @param authData - Telegram authentication data
    * @returns AuthenticatedResponse with operator details and access token
@@ -99,12 +67,13 @@ export class TelegramAuthService {
         throw new HttpException('Invalid Telegram authentication data', 401);
       }
 
-      let operator = (await this.operatorModel.findOne({
-        'tgProfile.tgId': parsedAuthData.user.id,
-      })) as Operator;
+      const operator = await this.operatorService.findOrCreateOperator({
+        id: parsedAuthData.user.id.toString(),
+        username: parsedAuthData.user.username,
+      });
 
       if (!operator) {
-        operator = await this.registerNewOperator(parsedAuthData.user);
+        throw new HttpException('Failed to create operator', 500);
       }
 
       const accessToken = this.generateToken({ _id: operator._id });
@@ -216,7 +185,10 @@ export class TelegramAuthService {
       })) as Operator;
 
       if (!operator) {
-        operator = await this.registerNewOperator(testUser);
+        operator = await this.operatorService.findOrCreateOperator({
+          id: testUser.id.toString(),
+          username: testUser.username,
+        });
       }
 
       const accessToken = this.generateToken({ _id: operator._id });

@@ -25,7 +25,7 @@ export class OperatorService {
   async findOrCreateOperator(authData: {
     id: string;
     username?: string;
-  }): Promise<Types.ObjectId | null> {
+  }): Promise<Operator | null> {
     this.logger.log(
       `🔍 (findOrCreateOperator) Searching for operator with Telegram ID: ${authData.id}`,
     );
@@ -42,7 +42,7 @@ export class OperatorService {
       this.logger.log(
         `✅ (findOrCreateOperator) Found existing operator: ${operator.username}`,
       );
-      return operator._id;
+      return operator;
     }
 
     // If no operator exists, create a new one.
@@ -84,6 +84,6 @@ export class OperatorService {
     this.logger.log(
       `🆕(findOrCreateOperator) Created new operator: ${username}`,
     );
-    return operator._id;
+    return operator;
   }
 }
