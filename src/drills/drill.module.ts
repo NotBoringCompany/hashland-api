@@ -12,4 +12,4 @@ import {
     ]),
   ],
 })
-export class DrillsModule {}
+export class DrillModule {}
