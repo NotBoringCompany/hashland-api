@@ -49,7 +49,7 @@ export class WalletController {
     @Request() req,
   ): Promise<ApiResponse<WalletConnectionResponse>> {
     // Ensure the operator ID from the token matches the requested operator ID
-    if (req.user.userId !== connectionRequest.operatorId) {
+    if (req.user.operatorId !== connectionRequest.operatorId) {
       throw new BadRequestException('Operator ID mismatch');
     }
 
@@ -62,7 +62,7 @@ export class WalletController {
     @Param('walletId') walletId: string,
     @Request() req,
   ): Promise<ApiResponse<boolean>> {
-    const operatorId = req.user.userId;
+    const operatorId = req.user.operatorId;
     return this.walletService.disconnectWallet(walletId, operatorId);
   }
 
@@ -73,7 +73,7 @@ export class WalletController {
     @Body() validationData: Record<string, any>,
     @Request() req,
   ): Promise<ApiResponse<boolean>> {
-    const operatorId = req.user.userId;
+    const operatorId = req.user.operatorId;
     validationData.operatorId = operatorId;
     return this.walletService.validateWallet(walletId, validationData);
   }
@@ -83,7 +83,7 @@ export class WalletController {
   async getWallets(
     @Request() req,
   ): Promise<ApiResponse<WalletConnectionResponse[]>> {
-    const operatorId = req.user.userId;
+    const operatorId = req.user.operatorId;
     return this.walletService.getWalletsForOperator(operatorId);
   }
   @UseGuards(JwtAuthGuard)
@@ -92,7 +92,7 @@ export class WalletController {
     @Param('walletId') walletId: string,
     @Request() req,
   ): Promise<ApiResponse<WalletConnectionResponse>> {
-    const operatorId = req.user.userId;
+    const operatorId = req.user.operatorId;
     const wallet = await this.walletService.getWallet(walletId, operatorId);
 
     if (!wallet) {
@@ -112,7 +112,7 @@ export class WalletController {
     @Param('walletId') walletId: string,
     @Request() req,
   ): Promise<ApiResponse<any>> {
-    const operatorId = req.user.userId;
+    const operatorId = req.user.operatorId;
     return this.walletService.getWalletEvents(walletId, operatorId);
   }
 
@@ -122,7 +122,7 @@ export class WalletController {
     @Param('walletId') walletId: string,
     @Request() req,
   ): Promise<ApiResponse<any>> {
-    const operatorId = req.user.userId;
+    const operatorId = req.user.operatorId;
     return this.walletService.getWalletBalance(walletId, operatorId);
   }
 }
