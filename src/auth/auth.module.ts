@@ -5,9 +5,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TelegramAuthService } from './telegram-auth.service';
 import { TelegramAuthController } from './telegram-auth.controller';
+import { JwtAuthController } from './jwt-auth.controller';
 import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
 import { JwtStrategy } from './jwt/jwt.strategy';
 import { OperatorModule } from 'src/operators/operator.module';
+import { OperatorService } from 'src/operators/operator.service';
 
 @Module({
   imports: [
@@ -28,8 +30,8 @@ import { OperatorModule } from 'src/operators/operator.module';
       { name: Operator.name, schema: OperatorSchema },
     ]),
   ],
-  controllers: [TelegramAuthController],
-  providers: [TelegramAuthService, JwtStrategy],
+  controllers: [TelegramAuthController, JwtAuthController],
+  providers: [TelegramAuthService, JwtStrategy, OperatorService],
   exports: [TelegramAuthService, JwtStrategy, JwtModule],
 })
 export class AuthModule {}

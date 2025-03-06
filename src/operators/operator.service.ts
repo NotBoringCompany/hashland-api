@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Operator } from './schemas/operator.schema';
@@ -14,6 +14,20 @@ export class OperatorService {
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
   ) {}
+
+  /**
+   * Finds an operator by their ID
+   * @param id - The operator's ID
+   * @returns The operator document or null if not found
+   */
+  async findById(id: string): Promise<Operator | null> {
+    const operator = await this.operatorModel.findById(id);
+    if (!operator) {
+      throw new NotFoundException('Operator not found');
+    }
+
+    return operator;
+  }
 
   /**
    * Finds or creates an operator using Telegram authentication data.
