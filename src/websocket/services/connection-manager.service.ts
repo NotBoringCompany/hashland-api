@@ -1,17 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Socket } from 'socket.io';
 import { Types } from 'mongoose';
-import { UserConnection } from '../notification.interface';
+import { OperatorConnection } from '../notification.interface';
 
 @Injectable()
 export class ConnectionManagerService {
   private readonly logger = new Logger(ConnectionManagerService.name);
 
-  // Map of userId to array of socket connections
-  private userConnections = new Map<string, UserConnection[]>();
+  // Map of operatorId to array of socket connections
+  private operatorConnections = new Map<string, OperatorConnection[]>();
 
-  // Map of socketId to userId for quick lookups
-  private socketToUser = new Map<string, string>();
+  // Map of socketId to operatorId for quick lookups
+  private socketToOperator = new Map<string, string>();
 
   // Map of socketId to drilling session ID
   private socketToDrillingSession = new Map<string, Types.ObjectId>();
@@ -19,46 +19,46 @@ export class ConnectionManagerService {
   // Connection statistics
   private stats = {
     totalConnections: 0,
-    activeUsers: 0,
+    activeOperators: 0,
     activeDrillingSessions: 0,
     peakConnections: 0,
   };
 
   /**
-   * Register a new user connection with optional drilling session
+   * Register a new operator connection with optional drilling session
    */
-  registerUserConnection(
-    userId: string,
+  registerOperatorConnection(
+    operatorId: string,
     socket: Socket,
     drillingSessionId?: Types.ObjectId,
   ): void {
     try {
-      const userIdStr = userId.toString();
-      const connection: UserConnection = {
+      const operatorIdStr = operatorId.toString();
+      const connection: OperatorConnection = {
         socketId: socket.id,
-        userId: new Types.ObjectId(userId),
+        operatorId: new Types.ObjectId(operatorId),
         connectedAt: new Date(),
         drillingSessionId,
         isActive: true,
       };
 
-      // Add to user connections map
-      if (!this.userConnections.has(userIdStr)) {
-        this.userConnections.set(userIdStr, []);
-        this.stats.activeUsers++;
+      // Add to operator connections map
+      if (!this.operatorConnections.has(operatorIdStr)) {
+        this.operatorConnections.set(operatorIdStr, []);
+        this.stats.activeOperators++;
       }
 
-      this.userConnections.get(userIdStr).push(connection);
+      this.operatorConnections.get(operatorIdStr).push(connection);
 
       // Add to socket lookup map
-      this.socketToUser.set(socket.id, userIdStr);
+      this.socketToOperator.set(socket.id, operatorIdStr);
 
       // If drilling session is provided, track it
       if (drillingSessionId) {
         this.socketToDrillingSession.set(socket.id, drillingSessionId);
         this.stats.activeDrillingSessions++;
         this.logger.log(
-          `User ${userId} started drilling session ${drillingSessionId} with socket ${socket.id}`,
+          `Operator ${operatorId} started drilling session ${drillingSessionId} with socket ${socket.id}`,
         );
       }
 
@@ -69,21 +69,21 @@ export class ConnectionManagerService {
       }
 
       this.logger.log(
-        `User ${userId} connected with socket ${socket.id}. Total connections: ${this.stats.totalConnections}`,
+        `Operator ${operatorId} connected with socket ${socket.id}. Total connections: ${this.stats.totalConnections}`,
       );
     } catch (error) {
-      this.logger.error(`Error registering user connection: ${error.message}`);
+      this.logger.error(`Error registering operator connection: ${error.message}`);
       // Continue without failing
     }
   }
 
   /**
-   * Remove a user connection
+   * Remove a operator connection
    */
-  removeUserConnection(socketId: string): void {
-    const userId = this.socketToUser.get(socketId);
+  removeOperatorConnection(socketId: string): void {
+    const operatorId = this.socketToOperator.get(socketId);
 
-    if (!userId) {
+    if (!operatorId) {
       this.logger.warn(`Attempted to remove unknown socket: ${socketId}`);
       return;
     }
@@ -95,20 +95,20 @@ export class ConnectionManagerService {
     }
 
     // Remove from socket lookup map
-    this.socketToUser.delete(socketId);
+    this.socketToOperator.delete(socketId);
 
-    // Remove from user connections map
-    if (this.userConnections.has(userId)) {
-      const connections = this.userConnections.get(userId);
+    // Remove from operator connections map
+    if (this.operatorConnections.has(operatorId)) {
+      const connections = this.operatorConnections.get(operatorId);
       const updatedConnections = connections.filter(
         (conn) => conn.socketId !== socketId,
       );
 
       if (updatedConnections.length === 0) {
-        this.userConnections.delete(userId);
-        this.stats.activeUsers--;
+        this.operatorConnections.delete(operatorId);
+        this.stats.activeOperators--;
       } else {
-        this.userConnections.set(userId, updatedConnections);
+        this.operatorConnections.set(operatorId, updatedConnections);
       }
     }
 
@@ -119,18 +119,18 @@ export class ConnectionManagerService {
   }
 
   /**
-   * Get all socket connections for a user
+   * Get all socket connections for a operator
    */
-  getUserConnections(userId: string): UserConnection[] {
-    const userIdStr = userId.toString();
-    return this.userConnections.get(userIdStr) || [];
+  getOperatorConnections(operatorId: string): OperatorConnection[] {
+    const operatorIdStr = operatorId.toString();
+    return this.operatorConnections.get(operatorIdStr) || [];
   }
 
   /**
-   * Get user ID from socket ID
+   * Get operator ID from socket ID
    */
-  getUserIdFromSocket(socketId: string): string | null {
-    return this.socketToUser.get(socketId) || null;
+  getOperatorIdFromSocket(socketId: string): string | null {
+    return this.socketToOperator.get(socketId) || null;
   }
 
   /**
@@ -141,42 +141,42 @@ export class ConnectionManagerService {
   }
 
   /**
-   * Check if a user has any active connections
+   * Check if a operator has any active connections
    */
-  isUserConnected(userId: string): boolean {
-    const userIdStr = userId.toString();
+  isOperatorConnected(operatorId: string): boolean {
+    const operatorIdStr = operatorId.toString();
     return (
-      this.userConnections.has(userIdStr) &&
-      this.userConnections.get(userIdStr).length > 0
+      this.operatorConnections.has(operatorIdStr) &&
+      this.operatorConnections.get(operatorIdStr).length > 0
     );
   }
 
   /**
-   * Check if a user is currently drilling
+   * Check if a operator is currently drilling
    */
-  isUserDrilling(userId: string): boolean {
-    const userIdStr = userId.toString();
-    if (!this.userConnections.has(userIdStr)) return false;
+  isOperatorDrilling(operatorId: string): boolean {
+    const operatorIdStr = operatorId.toString();
+    if (!this.operatorConnections.has(operatorIdStr)) return false;
 
-    return this.userConnections
-      .get(userIdStr)
+    return this.operatorConnections
+      .get(operatorIdStr)
       .some((conn) => !!conn.drillingSessionId);
   }
 
   /**
-   * Get all users who are currently drilling
+   * Get all operators who are currently drilling
    */
-  getDrillingUsers(): string[] {
-    const drillingUsers = new Set<string>();
+  getDrillingOperators(): string[] {
+    const drillingOperators = new Set<string>();
 
     this.socketToDrillingSession.forEach((_, socketId) => {
-      const userId = this.socketToUser.get(socketId);
-      if (userId) {
-        drillingUsers.add(userId);
+      const operatorId = this.socketToOperator.get(socketId);
+      if (operatorId) {
+        drillingOperators.add(operatorId);
       }
     });
 
-    return Array.from(drillingUsers);
+    return Array.from(drillingOperators);
   }
 
   /**

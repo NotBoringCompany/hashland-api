@@ -5,13 +5,13 @@ import { NotificationType } from '../notification.interface';
 /**
  * Service that bridges between the scheduler and the notification system
  * This service listens for cycle updates and other scheduled events
- * and translates them into user-specific notifications
+ * and translates them into operator-specific notifications
  */
 @Injectable()
 export class SchedulerBridgeService implements OnModuleInit {
   private readonly logger = new Logger(SchedulerBridgeService.name);
 
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(private readonly notificationService: NotificationService) { }
 
   onModuleInit() {
     this.logger.log('Scheduler Bridge Service initialized');
@@ -19,7 +19,7 @@ export class SchedulerBridgeService implements OnModuleInit {
   }
 
   /**
-   * Process a drilling cycle update and send notifications to relevant users
+   * Process a drilling cycle update and send notifications to relevant operators
    */
   processCycleUpdate(cycleData: any): void {
     try {
@@ -27,7 +27,7 @@ export class SchedulerBridgeService implements OnModuleInit {
         `Processing cycle update: ${JSON.stringify(cycleData)}`,
       );
 
-      // Example: Broadcast cycle progress to all users
+      // Example: Broadcast cycle progress to all operators
       if (cycleData.cycleProgress !== undefined) {
         this.notificationService.broadcastToAll({
           type: NotificationType.DRILLING,
@@ -45,7 +45,7 @@ export class SchedulerBridgeService implements OnModuleInit {
       // Example: Send personalized notifications to top miners
       if (cycleData.topMiners && Array.isArray(cycleData.topMiners)) {
         cycleData.topMiners.forEach((miner) => {
-          this.notificationService.sendToUser(miner.operatorId, {
+          this.notificationService.sendToOperator(miner.operatorId, {
             type: NotificationType.SUCCESS,
             title: 'Mining Performance Update',
             message: `You've mined ${miner.hashMined} hash in the current cycle!`,
@@ -75,7 +75,7 @@ export class SchedulerBridgeService implements OnModuleInit {
         `Processing cycle completion for cycle: ${cycleData.cycleId}`,
       );
 
-      // Broadcast to all users
+      // Broadcast to all operators
       this.notificationService.broadcastSystemNotification(
         'Drilling Cycle Completed',
         `Cycle ${cycleData.cycleId} has been completed successfully.`,
@@ -96,7 +96,7 @@ export class SchedulerBridgeService implements OnModuleInit {
         // Notify top 3 miners
         sortedMiners.slice(0, 3).forEach((miner, index) => {
           const rank = index + 1;
-          this.notificationService.sendToUser(miner.operatorId, {
+          this.notificationService.sendToOperator(miner.operatorId, {
             type: NotificationType.SUCCESS,
             title: `Congratulations! Rank #${rank} Miner`,
             message: `You ranked #${rank} in cycle ${cycleData.cycleId} with ${miner.hashMined} hash mined!`,
@@ -139,15 +139,15 @@ export class SchedulerBridgeService implements OnModuleInit {
   }
 
   /**
-   * Process user-specific events (e.g., rewards, achievements)
+   * Process operator-specific events (e.g., rewards, achievements)
    */
-  processUserEvent(userId: string, eventData: any): void {
+  processOperatorEvent(operatorId: string, eventData: any): void {
     try {
       const { eventType, details } = eventData;
 
       switch (eventType) {
         case 'reward':
-          this.notificationService.sendToUser(userId, {
+          this.notificationService.sendToOperator(operatorId, {
             type: NotificationType.SUCCESS,
             title: 'Reward Earned',
             message: `You've earned a reward: ${details.rewardName}`,
@@ -157,7 +157,7 @@ export class SchedulerBridgeService implements OnModuleInit {
           break;
 
         case 'achievement':
-          this.notificationService.sendToUser(userId, {
+          this.notificationService.sendToOperator(operatorId, {
             type: NotificationType.SUCCESS,
             title: 'Achievement Unlocked',
             message: `New achievement: ${details.achievementName}`,
@@ -167,11 +167,11 @@ export class SchedulerBridgeService implements OnModuleInit {
           break;
 
         default:
-          this.logger.warn(`Unknown user event type: ${eventType}`);
+          this.logger.warn(`Unknown operator event type: ${eventType}`);
       }
     } catch (error) {
       this.logger.error(
-        `Error processing user event: ${error.message}`,
+        `Error processing operator event: ${error.message}`,
         error.stack,
       );
     }

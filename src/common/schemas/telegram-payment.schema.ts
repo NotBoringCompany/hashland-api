@@ -1,7 +1,7 @@
 import { Prop } from '@nestjs/mongoose';
 
 /**
- * `TGStarsData` represents the data received from the Telegram payment provider when a user purchases an item from the shop using Telegram Stars.
+ * `TGStarsData` represents the data received from the Telegram payment provider when a operator purchases an item from the shop using Telegram Stars.
  */
 export class TGStarsData {
   /** The invoice payload of the payment (contains the metadata/details of the purchase) */

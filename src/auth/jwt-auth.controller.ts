@@ -16,11 +16,11 @@ import { OperatorService } from 'src/operators/operator.service';
 @ApiTags('JWT Authentication')
 @Controller('auth/jwt')
 export class JwtAuthController {
-  constructor(private readonly operatorService: OperatorService) {}
+  constructor(private readonly operatorService: OperatorService) { }
 
   /**
    * Verifies a JWT token and returns the operator information
-   * @param req - The request object containing the authenticated user
+   * @param req - The request object containing the authenticated operator
    * @returns ApiResponse containing the operator information
    */
   @ApiOperation({

@@ -34,7 +34,7 @@ export class TxParsedMessage {
 }
 
 /**
- * `BlockchainData` represents the data received from the blockchain when a user purchases an item from the shop using crypto.
+ * `BlockchainData` represents the data received from the blockchain when a operator purchases an item from the shop using crypto.
  */
 export class BlockchainData {
   /**
