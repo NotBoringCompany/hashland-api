@@ -20,12 +20,12 @@ export class OperatorService {
    *
    * Also assigns the operator to a random public pool if still applicable.
    * @param authData - Telegram authentication data
-   * @returns The operator's ID or null if authentication fails
+   * @returns The operator's data (or null if not found)
    */
   async findOrCreateOperator(authData: {
     id: string;
     username?: string;
-  }): Promise<Types.ObjectId | null> {
+  }): Promise<Operator | null> {
     this.logger.log(
       `🔍 (findOrCreateOperator) Searching for operator with Telegram ID: ${authData.id}`,
     );
@@ -42,7 +42,7 @@ export class OperatorService {
       this.logger.log(
         `✅ (findOrCreateOperator) Found existing operator: ${operator.username}`,
       );
-      return operator._id;
+      return operator;
     }
 
     // If no operator exists, create a new one.
@@ -84,6 +84,6 @@ export class OperatorService {
     this.logger.log(
       `🆕(findOrCreateOperator) Created new operator: ${username}`,
     );
-    return operator._id;
+    return operator;
   }
 }
