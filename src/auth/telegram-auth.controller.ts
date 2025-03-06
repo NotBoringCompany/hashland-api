@@ -1,7 +1,7 @@
 import { Controller, Post, Body, HttpCode } from '@nestjs/common';
 import { TelegramAuthService } from './telegram-auth.service';
 import { TelegramAuthDto } from '../common/dto/telegram-auth.dto';
-import { AuthenticatedResponse } from './dto/auth.dto';
+import { AuthenticatedResponse } from '../common/dto/auth.dto';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Telegram Authentication')

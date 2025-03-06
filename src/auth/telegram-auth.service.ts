@@ -16,7 +16,7 @@ import {
 } from '../common/dto/telegram-auth.dto';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from 'src/operators/operator.service';
-import { AuthenticatedResponse } from './dto/auth.dto';
+import { AuthenticatedResponse } from '../common/dto/auth.dto';
 
 /**
  * Service handling Telegram authentication and operator management
