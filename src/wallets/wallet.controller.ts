@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt/jwt-auth.guard';
 import { WalletService } from './services/wallet.services';
+import { WalletSignatureValidator } from '../wallets/utils/wallet-signature-validator';
 import { ApiResponse } from '../common/dto/response.dto';
 import {
   WalletConnectionRequest,
@@ -20,7 +21,20 @@ import {
 
 @Controller('wallets')
 export class WalletController {
-  constructor(private readonly walletService: WalletService) { }
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly walletSignatureValidator: WalletSignatureValidator,
+  ) { }
+
+  /**
+ * Generate a challenge message for wallet signature
+ */
+  @UseGuards(JwtAuthGuard)
+  @Post('challenge')
+  async generateChallenge(@Body() body: { address: string }) {
+    const { address } = body;
+    return { challenge_message: this.walletSignatureValidator.generateChallengeMessage(address, this.walletSignatureValidator.generateNonce()) };
+  }
 
   @UseGuards(JwtAuthGuard)
   @Post('connect')

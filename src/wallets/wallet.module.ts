@@ -8,7 +8,6 @@ import { WalletValidationService } from './services/wallet-validation.service';
 import { TonClientService } from './services/ton-client.service';
 import { WalletController } from './wallet.controller';
 import { TelegramWalletStrategy } from './strategies/telegram-wallet.strategy';
-import { WalletEncryptionUtil } from './utils/wallet-encryption';
 import { WalletSignatureValidator } from './utils/wallet-signature-validator';
 import { Wallet, WalletSchema } from './schemas/wallet.schema';
 import {
@@ -41,14 +40,15 @@ import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
     },
     WalletValidationService,
     WalletService,
-    WalletEncryptionUtil,
     WalletSignatureValidator,
     TonClientService,
+    TelegramWalletStrategy,
   ],
   exports: [
     WalletService,
     WalletConnectionService,
-    WalletValidationService,
+    // WalletValidationService,
+    WalletSignatureValidator,
     TelegramWalletStrategy,
     TonClientService,
   ],

@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 // import { createHash } from 'crypto';
 import { TelegramWalletConnectionData } from '../interfaces/wallet-connection-types';
+import { WalletSignatureValidator } from '../utils/wallet-signature-validator'
 
 @Injectable()
 export class WalletValidationService {
-  constructor(private configService: ConfigService) {}
+  constructor(
+    private configService: ConfigService,
+    private walletSignatureValidator: WalletSignatureValidator,
+  ) { }
 
   /**
    * Validate a TON proof from Telegram wallet
@@ -62,20 +66,13 @@ export class WalletValidationService {
     }
 
     try {
-      // In a real implementation, you would verify the signature using TON SDK
-      // This is a placeholder for the actual signature verification
-      // const isValidSignature = await verifyTonSignature(
-      //   signature,
-      //   message,
-      //   address
-      // );
+      const isValidSignature = await this.walletSignatureValidator.validateTonSignature(
+        signature,
+        message,
+        address
+      );
 
-      // For now, we'll assume the signature is valid if the message contains the address
-      // This is NOT secure and should be replaced with actual verification
-      // const messageHash = createHash('sha256').update(message).digest('hex');
-      const addressInMessage = message.includes(address);
-
-      return addressInMessage;
+      return isValidSignature;
     } catch (error) {
       console.error('Error validating TON signature:', error);
       return false;

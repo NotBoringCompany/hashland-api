@@ -90,16 +90,14 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
         });
       }
 
-      // If TON proof is provided, validate it
-      if (telegramData.tonProof) {
-        const isValid = await this.walletValidationService.validateTonProof(
-          telegramData.tonProof,
-          telegramData.address,
-        );
+      const isValid = await this.walletValidationService.validateTonSignature(
+        telegramData.signature,
+        telegramData.message,
+        telegramData.address
+      );
 
-        if (!isValid) {
-          return this.createErrorResponse(401, 'Invalid TON proof signature');
-        }
+      if (!isValid) {
+        return this.createErrorResponse(401, 'Invalid TON proof signature');
       }
 
       // Create the wallet connection
