@@ -195,4 +195,43 @@ export class TelegramAuthService {
       throw new Error('Invalid user data format');
     }
   }
+
+  /**
+   * Creates a test user without Telegram validation
+   * @returns AuthenticatedResponse with test operator details and access token
+   */
+  async testLogin(): Promise<AuthenticatedResponse> {
+    try {
+      const testUser: TelegramCreds = {
+        id: 12345,
+        first_name: 'Test',
+        last_name: 'User',
+        username: 'test_user',
+        language_code: 'en',
+        allows_write_to_pm: true,
+      };
+
+      let operator = (await this.operatorModel.findOne({
+        'tgProfile.tgId': testUser.id,
+      })) as Operator;
+
+      if (!operator) {
+        operator = await this.registerNewOperator(testUser);
+      }
+
+      const accessToken = this.generateToken({ _id: operator._id });
+
+      return new AuthenticatedResponse({
+        operator,
+        accessToken,
+      });
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(testLogin) Error creating test user: ${err.message}`,
+        ),
+      );
+    }
+  }
 }

@@ -33,4 +33,20 @@ export class TelegramAuthController {
   ): Promise<AuthenticatedResponse> {
     return this.telegramAuthService.telegramLogin(authData);
   }
+
+  @ApiOperation({
+    summary: 'Test Authentication',
+    description:
+      'Creates a test user without Telegram validation (development only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully authenticated test user',
+    type: AuthenticatedResponse,
+  })
+  @Post('test-login')
+  @HttpCode(200)
+  async testLogin(): Promise<AuthenticatedResponse> {
+    return this.telegramAuthService.testLogin();
+  }
 }
