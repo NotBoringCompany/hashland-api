@@ -8,6 +8,6 @@ import { DrillService } from './drill.service';
     MongooseModule.forFeature([{ name: Drill.name, schema: DrillSchema }]),
   ],
   providers: [DrillService],
-  exports: [DrillService],
+  exports: [MongooseModule, DrillService],
 })
 export class DrillModule {}
