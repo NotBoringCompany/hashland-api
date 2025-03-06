@@ -49,7 +49,7 @@ export class OperatorService {
     await this.operatorModel.updateMany(
       {
         _id: { $nin: Array.from(activeOperatorIds) }, // Only inactive operators
-        currentFuel: { $lt: '$maxFuel' }, // ✅ Exclude those already at maxFuel
+        $expr: { $lt: ['$currentFuel', '$maxFuel'] }, // ✅ Exclude those already at max fuel
       },
       [
         {
