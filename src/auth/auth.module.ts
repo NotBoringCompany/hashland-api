@@ -10,11 +10,13 @@ import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
 import { JwtStrategy } from './jwt/jwt.strategy';
 import { OperatorModule } from 'src/operators/operator.module';
 import { OperatorService } from 'src/operators/operator.service';
+import { PoolOperatorService } from 'src/pools/pool-operator.service';
 
 @Module({
   imports: [
     ConfigModule,
     OperatorModule,
+    PoolOperatorService,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
