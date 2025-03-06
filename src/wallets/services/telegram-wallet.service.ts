@@ -3,9 +3,9 @@
  * It demonstrates how to use the wallet integration system to connect a Telegram wallet.
  */
 
-import { WalletService } from './services/wallet.services';
-import { WalletConnectionRequest } from './interfaces/wallet.interface';
-import { TelegramWalletConnectionData } from './interfaces/wallet-connection-types';
+import { WalletService } from './wallet.services';
+import { WalletConnectionRequest } from '../interfaces/wallet.interface';
+import { TelegramWalletConnectionData } from '../interfaces/wallet-connection-types';
 
 /**
  * Example function to connect a Telegram wallet
@@ -89,4 +89,3 @@ export async function disconnectTelegramWallet(
     throw error;
   }
 }
-
