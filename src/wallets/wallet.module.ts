@@ -5,6 +5,7 @@ import { BullModule } from '@nestjs/bull';
 import { WalletService } from './services/wallet.services';
 import { WalletConnectionService } from './services/wallet-connection.service';
 import { WalletValidationService } from './services/wallet-validation.service';
+import { TonClientService } from './services/ton-client.service';
 import { WalletController } from './wallet.controller';
 import { TelegramWalletStrategy } from './strategies/telegram-wallet.strategy';
 import { WalletEncryptionUtil } from './utils/wallet-encryption';
@@ -42,12 +43,14 @@ import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
     WalletService,
     WalletEncryptionUtil,
     WalletSignatureValidator,
+    TonClientService,
   ],
   exports: [
     WalletService,
     WalletConnectionService,
     WalletValidationService,
     TelegramWalletStrategy,
+    TonClientService,
   ],
 })
 export class WalletModule { }

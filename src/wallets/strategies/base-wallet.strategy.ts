@@ -41,6 +41,13 @@ export abstract class BaseWalletStrategy implements WalletStrategy {
   ): Promise<ApiResponse<boolean>>;
 
   /**
+   * Get wallet balance
+   */
+  abstract getBalance(
+    walletId: string,
+  ): Promise<ApiResponse<{ balance: string; symbol: string }>>;
+
+  /**
    * Create a standardized error response
    */
   protected createErrorResponse<T>(

@@ -17,6 +17,7 @@ import { WalletConnectionService } from '../services/wallet-connection.service';
 import { WalletValidationService } from '../services/wallet-validation.service';
 import { Operator } from '../../operators/schemas/operator.schema';
 import { Wallet } from '../schemas/wallet.schema';
+import { TonClientService } from '../services/ton-client.service';
 
 @Injectable()
 export class TelegramWalletStrategy extends BaseWalletStrategy {
@@ -26,14 +27,11 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
     private configService: ConfigService,
     private walletConnectionService: WalletConnectionService,
     private walletValidationService: WalletValidationService,
+    private tonClientService: TonClientService,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel(Wallet.name) private walletModel: Model<Wallet>,
   ) {
     super();
-    console.log(
-      'WalletConnectionService injected:',
-      !!this.walletConnectionService,
-    );
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     if (!this.botToken) {
       throw new Error(
@@ -240,6 +238,7 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
     walletId: string,
   ): Promise<ApiResponse<{ balance: string; symbol: string }>> {
     try {
+      // Get the wallet connection from the database
       const wallet =
         await this.walletConnectionService.getWalletConnection(walletId);
 
@@ -251,13 +250,18 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
         return this.createErrorResponse(400, 'Invalid wallet type');
       }
 
-      // This would be implemented with TON SDK to fetch the actual balance
-      // For now, return a placeholder
+      // Fetch the actual balance from TON blockchain
+      const balance = await this.tonClientService.getAddressBalance(wallet.address);
+
+      // Log the balance retrieval
+      console.log(`Retrieved balance for wallet ${walletId}: ${balance} TON`);
+
       return this.createSuccessResponse('Wallet balance retrieved', {
-        balance: '0',
+        balance,
         symbol: 'TON',
       });
     } catch (err: any) {
+      console.error('Error getting wallet balance:', err);
       throw new InternalServerErrorException(
         this.createErrorResponse(
           500,
