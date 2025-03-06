@@ -20,7 +20,7 @@ export class OperatorService {
    *
    * Also assigns the operator to a random public pool if still applicable.
    * @param authData - Telegram authentication data
-   * @returns The operator's ID or null if authentication fails
+   * @returns The operator's data (or null if not found)
    */
   async findOrCreateOperator(authData: {
     id: string;

@@ -12,7 +12,6 @@ import { Operator } from '../operators/schemas/operator.schema';
 import {
   TelegramAuthDto,
   TelegramAuthData,
-  TelegramCreds,
 } from '../common/dto/telegram-auth.dto';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from 'src/operators/operator.service';
