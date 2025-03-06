@@ -3,6 +3,7 @@ import { Queue } from 'bull';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DrillingCycleService } from './drilling-cycle.service';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { RedisService } from 'src/common/redis.service';
 
 @Injectable()
 @Processor('drilling-cycles')
@@ -12,6 +13,7 @@ export class DrillingCycleQueue implements OnModuleInit {
 
   constructor(
     private readonly drillingCycleService: DrillingCycleService,
+    private readonly redisService: RedisService,
     @InjectQueue('drilling-cycles') private readonly drillingCycleQueue: Queue, // ✅ Inject Bull Queue
   ) {}
 
@@ -58,16 +60,28 @@ export class DrillingCycleQueue implements OnModuleInit {
       return;
     }
 
-    this.logger.log(
-      `🔄 Ending current drilling cycle before starting a new one...`,
-    );
+    this.logger.log(`🔄 Ending previous cycle in the background...`);
 
-    // ✅ Step 1: End the current cycle (select extractor, issue rewards, process fuel...)
-    await this.drillingCycleService.endCurrentCycle();
+    // ✅ Step 1: Get current cycle number **before creating a new one**
+    const latestCycleNumber = await this.redisService.get(
+      'drilling-cycle:current',
+    );
+    if (!latestCycleNumber) {
+      this.logger.warn(
+        '⚠️ No previous cycle found in Redis. Skipping endCurrentCycle.',
+      );
+    } else {
+      this.logger.log(`🔄 Processing end of cycle #${latestCycleNumber}...`);
+      this.drillingCycleService
+        .endCurrentCycle(parseInt(latestCycleNumber, 10))
+        .catch((err) => {
+          this.logger.error(`❌ Error while ending cycle: ${err.message}`);
+        });
+    }
 
     // ✅ Step 2: Start a new drilling cycle
+    this.logger.log(`⛏️ Starting a new drilling cycle...`);
     await this.drillingCycleService.createDrillingCycle();
-
-    this.logger.log(`✅ Drilling cycle completed successfully.`);
+    this.logger.log(`✅ New drilling cycle started.`);
   }
 }

@@ -14,6 +14,7 @@ import { OperatorModule } from 'src/operators/operator.module';
 import { DrillModule } from './drill.module';
 import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 import { PoolModule } from 'src/pools/pool.module';
+import { RedisModule } from 'src/common/redis.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PoolModule } from 'src/pools/pool.module';
     DrillModule, // Import DrillModule
     PoolOperatorModule, // Import PoolOperatorModule
     PoolModule, // Import PoolModule
+    RedisModule, // Import RedisModule
     MongooseModule.forFeature([
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
     ]),

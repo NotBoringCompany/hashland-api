@@ -39,4 +39,16 @@ export class DrillService {
       throw new Error(`(createDrill) Error creating drill: ${err.message}`);
     }
   }
+
+  /**
+   * Fetches all drills that have `extractorAllowed` set to `true`.
+   *
+   * These will be the drills that are eligible to be extractors.
+   */
+  async fetchEligibleExtractorDrills() {
+    return this.drillModel
+      .find({ extractorAllowed: true })
+      .select('_id actualEff')
+      .lean();
+  }
 }

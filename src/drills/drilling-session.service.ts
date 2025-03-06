@@ -26,39 +26,4 @@ export class DrillingSessionService {
       .distinct('operatorId')
       .lean();
   }
-
-  /**
-   * Fetches all active drilling sessions with drill ID and its actual EFF from the `Drill` collection.
-   */
-  async fetchActiveDrillingSessionsWithEff(): Promise<
-    { drillId: Types.ObjectId; eff: number }[]
-  > {
-    const activeSessions = await this.drillingSessionModel.aggregate([
-      {
-        $match: { endTime: null }, // Only active drilling sessions
-      },
-      {
-        $lookup: {
-          from: 'Drills', // Collection name (case-sensitive)
-          localField: 'drillId',
-          foreignField: '_id',
-          as: 'drill',
-        },
-      },
-      {
-        $unwind: '$drill', // Flatten the drill data
-      },
-      {
-        $match: { 'drill.extractorAllowed': true }, // Ensure only valid drills are selected
-      },
-      {
-        $project: {
-          drillId: '$drill._id',
-          eff: '$drill.actualEff',
-        },
-      },
-    ]);
-
-    return activeSessions;
-  }
 }

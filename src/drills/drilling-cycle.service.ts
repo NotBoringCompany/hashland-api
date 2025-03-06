@@ -16,6 +16,7 @@ import { Drill } from './schemas/drill.schema';
 import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
 import { Pool } from 'src/pools/schemas/pool.schema';
 import { OperatorService } from 'src/operators/operator.service';
+import { DrillService } from './drill.service';
 
 @Injectable()
 export class DrillingCycleService {
@@ -33,6 +34,7 @@ export class DrillingCycleService {
     @InjectModel(Pool.name) private poolModel: Model<Pool>,
     private readonly redisService: RedisService,
     private readonly drillingSessionService: DrillingSessionService,
+    private readonly drillService: DrillService,
     private readonly operatorService: OperatorService,
   ) {}
 
@@ -107,65 +109,58 @@ export class DrillingCycleService {
    * 1. Selecting the extractor for this cycle.
    * 2. Distributing rewards to operators.
    * 3. Depleting or replenishing fuel for operators.
+   * 4. Updating the cycle with the selected extractor.
    */
-  async endCurrentCycle() {
+  async endCurrentCycle(cycleNumber: number) {
     const startTime = performance.now();
-    this.logger.log(`⏳ (endCurrentCycle) Ending current cycle...`);
+    this.logger.log(`⏳ (endCurrentCycle) Ending cycle #${cycleNumber}...`);
 
-    // ✅ Step 1: Get the latest cycle data
-    const latestCycle = await this.drillingCycleModel
+    // ✅ Fetch cycle data using the explicitly provided cycle number
+    const cycle = await this.drillingCycleModel
       .findOne(
-        {},
+        { cycleNumber },
         {
           cycleNumber: 1,
           issuedHASH: 1,
         },
       )
-      .sort({ cycleNumber: -1 })
       .lean();
 
-    if (!latestCycle) {
-      this.logger.error(`❌ (endCurrentCycle) No active cycle found.`);
+    if (!cycle) {
+      this.logger.error(
+        `❌ (endCurrentCycle) Cycle #${cycleNumber} not found.`,
+      );
       return;
     }
 
-    // const cycleId = latestCycle._id;
-    const issuedHash = latestCycle.issuedHASH;
-
-    // ✅ Step 2: Fetch active drilling sessions with drill IDs & `actualEff`
-    const activeSessions =
-      await this.drillingSessionService.fetchActiveDrillingSessionsWithEff();
-
-    if (activeSessions.length === 0) {
-      this.logger.warn(
-        `(endCurrentCycle) No active sessions found. Skipping extractor selection.`,
-      );
-    }
-
-    // ✅ Step 3: Select extractor drill
-    const extractorData = this.selectExtractor(activeSessions);
-
+    // ✅ Step 1: Select extractor
+    const extractorData = await this.selectExtractor();
     if (!extractorData) {
       this.logger.warn(
         `(endCurrentCycle) No valid extractor drill found. Skipping reward distribution.`,
       );
     } else {
+      // ✅ Step 2: Distribute rewards
       await this.distributeCycleRewards(
-        // cycleId,
         extractorData.drillId,
-        issuedHash,
+        cycle.issuedHASH,
       );
     }
 
-    // ✅ Step 4: Process Fuel for ALL Operators
+    // ✅ Step 3: Process Fuel for ALL Operators
     await this.operatorService.processFuelForAllOperators();
 
-    // ✅ Step 5: Start the next cycle
-    await this.createDrillingCycle();
+    // ✅ Step 4: Update the cycle with extractor ID
+    if (extractorData) {
+      await this.drillingCycleModel.updateOne(
+        { cycleNumber },
+        { extractorId: extractorData.drillId },
+      );
+    }
 
     const endTime = performance.now();
     this.logger.log(
-      `✅ (endCurrentCycle) Cycle ended and new cycle started in ${(endTime - startTime).toFixed(2)}ms.`,
+      `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${(endTime - startTime).toFixed(2)}ms.`,
     );
   }
 
@@ -320,44 +315,78 @@ export class DrillingCycleService {
    * Selects an extractor using weighted probability with a luck factor.
    * Uses a dice roll between 0 and the cumulative sum of all (EFF × Luck Factor).
    */
-  private selectExtractor(
-    activeSessions: { drillId: Types.ObjectId; eff: number }[],
-  ) {
-    const selectionStartTime = performance.now(); // ✅ Start timing for selection process
+  private async selectExtractor(): Promise<{
+    drillId: Types.ObjectId;
+    eff: number;
+  } | null> {
+    const selectionStartTime = performance.now(); // ✅ Performance tracking
 
-    // Calculate weighted EFF with Luck Factor
-    const sessionsWithLuck = activeSessions.map((session) => {
-      const luckFactor = 1 + Math.random() * 0.1; // Luck Factor between 1.00 and 1.10
-      return { ...session, weightedEFF: session.eff * luckFactor };
+    const eligibleDrills =
+      await this.drillService.fetchEligibleExtractorDrills();
+
+    if (eligibleDrills.length === 0) {
+      this.logger.warn(
+        `⚠️ No eligible drills found. Skipping extractor selection.`,
+      );
+      return null;
+    }
+
+    // Apply Luck Factor
+    const drillsWithLuck = eligibleDrills.map((drill) => {
+      const luckFactor = 1 + Math.random() * 0.1; // 1.00 to 1.10
+      return { ...drill, weightedEFF: drill.actualEff * luckFactor };
     });
 
     // Calculate total weighted EFF
-    const totalWeightedEFF = sessionsWithLuck.reduce(
-      (sum, session) => sum + session.weightedEFF,
+    const totalWeightedEFF = drillsWithLuck.reduce(
+      (sum, drill) => sum + drill.weightedEFF,
       0,
     );
 
-    if (totalWeightedEFF === 0) return null; // No valid drills
+    if (totalWeightedEFF === 0) {
+      this.logger.warn(`⚠️ No valid EFF found for extractor selection.`);
+      return null;
+    }
 
-    // Roll a dice between 0 and total weighted EFF
+    // 🎲 Roll a random number between 0 and totalWeightedEFF
     const diceRoll = Math.random() * totalWeightedEFF;
-
-    // Iterate through drills and find the one that matches the dice roll
     let cumulativeWeightedEFF = 0;
-    for (const session of sessionsWithLuck) {
-      cumulativeWeightedEFF += session.weightedEFF;
+
+    for (const drill of drillsWithLuck) {
+      cumulativeWeightedEFF += drill.weightedEFF;
       if (diceRoll <= cumulativeWeightedEFF) {
-        const selectionEndTime = performance.now(); // ✅ End timing for selection process
         this.logger.log(
-          `⏳ (Performance) Extractor selection process took ${(
-            selectionEndTime - selectionStartTime
-          ).toFixed(2)} ms.`,
+          `✅ Selected extractor: Drill ${drill._id.toString()} with ${drill.weightedEFF.toFixed(2)} weighted EFF`,
         );
-        return session; // Selected drill
+
+        const selectionEndTime = performance.now(); // ✅ Performance tracking
+
+        this.logger.log(
+          `⏳ (selectExtractor) Extractor selection took ${(
+            selectionEndTime - selectionStartTime
+          ).toFixed(2)}ms.`,
+        );
+
+        return {
+          drillId: drill._id,
+          eff: drill.weightedEFF,
+        };
       }
     }
 
-    return null; // This should never happen if data is valid
+    this.logger.warn(
+      `⚠️ (selectExtractor) Unexpected error in extractor selection.`,
+    );
+
+    const selectionEndTime = performance.now(); // ✅ Performance tracking
+
+    this.logger.log(
+      `⏳ (selectExtractor) Extractor selection (failed) took ${(
+        selectionEndTime - selectionStartTime
+      ).toFixed(2)}ms.`,
+    );
+
+    return null; // Fallback case
   }
 
   /**
