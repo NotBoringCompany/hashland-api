@@ -15,6 +15,7 @@ import { DrillModule } from './drill.module';
 import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 import { PoolModule } from 'src/pools/pool.module';
 import { RedisModule } from 'src/common/redis.module';
+import { DrillService } from './drill.service';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RedisModule } from 'src/common/redis.module';
     DrillingSessionModule, // Import DrillingSessionModule
     OperatorModule, // Import OperatorModule
     DrillModule, // Import DrillModule
+    DrillService, // Import DrillService
     PoolOperatorModule, // Import PoolOperatorModule
     PoolModule, // Import PoolModule
     RedisModule, // Import RedisModule
