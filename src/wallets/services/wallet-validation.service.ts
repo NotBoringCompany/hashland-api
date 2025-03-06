@@ -9,7 +9,7 @@ export class WalletValidationService {
   constructor(
     private configService: ConfigService,
     private walletSignatureValidator: WalletSignatureValidator,
-  ) {}
+  ) { }
 
   /**
    * Validate a TON proof from Telegram wallet
@@ -93,14 +93,4 @@ export class WalletValidationService {
   //   // For now, return false as it's not implemented
   //   return false;
   // }
-
-  /**
-   * Generate a challenge message for wallet validation
-   */
-  generateChallengeMessage(address: string, nonce: string): string {
-    const appName = this.configService.get<string>('APP_NAME', 'Hashland');
-    const timestamp = Date.now();
-
-    return `${appName} authentication request for address ${address}.\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
-  }
 }

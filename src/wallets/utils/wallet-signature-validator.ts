@@ -130,11 +130,17 @@ export class WalletSignatureValidator {
    * Generate a challenge message for wallet validation
    * This message will be signed by the user's wallet
    */
-  generateChallengeMessage(address: string, nonce: string): string {
+  generateChallengeMessage(address: string, type: string, nonce: string): string {
     const appName = this.configService.get<string>('APP_NAME', 'Hashland');
     const timestamp = Date.now();
 
-    return `${appName} authentication request for address ${address}.\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
+    const message = `${appName} authentication request for address ${address}.\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
+    if (type === 'hex') {
+      // Use ethers.toUtf8Bytes to convert the string to bytes and then hexlify it
+      return this.hashMessage(message);
+    }
+
+    return message;
   }
 
   /**
