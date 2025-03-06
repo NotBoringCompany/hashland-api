@@ -21,7 +21,24 @@ export class OperatorService {
    * @returns The operator document or null if not found
    */
   async findById(id: string): Promise<Operator | null> {
-    const operator = await this.operatorModel.findById(id);
+    const operator = await this.operatorModel.findById(new Types.ObjectId(id));
+    if (!operator) {
+      throw new NotFoundException('Operator not found');
+    }
+
+    return operator;
+  }
+
+  /**
+   * Finds an operator by their Telegram ID
+   * @param id - The operator's ID
+   * @returns The operator document or null if not found
+   */
+  async findByTelegramId(id: string): Promise<Operator | null> {
+    const operator = await this.operatorModel.findOne({
+      'tgProfile.tgId': id,
+    });
+
     if (!operator) {
       throw new NotFoundException('Operator not found');
     }

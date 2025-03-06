@@ -39,7 +39,8 @@ export class JwtAuthController {
   @UseGuards(JwtAuthGuard)
   @Get('verify')
   async verifyToken(@Request() req): Promise<AppApiResponse<Operator>> {
-    const operator = await this.operatorService.findById(req.user.userId);
+    const operator = await this.operatorService.findById(req.user.operatorId);
+
     return new AppApiResponse<Operator>(
       200,
       'Token verified successfully',

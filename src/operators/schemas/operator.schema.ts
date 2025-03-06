@@ -13,6 +13,7 @@ export class Operator extends Document {
   @Prop({
     type: Types.ObjectId,
     default: () => new Types.ObjectId(),
+    primaryKey: true,
   })
   _id: Types.ObjectId;
 
