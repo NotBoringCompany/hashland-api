@@ -53,4 +53,4 @@ import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
     TonClientService,
   ],
 })
-export class WalletModule { }
+export class WalletModule {}

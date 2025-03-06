@@ -16,7 +16,7 @@ export class WalletConnectionService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel('WalletConnectionEvent')
     private walletEventModel: Model<WalletConnectionEvent>,
-  ) { }
+  ) {}
 
   /**
    * Save a new wallet connection

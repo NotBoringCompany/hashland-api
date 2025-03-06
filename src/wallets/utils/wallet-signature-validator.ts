@@ -11,7 +11,10 @@ export class WalletSignatureValidator {
 
   constructor(private configService: ConfigService) {
     // Initialize TON client
-    const endpoint = this.configService.get<string>('TON_API_ENDPOINT', 'https://toncenter.com/api/v2/jsonRPC');
+    const endpoint = this.configService.get<string>(
+      'TON_API_ENDPOINT',
+      'https://toncenter.com/api/v2/jsonRPC',
+    );
     const apiKey = this.configService.get<string>('TON_API_KEY', '');
 
     this.tonClient = new TonClient({
@@ -34,9 +37,9 @@ export class WalletSignatureValidator {
       const tonAddress = Address.parse(address);
 
       // Create a cell with the message
-      const messageCell = beginCell().storeBuffer(
-        Buffer.from(message)
-      ).endCell();
+      const messageCell = beginCell()
+        .storeBuffer(Buffer.from(message))
+        .endCell();
 
       // Get contract state to extract public key
       const contractState = await this.tonClient.getContractState(tonAddress);
@@ -60,10 +63,12 @@ export class WalletSignatureValidator {
       const isValid = this.verifySignature(
         publicKey,
         messageCell.hash(),
-        signatureBuffer
+        signatureBuffer,
       );
 
-      console.log(`Validating TON signature for address ${address}: ${isValid}`);
+      console.log(
+        `Validating TON signature for address ${address}: ${isValid}`,
+      );
       return isValid;
     } catch (error) {
       console.error('Error validating TON signature:', error);
@@ -74,7 +79,9 @@ export class WalletSignatureValidator {
   /**
    * Extract public key from contract by calling get_public_key method
    */
-  private async extractPublicKeyFromContract(address: Address): Promise<Buffer | null> {
+  private async extractPublicKeyFromContract(
+    address: Address,
+  ): Promise<Buffer | null> {
     try {
       // For v3R1 and v3R2 wallets, you can use get methods to extract the public key
       const result = await this.tonClient.runMethod(address, 'get_public_key');
@@ -101,15 +108,11 @@ export class WalletSignatureValidator {
   private verifySignature(
     publicKey: Buffer,
     messageHash: Buffer,
-    signature: Buffer
+    signature: Buffer,
   ): boolean {
     try {
       // Use TweetNaCl to verify the signature
-      return nacl.sign.detached.verify(
-        messageHash,
-        signature,
-        publicKey
-      );
+      return nacl.sign.detached.verify(messageHash, signature, publicKey);
     } catch (error) {
       console.error('Error in signature verification:', error);
       return false;

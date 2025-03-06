@@ -93,7 +93,7 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
       const isValid = await this.walletValidationService.validateTonSignature(
         telegramData.signature,
         telegramData.message,
-        telegramData.address
+        telegramData.address,
       );
 
       if (!isValid) {
@@ -249,7 +249,9 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
       }
 
       // Fetch the actual balance from TON blockchain
-      const balance = await this.tonClientService.getAddressBalance(wallet.address);
+      const balance = await this.tonClientService.getAddressBalance(
+        wallet.address,
+      );
 
       // Log the balance retrieval
       console.log(`Retrieved balance for wallet ${walletId}: ${balance} TON`);

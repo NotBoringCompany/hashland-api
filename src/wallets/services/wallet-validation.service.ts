@@ -2,14 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 // import { createHash } from 'crypto';
 import { TelegramWalletConnectionData } from '../interfaces/wallet-connection-types';
-import { WalletSignatureValidator } from '../utils/wallet-signature-validator'
+import { WalletSignatureValidator } from '../utils/wallet-signature-validator';
 
 @Injectable()
 export class WalletValidationService {
   constructor(
     private configService: ConfigService,
     private walletSignatureValidator: WalletSignatureValidator,
-  ) { }
+  ) {}
 
   /**
    * Validate a TON proof from Telegram wallet
@@ -66,11 +66,12 @@ export class WalletValidationService {
     }
 
     try {
-      const isValidSignature = await this.walletSignatureValidator.validateTonSignature(
-        signature,
-        message,
-        address
-      );
+      const isValidSignature =
+        await this.walletSignatureValidator.validateTonSignature(
+          signature,
+          message,
+          address,
+        );
 
       return isValidSignature;
     } catch (error) {

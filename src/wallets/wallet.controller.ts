@@ -24,16 +24,21 @@ export class WalletController {
   constructor(
     private readonly walletService: WalletService,
     private readonly walletSignatureValidator: WalletSignatureValidator,
-  ) { }
+  ) {}
 
   /**
- * Generate a challenge message for wallet signature
- */
+   * Generate a challenge message for wallet signature
+   */
   @UseGuards(JwtAuthGuard)
   @Post('challenge')
   async generateChallenge(@Body() body: { address: string }) {
     const { address } = body;
-    return { challenge_message: this.walletSignatureValidator.generateChallengeMessage(address, this.walletSignatureValidator.generateNonce()) };
+    return {
+      challenge_message: this.walletSignatureValidator.generateChallengeMessage(
+        address,
+        this.walletSignatureValidator.generateNonce(),
+      ),
+    };
   }
 
   @UseGuards(JwtAuthGuard)

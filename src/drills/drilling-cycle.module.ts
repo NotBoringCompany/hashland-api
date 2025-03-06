@@ -21,10 +21,7 @@ import { DrillingSessionModule } from './drilling-session.module';
     BullModule.registerQueue({ name: 'drilling-cycles' }), // Register Bull queue
   ],
   controllers: [DrillingCycleController],
-  providers: [
-    DrillingCycleService,
-    DrillingCycleQueue
-  ],
+  providers: [DrillingCycleService, DrillingCycleQueue],
   exports: [DrillingCycleService], // Export so other modules can use DrillingCycleService
 })
-export class DrillingCycleModule { }
+export class DrillingCycleModule {}
