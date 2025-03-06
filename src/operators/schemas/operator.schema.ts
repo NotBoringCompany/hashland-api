@@ -72,6 +72,18 @@ export class Operator extends Document {
     tgId: string;
     tgUsername: string;
   } | null;
+
+  /**
+   *  An array of wallet IDs associated with the operator.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    required: false,
+    default: [],
+    ref: 'Wallet',
+    index: true,
+  })
+  wallets: Types.ObjectId[];
 }
 
 /**
