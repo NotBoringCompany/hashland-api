@@ -52,12 +52,14 @@ export class Pool extends Document {
 
   /**
    * The pool's reward system, which includes the reward distribution for the extractor operator, leader, and active pool operators.
+   *
+   * Default format is in ratio.
    */
   @Prop({
     type: {
-      extractorOperator: { type: Number, required: true, default: 48.0 },
-      leader: { type: Number, required: true, default: 4.0 },
-      activePoolOperators: { type: Number, required: true, default: 48.0 },
+      extractorOperator: { type: Number, required: true, default: 0.48 },
+      leader: { type: Number, required: true, default: 0.04 },
+      activePoolOperators: { type: Number, required: true, default: 0.48 },
     },
     required: true,
     _id: false,

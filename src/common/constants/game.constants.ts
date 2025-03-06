@@ -51,11 +51,11 @@ export const GAME_CONSTANTS = {
      */
     SOLO_OPERATOR_REWARD_SYSTEM: {
       /**
-       * The total % of $HASH rewards that are distributed to the extractor's operator on that cycle.
+       * The total % (in ratio format) of $HASH rewards that are distributed to the extractor's operator on that cycle.
        */
       extractorOperator: 0.55,
       /**
-       * The total % of $HASH rewards that are distributed to all other active operators on that cycle.
+       * The total % (in ratio format) of $HASH rewards that are distributed to all other active operators on that cycle.
        */
       allActiveOperators: 0.45,
     },

@@ -45,7 +45,9 @@ export class DrillingCycleQueue implements OnModuleInit {
   }
 
   /**
-   * Handles new drilling cycle creation.
+   * Handles the drilling cycle queue process:
+   * 1. Ends the current cycle (select extractor, distribute rewards, process fuel).
+   * 2. Starts a new cycle.
    */
   @Process('new-drilling-cycle')
   async handleNewDrillingCycle() {
@@ -56,7 +58,16 @@ export class DrillingCycleQueue implements OnModuleInit {
       return;
     }
 
-    this.logger.log(`⛏️ Processing new drilling cycle...`);
+    this.logger.log(
+      `🔄 Ending current drilling cycle before starting a new one...`,
+    );
+
+    // ✅ Step 1: End the current cycle (select extractor, issue rewards, process fuel...)
+    await this.drillingCycleService.endCurrentCycle();
+
+    // ✅ Step 2: Start a new drilling cycle
     await this.drillingCycleService.createDrillingCycle();
+
+    this.logger.log(`✅ Drilling cycle completed successfully.`);
   }
 }

@@ -1,49 +1,10 @@
-// import { Injectable } from '@nestjs/common';
-// import { ExtractorSelectionService } from './services/extractor-selection.service';
-// import { SchedulerBridgeService } from 'src/websocket/services/scheduler-bridge.service';
-
-// @Injectable()
-// export class DrillingCycleService {
-//   constructor(
-//     private readonly extractorSelectionService: ExtractorSelectionService,
-//     private readonly schedulerBridgeService: SchedulerBridgeService,
-//   ) {}
-
-//   async completeCycle(cycleId: string) {
-//     // Select extractor at the end of the cycle
-//     await this.extractorSelectionService.selectExtractorForCycle(cycleId);
-
-//     // Get cycle completion data
-//     const cycleData = await this.getCycleCompletionData(cycleId);
-
-//     // Send notifications about cycle completion
-//     this.schedulerBridgeService.processCycleCompletion(cycleData);
-//   }
-
-//   private async getCycleCompletionData(cycleId: string) {
-//     // This is a placeholder - implement your actual data retrieval logic
-//     return {
-//       cycleId,
-//       timestamp: Math.floor(Date.now() / 1000),
-//       totalHashMined: 1000000, // Example value
-//       topMiners: [
-//         { operatorId: 'operator-1', hashMined: 50000 },
-//         { operatorId: 'operator-2', hashMined: 40000 },
-//         { operatorId: 'operator-3', hashMined: 30000 },
-//         { operatorId: 'operator-4', hashMined: 20000 },
-//         { operatorId: 'operator-5', hashMined: 10000 },
-//       ],
-//     };
-//   }
-// }
-
 import {
   Injectable,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { DrillingCycle } from './schemas/drilling-cycle.schema';
 import { RedisService } from 'src/common/redis.service';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
@@ -53,6 +14,8 @@ import { DrillingSessionService } from './drilling-session.service';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { Drill } from './schemas/drill.schema';
 import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
+import { Pool } from 'src/pools/schemas/pool.schema';
+import { OperatorService } from 'src/operators/operator.service';
 
 @Injectable()
 export class DrillingCycleService {
@@ -67,8 +30,10 @@ export class DrillingCycleService {
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
+    @InjectModel(Pool.name) private poolModel: Model<Pool>,
     private readonly redisService: RedisService,
     private readonly drillingSessionService: DrillingSessionService,
+    private readonly operatorService: OperatorService,
   ) {}
 
   /**
@@ -135,57 +100,265 @@ export class DrillingCycleService {
     }
   }
 
-  // /**
-  //  * Handles the end of a drilling cycle.
-  //  * 1. Selects an extractor.
-  //  * 2. Distributes rewards.
-  //  * 3. Updates fuel levels.
-  //  * 4. Starts a new cycle if enabled.
-  //  */
-  // async endDrillingCycle() {
-  //   this.logger.log('🛑 Ending Current Drilling Cycle...');
+  /**
+   * Ends the current drilling cycle. Called at the end of each cycle.
+   *
+   * This method is responsible for:
+   * 1. Selecting the extractor for this cycle.
+   * 2. Distributing rewards to operators.
+   * 3. Depleting or replenishing fuel for operators.
+   */
+  async endCurrentCycle() {
+    const startTime = performance.now();
+    this.logger.log(`⏳ (endCurrentCycle) Ending current cycle...`);
 
-  //   // Fetch the latest cycle
-  //   const latestCycle = await this.drillingCycleModel
-  //     .findOne()
-  //     .sort({ cycleNumber: -1 })
-  //     .exec();
-  //   if (!latestCycle) {
-  //     this.logger.warn('⚠️ No drilling cycle found.');
-  //     return;
-  //   }
+    // ✅ Step 1: Get the latest cycle data
+    const latestCycle = await this.drillingCycleModel
+      .findOne(
+        {},
+        {
+          cycleNumber: 1,
+          issuedHASH: 1,
+        },
+      )
+      .sort({ cycleNumber: -1 })
+      .lean();
 
-  //   // Fetch active drilling sessions
-  //   const activeSessions =
-  //     await this.drillingSessionService.fetchActiveDrillingSessions();
-  //   if (activeSessions === 0) {
-  //     this.logger.warn('⚠️ No active drills, skipping cycle.');
-  //     return;
-  //   }
+    if (!latestCycle) {
+      this.logger.error(`❌ (endCurrentCycle) No active cycle found.`);
+      return;
+    }
 
-  //   // Select extractor drill
-  //   const extractorDrill = await this.selectExtractorDrill();
-  //   if (!extractorDrill) {
-  //     this.logger.warn('⚠️ No valid extractor drill found.');
-  //     return;
-  //   }
+    // const cycleId = latestCycle._id;
+    const issuedHash = latestCycle.issuedHASH;
 
-  //   // Distribute rewards
-  //   await this.distributeRewards(extractorDrill);
+    // ✅ Step 2: Fetch active drilling sessions with drill IDs & `actualEff`
+    const activeSessions =
+      await this.drillingSessionService.fetchActiveDrillingSessionsWithEff();
 
-  //   // Update cycle with extractor info
-  //   latestCycle.extractorId = extractorDrill._id;
-  //   await latestCycle.save();
+    if (activeSessions.length === 0) {
+      this.logger.warn(
+        `(endCurrentCycle) No active sessions found. Skipping extractor selection.`,
+      );
+    }
 
-  //   this.logger.log(`✅ Cycle #${latestCycle.cycleNumber} completed.`);
+    // ✅ Step 3: Select extractor drill
+    const extractorData = this.selectExtractor(activeSessions);
 
-  //   // Start new cycle if enabled
-  //   if (GAME_CONSTANTS.CYCLES.ENABLED) {
-  //     await this.createDrillingCycle();
-  //   } else {
-  //     this.logger.warn('⏸️ Drilling cycles are currently disabled.');
-  //   }
-  // }
+    if (!extractorData) {
+      this.logger.warn(
+        `(endCurrentCycle) No valid extractor drill found. Skipping reward distribution.`,
+      );
+    } else {
+      await this.distributeCycleRewards(
+        // cycleId,
+        extractorData.drillId,
+        issuedHash,
+      );
+    }
+
+    // ✅ Step 4: Process Fuel for ALL Operators
+    await this.operatorService.processFuelForAllOperators();
+
+    // ✅ Step 5: Start the next cycle
+    await this.createDrillingCycle();
+
+    const endTime = performance.now();
+    this.logger.log(
+      `✅ (endCurrentCycle) Cycle ended and new cycle started in ${(endTime - startTime).toFixed(2)}ms.`,
+    );
+  }
+
+  async distributeCycleRewards(
+    // cycleId: Types.ObjectId,
+    extractorId: Types.ObjectId,
+    issuedHash: number,
+  ) {
+    // Measure execution time
+    const now = performance.now();
+
+    const extractorDrill = await this.drillModel
+      .findById(extractorId)
+      .select('operatorId')
+      .lean();
+
+    if (!extractorDrill) {
+      this.logger.error(
+        `(distributeCycleRewards) Extractor drill not found: ${extractorId}`,
+      );
+      return;
+    }
+
+    const extractorOperatorId = extractorDrill.operatorId;
+
+    // Fetch all active operators in one go
+    const allActiveOperatorIds =
+      await this.drillingSessionService.fetchActiveDrillingSessionOperatorIds();
+
+    // Check if extractor operator is in a pool
+    const poolOperator = await this.poolOperatorModel
+      .findOne({ operatorId: extractorOperatorId })
+      .select('poolId')
+      .lean();
+
+    if (!poolOperator) {
+      // SOLO OPERATOR REWARD LOGIC
+      const extractorReward =
+        issuedHash *
+        GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.extractorOperator;
+      const activeOperatorsReward =
+        issuedHash *
+        GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.allActiveOperators;
+
+      // Prepare batch update for rewards
+      const rewardData = [
+        { operatorId: extractorOperatorId, amount: extractorReward },
+        ...allActiveOperatorIds
+          .filter((id) => id.toString() !== extractorOperatorId.toString()) // Exclude extractor
+          .map((operatorId) => ({
+            operatorId,
+            amount: activeOperatorsReward / (allActiveOperatorIds.length - 1), // Divide reward
+          })),
+      ];
+
+      const end = performance.now();
+
+      this.logger.log(
+        `⏳ (Performance) Reward calculation for solo operator took ${end - now}ms.`,
+      );
+
+      // Batch issue rewards
+      await this.batchIssueHashRewards(rewardData);
+
+      this.logger.log(
+        `✅ (distributeCycleRewards) SOLO rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH. Active operators split ${activeOperatorsReward} $HASH.`,
+      );
+
+      return;
+    }
+
+    // 🟢 POOL OPERATOR REWARD LOGIC
+    const pool = await this.poolModel
+      .findById(poolOperator.poolId)
+      .select('leaderId rewardSystem')
+      .lean();
+
+    if (!pool) {
+      this.logger.error(
+        `(distributeCycleRewards) Pool not found for operator: ${extractorOperatorId}`,
+      );
+      return;
+    }
+
+    // Get active pool operator IDs
+    const activePoolOperatorIds = allActiveOperatorIds.filter(
+      async (id) =>
+        !!(await this.poolOperatorModel
+          .findOne({ poolId: poolOperator.poolId, operatorId: id })
+          .lean()),
+    );
+
+    // Split rewards
+    const extractorReward = issuedHash * pool.rewardSystem.extractorOperator;
+    const leaderReward = issuedHash * pool.rewardSystem.leader;
+    const activePoolReward = issuedHash * pool.rewardSystem.activePoolOperators;
+
+    // Prepare batch update for rewards
+    const rewardData = [
+      { operatorId: extractorOperatorId, amount: extractorReward },
+      { operatorId: pool.leaderId, amount: leaderReward },
+      ...activePoolOperatorIds.map((operatorId) => ({
+        operatorId,
+        amount: activePoolReward / activePoolOperatorIds.length,
+      })),
+    ];
+
+    const end = performance.now();
+
+    this.logger.log(
+      `⏳ (Performance) Reward calculation for pooled operator took ${end - now}ms.`,
+    );
+
+    // Batch issue rewards
+    await this.batchIssueHashRewards(rewardData);
+
+    this.logger.log(
+      `✅ (distributeCycleRewards) POOL rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH. Leader received ${leaderReward} $HASH. Active pool operators split ${activePoolReward} $HASH.`,
+    );
+  }
+
+  /**
+   * Batch issues $HASH rewards to operators at the end of a drilling cycle.
+   */
+  async batchIssueHashRewards(
+    rewardData: { operatorId: Types.ObjectId; amount: number }[],
+  ) {
+    if (!rewardData.length) return;
+
+    // Measure execution time
+    const start = performance.now();
+
+    await this.operatorModel.bulkWrite(
+      rewardData.map(({ operatorId, amount }) => ({
+        updateOne: {
+          filter: { _id: operatorId },
+          update: { $inc: { balance: amount } },
+        },
+      })),
+    );
+
+    const end = performance.now();
+
+    this.logger.log(
+      `✅ (batchIssueHashRewards) Issued ${rewardData.length} rewards in ${
+        end - start
+      }ms.`,
+    );
+  }
+
+  /**
+   * Selects an extractor using weighted probability with a luck factor.
+   * Uses a dice roll between 0 and the cumulative sum of all (EFF × Luck Factor).
+   */
+  private selectExtractor(
+    activeSessions: { drillId: Types.ObjectId; eff: number }[],
+  ) {
+    const selectionStartTime = performance.now(); // ✅ Start timing for selection process
+
+    // Calculate weighted EFF with Luck Factor
+    const sessionsWithLuck = activeSessions.map((session) => {
+      const luckFactor = 1 + Math.random() * 0.1; // Luck Factor between 1.00 and 1.10
+      return { ...session, weightedEFF: session.eff * luckFactor };
+    });
+
+    // Calculate total weighted EFF
+    const totalWeightedEFF = sessionsWithLuck.reduce(
+      (sum, session) => sum + session.weightedEFF,
+      0,
+    );
+
+    if (totalWeightedEFF === 0) return null; // No valid drills
+
+    // Roll a dice between 0 and total weighted EFF
+    const diceRoll = Math.random() * totalWeightedEFF;
+
+    // Iterate through drills and find the one that matches the dice roll
+    let cumulativeWeightedEFF = 0;
+    for (const session of sessionsWithLuck) {
+      cumulativeWeightedEFF += session.weightedEFF;
+      if (diceRoll <= cumulativeWeightedEFF) {
+        const selectionEndTime = performance.now(); // ✅ End timing for selection process
+        this.logger.log(
+          `⏳ (Performance) Extractor selection process took ${(
+            selectionEndTime - selectionStartTime
+          ).toFixed(2)} ms.`,
+        );
+        return session; // Selected drill
+      }
+    }
+
+    return null; // This should never happen if data is valid
+  }
 
   /**
    * Fetches the latest drilling cycle number from Redis.
