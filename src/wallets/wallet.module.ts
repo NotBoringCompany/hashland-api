@@ -15,7 +15,10 @@ import {
   WalletConnectionEventSchema,
 } from './schemas/wallet.schema';
 import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
-import { OperatorWallet, OperatorWalletSchema } from '../operators/schemas/operator-wallet.schema';
+import {
+  OperatorWallet,
+  OperatorWalletSchema,
+} from '../operators/schemas/operator-wallet.schema';
 
 @Module({
   imports: [
@@ -25,7 +28,6 @@ import { OperatorWallet, OperatorWalletSchema } from '../operators/schemas/opera
       { name: WalletConnectionEvent.name, schema: WalletConnectionEventSchema },
       { name: Operator.name, schema: OperatorSchema },
       { name: OperatorWallet.name, schema: OperatorWalletSchema },
-
     ]),
     BullModule.registerQueue({
       name: 'wallet-events',
@@ -56,4 +58,4 @@ import { OperatorWallet, OperatorWalletSchema } from '../operators/schemas/opera
     TonClientService,
   ],
 })
-export class WalletModule { }
+export class WalletModule {}

@@ -13,7 +13,7 @@ export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private server: Server;
 
-  constructor(private readonly connectionManager: ConnectionManagerService) { }
+  constructor(private readonly connectionManager: ConnectionManagerService) {}
 
   /**
    * Set the WebSocket server instance
@@ -25,14 +25,18 @@ export class NotificationService {
   /**
    * Send a notification to a specific operator
    */
-  sendToOperator(operatorId: string, notification: NotificationPayload): boolean {
+  sendToOperator(
+    operatorId: string,
+    notification: NotificationPayload,
+  ): boolean {
     try {
       if (!this.server) {
         this.logger.error('WebSocket server not initialized');
         return false;
       }
 
-      const connections = this.connectionManager.getOperatorConnections(operatorId);
+      const connections =
+        this.connectionManager.getOperatorConnections(operatorId);
 
       if (!connections || connections.length === 0) {
         this.logger.warn(`No active connections for operator ${operatorId}`);

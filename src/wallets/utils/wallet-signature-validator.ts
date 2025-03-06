@@ -130,7 +130,11 @@ export class WalletSignatureValidator {
    * Generate a challenge message for wallet validation
    * This message will be signed by the user's wallet
    */
-  generateChallengeMessage(address: string, type: string, nonce: string): string {
+  generateChallengeMessage(
+    address: string,
+    type: string,
+    nonce: string,
+  ): string {
     const appName = this.configService.get<string>('APP_NAME', 'Hashland');
     const timestamp = Date.now();
 

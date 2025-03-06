@@ -7,7 +7,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 @ApiTags('Telegram Authentication')
 @Controller('auth/telegram')
 export class TelegramAuthController {
-  constructor(private readonly telegramAuthService: TelegramAuthService) { }
+  constructor(private readonly telegramAuthService: TelegramAuthService) {}
 
   @ApiOperation({
     summary: 'Authenticate with Telegram',

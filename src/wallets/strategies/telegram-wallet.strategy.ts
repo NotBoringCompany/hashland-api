@@ -31,7 +31,8 @@ export class TelegramWalletStrategy extends BaseWalletStrategy {
     private tonClientService: TonClientService,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel(Wallet.name) private walletModel: Model<Wallet>,
-    @InjectModel(OperatorWallet.name) private operatorWalletModel: Model<OperatorWallet>,
+    @InjectModel(OperatorWallet.name)
+    private operatorWalletModel: Model<OperatorWallet>,
   ) {
     super();
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');

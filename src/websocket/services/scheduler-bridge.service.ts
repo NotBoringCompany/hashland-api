@@ -11,7 +11,7 @@ import { NotificationType } from '../notification.interface';
 export class SchedulerBridgeService implements OnModuleInit {
   private readonly logger = new Logger(SchedulerBridgeService.name);
 
-  constructor(private readonly notificationService: NotificationService) { }
+  constructor(private readonly notificationService: NotificationService) {}
 
   onModuleInit() {
     this.logger.log('Scheduler Bridge Service initialized');

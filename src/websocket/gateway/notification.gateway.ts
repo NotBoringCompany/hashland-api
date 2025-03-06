@@ -24,7 +24,8 @@ import { JwtService } from '@nestjs/jwt';
 })
 @Injectable()
 export class NotificationGateway
-  implements OnGatewayConnection, OnGatewayDisconnect {
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(NotificationGateway.name);
 
   @WebSocketServer()
@@ -34,7 +35,7 @@ export class NotificationGateway
     private readonly connectionManager: ConnectionManagerService,
     private readonly notificationService: NotificationService,
     private readonly jwtService: JwtService,
-  ) { }
+  ) {}
 
   afterInit(server: Server) {
     this.notificationService.setServer(server);
@@ -77,7 +78,10 @@ export class NotificationGateway
       }
 
       // Register the connection
-      this.connectionManager.registerOperatorConnection(payload.operatorId, client);
+      this.connectionManager.registerOperatorConnection(
+        payload.operatorId,
+        client,
+      );
 
       // Notify client of successful authentication
       client.emit('authenticated', {
@@ -115,13 +119,16 @@ export class NotificationGateway
         return;
       }
 
-      const success = this.notificationService.sendToOperator(payload.operatorId, {
-        type: payload.type,
-        title: payload.title,
-        message: payload.message,
-        data: payload.data,
-        timestamp: new Date(),
-      });
+      const success = this.notificationService.sendToOperator(
+        payload.operatorId,
+        {
+          type: payload.type,
+          title: payload.title,
+          message: payload.message,
+          data: payload.data,
+          timestamp: new Date(),
+        },
+      );
 
       if (success) {
         client.emit('notificationSent', {
@@ -185,7 +192,9 @@ export class NotificationGateway
   handleGetConnectionStats(client: Socket): void {
     try {
       // Get the authenticated operator ID from the socket
-      const operatorId = this.connectionManager.getOperatorIdFromSocket(client.id);
+      const operatorId = this.connectionManager.getOperatorIdFromSocket(
+        client.id,
+      );
 
       if (!operatorId) {
         client.emit('error', {

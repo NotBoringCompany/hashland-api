@@ -9,7 +9,7 @@ export class WalletValidationService {
   constructor(
     private configService: ConfigService,
     private walletSignatureValidator: WalletSignatureValidator,
-  ) { }
+  ) {}
 
   /**
    * Validate a TON proof from Telegram wallet

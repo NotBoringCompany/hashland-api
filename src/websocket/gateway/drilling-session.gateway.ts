@@ -26,7 +26,8 @@ import { NotificationService } from '../services/notification.service';
 })
 @Injectable()
 export class DrillingSessionGateway
-  implements OnGatewayConnection, OnGatewayDisconnect {
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(DrillingSessionGateway.name);
   private activeSessions = new Map<
     string,
@@ -47,7 +48,7 @@ export class DrillingSessionGateway
     private readonly connectionManager: ConnectionManagerService,
     private readonly jwtService: JwtService,
     private readonly notificationService: NotificationService,
-  ) { }
+  ) {}
 
   async handleConnection(client: Socket) {
     this.logger.log(`Client connected to drilling session: ${client.id}`);

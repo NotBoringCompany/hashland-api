@@ -72,7 +72,9 @@ export class ConnectionManagerService {
         `Operator ${operatorId} connected with socket ${socket.id}. Total connections: ${this.stats.totalConnections}`,
       );
     } catch (error) {
-      this.logger.error(`Error registering operator connection: ${error.message}`);
+      this.logger.error(
+        `Error registering operator connection: ${error.message}`,
+      );
       // Continue without failing
     }
   }
