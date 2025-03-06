@@ -15,8 +15,6 @@ export class DrillingCycle extends Document {
    */
   @Prop({
     type: Types.ObjectId,
-    required: true,
-    index: true,
     default: () => new Types.ObjectId(),
   })
   _id: Types.ObjectId;

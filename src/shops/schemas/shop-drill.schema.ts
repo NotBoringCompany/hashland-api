@@ -14,7 +14,7 @@ export class ShopDrill extends Document {
   /**
    * The database ID of the drill.
    */
-  @Prop({ required: true, index: true, default: () => new Types.ObjectId() })
+  @Prop({ type: Types.ObjectId, default: () => new Types.ObjectId() })
   _id: Types.ObjectId;
 
   /**
