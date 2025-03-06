@@ -9,6 +9,7 @@ import {
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -30,9 +31,22 @@ async function bootstrap() {
   // Use the Socket.IO adapter
   app.useWebSocketAdapter(new IoAdapter(app));
 
+  // Swagger configuration
+  const config = new DocumentBuilder()
+    .setTitle('HashLand API')
+    .setDescription('The HashLand API documentation')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
   // Start Fastify server
   const PORT = process.env.PORT || 8080;
   await app.listen(PORT, '0.0.0.0');
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(
+    `📚 Swagger documentation available at http://localhost:${PORT}/api/docs`,
+  );
 }
 bootstrap();
