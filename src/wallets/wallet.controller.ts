@@ -16,11 +16,11 @@ import { ApiResponse } from '../common/dto/response.dto';
 import {
   WalletConnectionRequest,
   WalletConnectionResponse,
-} from './interfaces/wallet-interface';
+} from './interfaces/wallet.interface';
 
 @Controller('wallets')
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(private readonly walletService: WalletService) { }
 
   @UseGuards(JwtAuthGuard)
   @Post('connect')

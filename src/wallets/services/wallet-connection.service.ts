@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { WalletConnection } from '../interfaces/wallet-interface';
+import { WalletConnection } from '../interfaces/wallet.interface';
 import { Wallet } from '../schemas/wallet.schema';
 import { Operator } from '../../operators/schemas/operator.schema';
 import {
@@ -16,7 +16,7 @@ export class WalletConnectionService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel('WalletConnectionEvent')
     private walletEventModel: Model<WalletConnectionEvent>,
-  ) {}
+  ) { }
 
   /**
    * Save a new wallet connection

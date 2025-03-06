@@ -3,10 +3,10 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { WalletService } from './services/wallet.services';
-import { WalletConnectionService } from './services/wallet-connection-service';
-import { WalletValidationService } from './services/wallet-validation-service';
+import { WalletConnectionService } from './services/wallet-connection.service';
+import { WalletValidationService } from './services/wallet-validation.service';
 import { WalletController } from './wallet.controller';
-import { TelegramWalletStrategy } from './strategies/telegram-wallet-strategy';
+import { TelegramWalletStrategy } from './strategies/telegram-wallet.strategy';
 import { WalletEncryptionUtil } from './utils/wallet-encryption';
 import { WalletSignatureValidator } from './utils/wallet-signature-validator';
 import { Wallet, WalletSchema } from './schemas/wallet.schema';
@@ -50,4 +50,4 @@ import { Operator, OperatorSchema } from '../operators/schemas/operator.schema';
     TelegramWalletStrategy,
   ],
 })
-export class WalletModule {}
+export class WalletModule { }

@@ -4,19 +4,19 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 // import { createHash, createHmac } from 'crypto';
 import { ApiResponse } from 'src/common/dto/response.dto';
-import { BaseWalletStrategy } from './base-wallet-strategy';
+import { BaseWalletStrategy } from './base-wallet.strategy';
 import {
   WalletConnectionResponse,
   WalletConnection,
-} from '../interfaces/wallet-interface';
+} from '../interfaces/wallet.interface';
 import {
   TelegramWalletConnectionData,
   WalletConnectionStatus,
 } from '../interfaces/wallet-connection-types';
-import { WalletConnectionService } from '../services/wallet-connection-service';
-import { WalletValidationService } from '../services/wallet-validation-service';
+import { WalletConnectionService } from '../services/wallet-connection.service';
+import { WalletValidationService } from '../services/wallet-validation.service';
 import { Operator } from '../../operators/schemas/operator.schema';
-import { Wallet } from '../../wallets/schemas/wallet.schema';
+import { Wallet } from '../schemas/wallet.schema';
 
 @Injectable()
 export class TelegramWalletStrategy extends BaseWalletStrategy {

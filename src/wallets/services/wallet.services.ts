@@ -12,11 +12,11 @@ import {
   WalletConnectionRequest,
   WalletConnectionResponse,
   WalletConnection,
-} from '../interfaces/wallet-interface';
-import { WalletConnectionService } from './wallet-connection-service';
+} from '../interfaces/wallet.interface';
+import { WalletConnectionService } from './wallet-connection.service';
 import { Wallet } from '../schemas/wallet.schema';
 import { Operator } from '../../operators/schemas/operator.schema';
-import { TelegramWalletStrategy } from '../strategies/telegram-wallet-strategy';
+import { TelegramWalletStrategy } from '../strategies/telegram-wallet.strategy';
 
 @Injectable()
 export class WalletService {

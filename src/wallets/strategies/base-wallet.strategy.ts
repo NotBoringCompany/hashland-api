@@ -3,7 +3,7 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import {
   WalletStrategy,
   WalletConnectionResponse,
-} from '../interfaces/wallet-interface';
+} from '../interfaces/wallet.interface';
 import { WalletConnectionStatus } from '../interfaces/wallet-connection-types';
 
 /**

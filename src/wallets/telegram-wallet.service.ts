@@ -4,7 +4,7 @@
  */
 
 import { WalletService } from './services/wallet.services';
-import { WalletConnectionRequest } from './interfaces/wallet-interface';
+import { WalletConnectionRequest } from './interfaces/wallet.interface';
 import { TelegramWalletConnectionData } from './interfaces/wallet-connection-types';
 
 /**
