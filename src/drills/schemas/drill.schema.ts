@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 /**
  * `Drill` represents a drill owned by an operator to drill and extract $HASH.
@@ -8,10 +8,19 @@ import { Document } from 'mongoose';
 @Schema({ collection: 'Drills', versionKey: false })
 export class Drill extends Document {
   /**
+   * The database ID of the drill.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
+  /**
    * The database ID of the operator who owns the drill.
    */
-  @Prop({ type: String, required: true, index: true })
-  operatorId: string;
+  @Prop({ type: Types.ObjectId, required: true, index: true, ref: 'Operators' })
+  operatorId: Types.ObjectId;
 
   /**
    * The version of the drill.

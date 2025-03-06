@@ -14,6 +14,15 @@ import { TGStarsData } from 'src/common/schemas/telegram-payment.schema';
 })
 export class ShopPurchase extends Document {
   /**
+   * The database ID of the shop purchase.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
+  /**
    * The database ID of the operator who made the purchase.
    */
   @Prop({ type: Types.ObjectId, ref: 'Operator', required: true })

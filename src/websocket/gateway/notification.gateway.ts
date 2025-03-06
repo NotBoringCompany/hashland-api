@@ -10,7 +10,7 @@ import { Logger, Injectable } from '@nestjs/common';
 import { ConnectionManagerService } from '../services/connection-manager.service';
 import { NotificationService } from '../services/notification.service';
 import {
-  AuthenticateUserDto,
+  AuthenticateOperatorDto,
   SendNotificationDto,
   BroadcastNotificationDto,
 } from '../dto/notification.dto';
@@ -24,8 +24,7 @@ import { JwtService } from '@nestjs/jwt';
 })
 @Injectable()
 export class NotificationGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(NotificationGateway.name);
 
   @WebSocketServer()
@@ -35,7 +34,7 @@ export class NotificationGateway
     private readonly connectionManager: ConnectionManagerService,
     private readonly notificationService: NotificationService,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   afterInit(server: Server) {
     this.notificationService.setServer(server);
@@ -57,38 +56,38 @@ export class NotificationGateway
     this.logger.log(`Client disconnected: ${client.id}`);
 
     // Remove the connection from our manager
-    this.connectionManager.removeUserConnection(client.id);
+    this.connectionManager.removeOperatorConnection(client.id);
   }
 
   @SubscribeMessage('authenticate')
   async handleAuthentication(
     client: Socket,
-    payload: AuthenticateUserDto,
+    payload: AuthenticateOperatorDto,
   ): Promise<void> {
     try {
       // Validate JWT token
       const decodedToken = this.jwtService.verify(payload.token);
 
-      // Ensure the token belongs to the user trying to authenticate
-      if (decodedToken.sub !== payload.userId) {
+      // Ensure the token belongs to the operator trying to authenticate
+      if (decodedToken.sub !== payload.operatorId) {
         client.emit('error', {
-          message: 'Authentication failed: User ID mismatch',
+          message: 'Authentication failed: Operator ID mismatch',
         });
         return;
       }
 
       // Register the connection
-      this.connectionManager.registerUserConnection(payload.userId, client);
+      this.connectionManager.registerOperatorConnection(payload.operatorId, client);
 
       // Notify client of successful authentication
       client.emit('authenticated', {
         status: 'success',
-        userId: payload.userId,
+        operatorId: payload.operatorId,
         timestamp: new Date().toISOString(),
       });
 
       this.logger.log(
-        `User ${payload.userId} authenticated on socket ${client.id}`,
+        `Operator ${payload.operatorId} authenticated on socket ${client.id}`,
       );
     } catch (error) {
       this.logger.error(
@@ -104,19 +103,19 @@ export class NotificationGateway
     payload: SendNotificationDto,
   ): Promise<void> {
     try {
-      // Get the authenticated user ID from the socket
-      const senderUserId = this.connectionManager.getUserIdFromSocket(
+      // Get the authenticated operator ID from the socket
+      const senderOperatorId = this.connectionManager.getOperatorIdFromSocket(
         client.id,
       );
 
-      if (!senderUserId) {
+      if (!senderOperatorId) {
         client.emit('error', {
           message: 'You must be authenticated to send notifications',
         });
         return;
       }
 
-      const success = this.notificationService.sendToUser(payload.userId, {
+      const success = this.notificationService.sendToOperator(payload.operatorId, {
         type: payload.type,
         title: payload.title,
         message: payload.message,
@@ -127,14 +126,14 @@ export class NotificationGateway
       if (success) {
         client.emit('notificationSent', {
           status: 'success',
-          recipient: payload.userId,
+          recipient: payload.operatorId,
           timestamp: new Date().toISOString(),
         });
       } else {
         client.emit('notificationSent', {
           status: 'failed',
-          recipient: payload.userId,
-          reason: 'User not connected',
+          recipient: payload.operatorId,
+          reason: 'Operator not connected',
           timestamp: new Date().toISOString(),
         });
       }
@@ -150,12 +149,12 @@ export class NotificationGateway
     payload: BroadcastNotificationDto,
   ): Promise<void> {
     try {
-      // Get the authenticated user ID from the socket
-      const senderUserId = this.connectionManager.getUserIdFromSocket(
+      // Get the authenticated operator ID from the socket
+      const senderOperatorId = this.connectionManager.getOperatorIdFromSocket(
         client.id,
       );
 
-      if (!senderUserId) {
+      if (!senderOperatorId) {
         client.emit('error', {
           message: 'You must be authenticated to broadcast notifications',
         });
@@ -185,10 +184,10 @@ export class NotificationGateway
   @SubscribeMessage('getConnectionStats')
   handleGetConnectionStats(client: Socket): void {
     try {
-      // Get the authenticated user ID from the socket
-      const userId = this.connectionManager.getUserIdFromSocket(client.id);
+      // Get the authenticated operator ID from the socket
+      const operatorId = this.connectionManager.getOperatorIdFromSocket(client.id);
 
-      if (!userId) {
+      if (!operatorId) {
         client.emit('error', {
           message: 'You must be authenticated to access stats',
         });

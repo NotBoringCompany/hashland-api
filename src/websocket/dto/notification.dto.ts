@@ -1,10 +1,10 @@
 import { IsString, IsNotEmpty, IsEnum, IsOptional } from 'class-validator';
 import { NotificationType } from '../notification.interface';
 
-export class AuthenticateUserDto {
+export class AuthenticateOperatorDto {
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  operatorId: string;
 
   @IsString()
   @IsNotEmpty()
@@ -14,7 +14,7 @@ export class AuthenticateUserDto {
 export class SendNotificationDto {
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  operatorId: string;
 
   @IsEnum(NotificationType)
   type: NotificationType;

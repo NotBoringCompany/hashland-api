@@ -50,6 +50,9 @@ import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { performance } from 'perf_hooks'; // Import high-precision timer
 import { DrillingSessionService } from './drilling-session.service';
+import { Operator } from 'src/operators/schemas/operator.schema';
+import { Drill } from './schemas/drill.schema';
+import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
 
 @Injectable()
 export class DrillingCycleService {
@@ -60,8 +63,12 @@ export class DrillingCycleService {
   constructor(
     @InjectModel(DrillingCycle.name)
     private drillingCycleModel: Model<DrillingCycle>,
-    private readonly drillingSessionService: DrillingSessionService,
+    @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    @InjectModel(Drill.name) private drillModel: Model<Drill>,
+    @InjectModel(PoolOperator.name)
+    private poolOperatorModel: Model<PoolOperator>,
     private readonly redisService: RedisService,
+    private readonly drillingSessionService: DrillingSessionService,
   ) {}
 
   /**
@@ -85,6 +92,9 @@ export class DrillingCycleService {
     }
   }
 
+  /**
+   * Creates a new drilling cycle every `CYCLE_DURATION` seconds.
+   */
   async createDrillingCycle(): Promise<number> {
     const newCycleNumber = await this.redisService.increment(
       this.redisCycleKey,
@@ -124,6 +134,58 @@ export class DrillingCycleService {
       throw error;
     }
   }
+
+  // /**
+  //  * Handles the end of a drilling cycle.
+  //  * 1. Selects an extractor.
+  //  * 2. Distributes rewards.
+  //  * 3. Updates fuel levels.
+  //  * 4. Starts a new cycle if enabled.
+  //  */
+  // async endDrillingCycle() {
+  //   this.logger.log('🛑 Ending Current Drilling Cycle...');
+
+  //   // Fetch the latest cycle
+  //   const latestCycle = await this.drillingCycleModel
+  //     .findOne()
+  //     .sort({ cycleNumber: -1 })
+  //     .exec();
+  //   if (!latestCycle) {
+  //     this.logger.warn('⚠️ No drilling cycle found.');
+  //     return;
+  //   }
+
+  //   // Fetch active drilling sessions
+  //   const activeSessions =
+  //     await this.drillingSessionService.fetchActiveDrillingSessions();
+  //   if (activeSessions === 0) {
+  //     this.logger.warn('⚠️ No active drills, skipping cycle.');
+  //     return;
+  //   }
+
+  //   // Select extractor drill
+  //   const extractorDrill = await this.selectExtractorDrill();
+  //   if (!extractorDrill) {
+  //     this.logger.warn('⚠️ No valid extractor drill found.');
+  //     return;
+  //   }
+
+  //   // Distribute rewards
+  //   await this.distributeRewards(extractorDrill);
+
+  //   // Update cycle with extractor info
+  //   latestCycle.extractorId = extractorDrill._id;
+  //   await latestCycle.save();
+
+  //   this.logger.log(`✅ Cycle #${latestCycle.cycleNumber} completed.`);
+
+  //   // Start new cycle if enabled
+  //   if (GAME_CONSTANTS.CYCLES.ENABLED) {
+  //     await this.createDrillingCycle();
+  //   } else {
+  //     this.logger.warn('⏸️ Drilling cycles are currently disabled.');
+  //   }
+  // }
 
   /**
    * Fetches the latest drilling cycle number from Redis.

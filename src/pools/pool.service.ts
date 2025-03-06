@@ -12,6 +12,15 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 export class PoolService {
   constructor(@InjectModel(Pool.name) private poolModel: Model<Pool>) {}
 
+  // /**
+  //  * Checks if the operator has met the pool prerequisites before joining.
+  //  */
+  // checkPoolPrequisites(
+  //   prerequisites:
+  // ) {
+
+  // }
+
   /**
    * Creates a new pool. Bypasses prerequisites and costs. Admin only.
    */
@@ -46,7 +55,7 @@ export class PoolService {
         200,
         `(createPoolAdmin) Pool created.`,
         {
-          poolId: String(pool._id),
+          poolId: pool._id.toString(),
         },
       );
     } catch (err: any) {
@@ -125,5 +134,32 @@ export class PoolService {
    */
   async updatePool(poolId: string, updates: Partial<Pool>) {
     return this.poolModel.findByIdAndUpdate(poolId, updates, { new: true });
+  }
+
+  /**
+   * Fetches one random public pool ID for new operators to join.
+   *
+   * @returns The ID of the pool to join
+   */
+  fetchRandomPublicPoolId(): string {
+    // get the pool ID from the pool number.
+    // hardcoding this reduces query time compared to fetching from the database.
+    const poolIds: Array<{ poolNumber: number; poolId: string }> = [
+      {
+        poolNumber: 1,
+        poolId: '67c59119e13cd025d70558f8',
+      },
+      {
+        poolNumber: 2,
+        poolId: '67c5913d38219727f71abcc9',
+      },
+      {
+        poolNumber: 3,
+        poolId: '67c59160bcc83377ab6e9201',
+      },
+    ];
+
+    // randomize which pool to fetch
+    return poolIds[Math.floor(Math.random() * poolIds.length)].poolId;
   }
 }

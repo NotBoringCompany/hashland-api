@@ -26,8 +26,7 @@ import { NotificationService } from '../services/notification.service';
 })
 @Injectable()
 export class DrillingSessionGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+  implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(DrillingSessionGateway.name);
   private activeSessions = new Map<
     string,
@@ -48,14 +47,14 @@ export class DrillingSessionGateway
     private readonly connectionManager: ConnectionManagerService,
     private readonly jwtService: JwtService,
     private readonly notificationService: NotificationService,
-  ) {}
+  ) { }
 
   async handleConnection(client: Socket) {
     this.logger.log(`Client connected to drilling session: ${client.id}`);
 
     try {
       // Extract token from headers
-      const operatorId = this.extractUserId(client);
+      const operatorId = this.extractOperatorId(client);
       if (!operatorId) {
         client.emit('error', { message: 'Authentication failed' });
         return;
@@ -64,7 +63,7 @@ export class DrillingSessionGateway
       // This just validates the connection is authenticated
 
       this.logger.log(
-        `Client ${client.id} authenticated as user ${operatorId.toString()}`,
+        `Client ${client.id} authenticated as operator ${operatorId.toString()}`,
       );
     } catch (error) {
       this.logger.error(
@@ -84,7 +83,7 @@ export class DrillingSessionGateway
     }
 
     // Remove from connection manager if they were registered
-    this.connectionManager.removeUserConnection(client.id);
+    this.connectionManager.removeOperatorConnection(client.id);
   }
 
   @SubscribeMessage('startDrilling')
@@ -98,7 +97,7 @@ export class DrillingSessionGateway
         return;
       }
       const startTime = new Date();
-      const operatorId = this.extractUserId(client);
+      const operatorId = this.extractOperatorId(client);
       if (!operatorId) {
         client.emit('error', { message: 'Authentication failed' });
         return;
@@ -119,14 +118,14 @@ export class DrillingSessionGateway
         earnedHASH: 0,
       });
 
-      // Register the user connection with the connection manager
-      this.connectionManager.registerUserConnection(
+      // Register the operator connection with the connection manager
+      this.connectionManager.registerOperatorConnection(
         operatorId.toString(),
         client,
         newSession._id,
       );
 
-      // Send a notification to the user
+      // Send a notification to the operator
       try {
         await this.notificationService.sendDrillingNotification(
           operatorId.toString(),
@@ -175,7 +174,7 @@ export class DrillingSessionGateway
       const session = this.activeSessions.get(client.id);
       await this.endDrillingSession(client.id);
 
-      // Send a notification to the user
+      // Send a notification to the operator
       await this.notificationService.sendDrillingNotification(
         session.operatorId.toString(),
         'Drilling Completed',
@@ -221,7 +220,7 @@ export class DrillingSessionGateway
     );
   }
 
-  private extractUserId(client: Socket): Types.ObjectId | null {
+  private extractOperatorId(client: Socket): Types.ObjectId | null {
     try {
       const authHeader = client.handshake.headers.authorization;
       if (!authHeader) {
@@ -232,15 +231,15 @@ export class DrillingSessionGateway
       const token = authHeader.split(' ')[1];
       const payload = this.jwtService.verify(token);
 
-      if (!payload || !payload.sub) {
+      if (!payload || !payload.operatorId) {
         this.logger.warn(`Client ${client.id} has invalid token payload`);
         return null;
       }
 
-      return new Types.ObjectId(payload.sub.toString());
+      return new Types.ObjectId(payload.operatorId.toString());
     } catch (error) {
       this.logger.error(
-        `Failed to extract user ID: ${error.message}`,
+        `Failed to extract operator ID: ${error.message}`,
         error.stack,
       );
       return null;

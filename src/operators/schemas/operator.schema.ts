@@ -8,9 +8,19 @@ import { Document, Types } from 'mongoose';
 @Schema({ timestamps: true, collection: 'Operators', versionKey: false })
 export class Operator extends Document {
   /**
+   * The database ID of the operator.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    default: () => new Types.ObjectId(),
+    primaryKey: true,
+  })
+  _id: Types.ObjectId;
+
+  /**
    * A unique username accompanying the operator.
    */
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true, unique: true, index: true })
   username: string;
 
   /**
@@ -52,7 +62,7 @@ export class Operator extends Document {
    */
   @Prop({
     type: {
-      tgId: { type: String, required: true },
+      tgId: { type: String, required: true, index: true },
       tgUsername: { type: String, required: true },
     },
     required: false, // Make the whole object optional

@@ -5,7 +5,7 @@ import { ConnectionManagerService } from './connection-manager.service';
 import {
   NotificationPayload,
   NotificationType,
-  UserNotification,
+  OperatorNotification,
 } from '../notification.interface';
 
 @Injectable()
@@ -13,7 +13,7 @@ export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private server: Server;
 
-  constructor(private readonly connectionManager: ConnectionManagerService) {}
+  constructor(private readonly connectionManager: ConnectionManagerService) { }
 
   /**
    * Set the WebSocket server instance
@@ -23,41 +23,41 @@ export class NotificationService {
   }
 
   /**
-   * Send a notification to a specific user
+   * Send a notification to a specific operator
    */
-  sendToUser(userId: string, notification: NotificationPayload): boolean {
+  sendToOperator(operatorId: string, notification: NotificationPayload): boolean {
     try {
       if (!this.server) {
         this.logger.error('WebSocket server not initialized');
         return false;
       }
 
-      const connections = this.connectionManager.getUserConnections(userId);
+      const connections = this.connectionManager.getOperatorConnections(operatorId);
 
       if (!connections || connections.length === 0) {
-        this.logger.warn(`No active connections for user ${userId}`);
+        this.logger.warn(`No active connections for operator ${operatorId}`);
         return false;
       }
 
-      const userNotification: UserNotification = {
+      const operatorNotification: OperatorNotification = {
         id: uuidv4(),
-        userId: connections[0].userId, // Use the ObjectId from the connection
+        operatorId: connections[0].operatorId, // Use the ObjectId from the connection
         read: false,
         ...notification,
         timestamp: notification.timestamp || new Date(),
       };
 
-      // Send to all connections for this user
+      // Send to all connections for this operator
       let sent = false;
       for (const connection of connections) {
         const connectedSockets = this.server.sockets.sockets;
         if (connectedSockets) {
           const socket = connectedSockets.get(connection.socketId);
           if (socket) {
-            socket.emit('notification', userNotification);
+            socket.emit('notification', operatorNotification);
             sent = true;
             this.logger.debug(
-              `Notification sent to user ${userId} via socket ${connection.socketId}`,
+              `Notification sent to operator ${operatorId} via socket ${connection.socketId}`,
             );
           }
         }
@@ -66,7 +66,7 @@ export class NotificationService {
       return sent;
     } catch (error) {
       this.logger.error(
-        `Error sending notification to user ${userId}: ${error.message}`,
+        `Error sending notification to operator ${operatorId}: ${error.message}`,
         error.stack,
       );
       return false;
@@ -74,7 +74,7 @@ export class NotificationService {
   }
 
   /**
-   * Broadcast a notification to all connected users
+   * Broadcast a notification to all connected operators
    */
   broadcastToAll(notification: NotificationPayload): void {
     try {
@@ -91,7 +91,7 @@ export class NotificationService {
 
       this.server.emit('notification', broadcastNotification);
       this.logger.log(
-        `Broadcast notification sent to all users: ${notification.title}`,
+        `Broadcast notification sent to all operators: ${notification.title}`,
       );
     } catch (error) {
       this.logger.error(
@@ -102,15 +102,15 @@ export class NotificationService {
   }
 
   /**
-   * Send a system notification to a specific user
+   * Send a system notification to a specific operator
    */
   sendSystemNotification(
-    userId: string,
+    operatorId: string,
     title: string,
     message: string,
     data?: any,
   ): boolean {
-    return this.sendToUser(userId, {
+    return this.sendToOperator(operatorId, {
       type: NotificationType.SYSTEM,
       title,
       message,
@@ -120,15 +120,15 @@ export class NotificationService {
   }
 
   /**
-   * Send a drilling notification to a specific user
+   * Send a drilling notification to a specific operator
    */
   sendDrillingNotification(
-    userId: string,
+    operatorId: string,
     title: string,
     message: string,
     data?: any,
   ): boolean {
-    return this.sendToUser(userId, {
+    return this.sendToOperator(operatorId, {
       type: NotificationType.DRILLING,
       title,
       message,
@@ -138,7 +138,7 @@ export class NotificationService {
   }
 
   /**
-   * Broadcast a system notification to all users
+   * Broadcast a system notification to all operators
    */
   broadcastSystemNotification(
     title: string,

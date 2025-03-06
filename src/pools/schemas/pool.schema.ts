@@ -1,11 +1,21 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { PoolPrerequisites } from 'src/common/schemas/pool-prerequisites.schema';
 
 /**
  * `Pool` represents a group where operators can join to increase cumulative EFF ratings and have a higher chance to extract more $HASH per cycle.
  */
 @Schema({ timestamps: true, collection: 'Pools', versionKey: false })
 export class Pool extends Document {
+  /**
+   * The database ID of the pool.
+   */
+  @Prop({
+    type: Types.ObjectId,
+    default: () => new Types.ObjectId(),
+  })
+  _id: Types.ObjectId;
+
   /**
    * The database ID of the leader, who is an operator responsible for managing the pool.
    */
@@ -62,16 +72,11 @@ export class Pool extends Document {
    * Optional prerequisites to join the pool. If not provided (i.e. null), anyone can join as long as `maxOperators` is not reached.
    */
   @Prop({
-    type: {
-      tgChannelId: { type: String, default: null },
-    },
     required: false,
     default: null,
     _id: false,
   })
-  joinPrerequisites?: {
-    tgChannelId?: string | null;
-  } | null;
+  joinPrerequisites?: PoolPrerequisites | null;
 }
 
 export const PoolSchema = SchemaFactory.createForClass(Pool);

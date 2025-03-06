@@ -23,21 +23,21 @@ export interface NotificationPayload {
 }
 
 /**
- * Complete notification object with user information
+ * Complete notification object with operator information
  */
-export interface UserNotification extends NotificationPayload {
+export interface OperatorNotification extends NotificationPayload {
   id: string;
-  userId: Types.ObjectId;
+  operatorId: Types.ObjectId;
   read: boolean;
   timestamp: Date;
 }
 
 /**
- * User connection information
+ * Operator connection information
  */
-export interface UserConnection {
+export interface OperatorConnection {
   socketId: string;
-  userId: Types.ObjectId;
+  operatorId: Types.ObjectId;
   connectedAt: Date;
   drillingSessionId?: Types.ObjectId;
   isActive?: boolean;
