@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
-import { WalletService } from './services/wallet.services';
+import { WalletService } from './services/wallet.service';
 import { WalletConnectionService } from './services/wallet-connection.service';
 import { WalletValidationService } from './services/wallet-validation.service';
 import { TonClientService } from './services/ton-client.service';

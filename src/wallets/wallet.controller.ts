@@ -10,7 +10,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { WalletService } from './services/wallet.services';
+import { WalletService } from './services/wallet.service';
 import { WalletSignatureValidator } from './utils/wallet-signature-validator';
 import { JwtAuthGuard } from '../auth/jwt/jwt-auth.guard';
 import { WalletConnectionRequest } from './interfaces/wallet.interface';
