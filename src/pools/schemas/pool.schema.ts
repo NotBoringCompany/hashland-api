@@ -11,8 +11,6 @@ export class Pool extends Document {
    */
   @Prop({
     type: Types.ObjectId,
-    required: true,
-    index: true,
     default: () => new Types.ObjectId(),
   })
   _id: Types.ObjectId;
