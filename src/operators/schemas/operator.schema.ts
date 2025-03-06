@@ -13,13 +13,14 @@ export class Operator extends Document {
   @Prop({
     type: Types.ObjectId,
     default: () => new Types.ObjectId(),
+    index: true,
   })
   _id: Types.ObjectId;
 
   /**
    * A unique username accompanying the operator.
    */
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true, unique: true, index: true })
   username: string;
 
   /**
@@ -27,7 +28,7 @@ export class Operator extends Document {
    *
    * NOTE: This can also be in real-time.
    */
-  @Prop({ required: true, default: 0 })
+  @Prop({ required: true, default: 0, index: true })
   weightedAssetEquity: number;
 
   /**
@@ -77,3 +78,6 @@ export class Operator extends Document {
  * Generate the Mongoose schema for Operator.
  */
 export const OperatorSchema = SchemaFactory.createForClass(Operator);
+
+// Create compound index on tgProfile.tgId
+OperatorSchema.index({ 'tgProfile.tgId': 1 });
