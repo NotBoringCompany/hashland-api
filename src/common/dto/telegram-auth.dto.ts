@@ -1,31 +1,23 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty } from 'class-validator';
 
 export class TelegramAuthDto {
   @IsString()
   @IsNotEmpty()
-  id: string;
+  initData: string;
+}
 
-  @IsString()
-  @IsOptional()
-  first_name?: string;
+export class TelegramCreds {
+  id: number;
+  first_name: string;
+  last_name: string;
+  username: string;
+  language_code: string;
+  allows_write_to_pm: boolean;
+}
 
-  @IsString()
-  @IsOptional()
-  last_name?: string;
-
-  @IsString()
-  @IsOptional()
-  username?: string;
-
-  @IsString()
-  @IsOptional()
-  photo_url?: string;
-
-  @IsString()
-  @IsNotEmpty()
+export class TelegramAuthData {
+  query_id: string;
+  user: TelegramCreds;
   auth_date: string;
-
-  @IsString()
-  @IsNotEmpty()
   hash: string;
 }

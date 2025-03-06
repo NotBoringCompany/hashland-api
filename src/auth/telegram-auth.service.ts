@@ -1,14 +1,22 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac } from 'crypto';
 import { Operator } from '../operators/schemas/operator.schema';
-import { TelegramAuthDto } from '../common/dto/telegram-auth.dto';
+import {
+  TelegramAuthDto,
+  TelegramAuthData,
+  TelegramCreds,
+} from '../common/dto/telegram-auth.dto';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from 'src/operators/operator.service';
+import { AuthenticatedResponse } from './dto/auth.dto';
 
+/**
+ * Service handling Telegram authentication and operator management
+ */
 @Injectable()
 export class TelegramAuthService {
   private readonly botToken: string;
@@ -27,6 +35,11 @@ export class TelegramAuthService {
     }
   }
 
+  /**
+   * Generates a JWT token for an operator
+   * @param operator - The operator to generate token for
+   * @returns Signed JWT token string
+   */
   generateToken(operator: Partial<Operator>): string {
     const payload = {
       operatorId: operator._id,
@@ -35,121 +48,70 @@ export class TelegramAuthService {
   }
 
   /**
-   * Validates Telegram authentication data
-   * @param authData - The authentication data from Telegram
-   * @returns boolean indicating if the data is valid
+   * Registers a new operator from Telegram credentials
+   * @param user - Telegram user credentials
+   * @returns Newly created operator or null if registration fails
+   * @throws Error if operator already exists
    */
-  validateTelegramAuth(authData: TelegramAuthDto): boolean {
-    // Check if auth_date is not older than 24 hours
-    const authDate = parseInt(authData.auth_date, 10);
-    const currentTime = Math.floor(Date.now() / 1000);
-    if (currentTime - authDate > 86400) {
-      return false;
+  async registerNewOperator(user: TelegramCreds): Promise<Operator | null> {
+    if (await this.operatorModel.exists({ 'tgProfile.tgId': user.id })) {
+      throw new Error('Operator already exists');
     }
 
-    // Create data check string
-    const { hash, ...data } = authData;
-    const dataCheckString = Object.keys(data)
-      .sort()
-      .map((key) => `${key}=${data[key]}`)
-      .join('\n');
-
-    // Create secret key
-    const secretKey = createHash('sha256').update(this.botToken).digest();
-
-    // Calculate hash
-    const calculatedHash = createHmac('sha256', secretKey)
-      .update(dataCheckString)
-      .digest('hex');
-
-    // Compare hashes
-    return calculatedHash === hash;
-  }
-
-  /**
-   * Authenticates a user with Telegram data.
-   * @param authData - The authentication data from Telegram
-   * @returns The operator's ID or null if authentication fails
-   */
-  async authenticateWithTelegram(
-    authData: TelegramAuthDto,
-  ): Promise<Types.ObjectId | null> {
-    // Validate the authentication data
-    if (!this.validateTelegramAuth(authData)) {
-      return null;
-    }
-
-    // Try to update the operator if it exists.
-    // This will update tgUsername if authData.username is provided.
-    let operator = await this.operatorModel.findOneAndUpdate(
-      { 'tgProfile.tgId': authData.id },
-      authData.username
-        ? { $set: { 'tgProfile.tgUsername': authData.username } }
-        : {},
-      { new: true },
-    );
-
-    if (operator) {
-      return operator._id;
-    }
-
-    // If no operator was found, create a new one.
-    // Generate a unique username based on the Telegram username or ID.
-    const baseUsername = authData.username || `tg_${authData.id}`;
+    const baseUsername = user.username || `tg_${user.id}`;
     let username = baseUsername;
     let counter = 1;
 
-    // Check for uniqueness using exists() which is more efficient than a full findOne.
+    // Generate unique username by appending counter if needed
     while (await this.operatorModel.exists({ username })) {
       username = `${baseUsername}_${counter}`;
       counter++;
     }
 
-    operator = await this.operatorModel.create({
+    const operator = await this.operatorModel.create({
       username,
       tgProfile: {
-        tgId: authData.id,
-        tgUsername: authData.username || `user_${authData.id}`,
+        tgId: user.id,
+        tgUsername: user.username || user.id,
       },
     });
 
-    return operator._id;
+    return operator;
   }
 
   /**
-   * Handles Telegram login authentication if an operator logs in via Telegram.
+   * Handles Telegram login authentication
+   * @param authData - Telegram authentication data
+   * @returns AuthenticatedResponse with operator details and access token
+   * @throws InternalServerErrorException on authentication failure
    */
-  async telegramLogin(authData: TelegramAuthDto): Promise<
-    ApiResponse<{
-      operatorId: string;
-      accessToken: string;
-    }>
-  > {
+  async telegramLogin(
+    authData: TelegramAuthDto,
+  ): Promise<AuthenticatedResponse> {
     try {
-      if (!this.validateTelegramAuth(authData)) {
+      const parsedAuthData = this.parseTelegramInitData(authData.initData);
+
+      if (!this.validateTelegramAuth(parsedAuthData)) {
         return new ApiResponse<null>(
           401,
           '(telegramLogin) Unauthorized: Invalid Telegram authentication data',
         );
       }
 
-      // Call OperatorService to find or create the operator
-      const operatorId =
-        await this.operatorService.findOrCreateOperator(authData);
-      if (!operatorId) {
-        return new ApiResponse<null>(
-          500,
-          '(telegramLogin) Failed to create or retrieve operator',
-        );
+      let operator = (await this.operatorModel.findOne({
+        'tgProfile.tgId': parsedAuthData.user.id,
+      })) as Operator;
+
+      if (!operator) {
+        operator = await this.registerNewOperator(parsedAuthData.user);
       }
 
-      const accessToken = this.generateToken({ _id: operatorId });
+      const accessToken = this.generateToken({ _id: operator._id });
 
-      return new ApiResponse<{ operatorId: string; accessToken: string }>(
-        200,
-        '(telegramLogin) Successfully authenticated with Telegram.',
-        { operatorId: operatorId.toString(), accessToken },
-      );
+      return new AuthenticatedResponse({
+        operator,
+        accessToken,
+      });
     } catch (err: any) {
       throw new InternalServerErrorException(
         new ApiResponse<null>(
@@ -157,6 +119,79 @@ export class TelegramAuthService {
           `(telegramLogin) Error authenticating with Telegram: ${err.message}`,
         ),
       );
+    }
+  }
+
+  /**
+   * Validates Telegram authentication data
+   * @param authData - The authentication data from Telegram
+   * @returns boolean indicating if the data is valid
+   */
+  validateTelegramAuth(authData: TelegramAuthData): boolean {
+    // Check if auth_date is not older than 24 hours
+    const authDate = parseInt(authData.auth_date, 10);
+    const currentTime = Math.floor(Date.now() / 1000);
+    if (currentTime - authDate > 86400) {
+      return false;
+    }
+
+    // Create data check string by sorting and joining key-value pairs
+    const { hash, ...data } = authData;
+    const dataCheckString = Object.keys(data)
+      .sort()
+      .map((key) => `${key}=${data[key]}`)
+      .join('\n');
+
+    // Create secret key using SHA-256 hash of bot token
+    const secretKey = createHash('sha256').update(this.botToken).digest();
+
+    // Calculate HMAC hash of data string
+    const calculatedHash = createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex');
+
+    return calculatedHash === hash;
+  }
+
+  /**
+   * Parses and validates Telegram initialization data
+   * @param initData - Raw initialization data string from Telegram
+   * @returns Parsed and validated TelegramAuthData
+   * @throws Error if required fields are missing or data format is invalid
+   */
+  private parseTelegramInitData(initData: string): TelegramAuthData {
+    const parsedData = new URLSearchParams(initData);
+    const data: any = {};
+
+    // Validate required fields exist
+    const requiredFields = ['query_id', 'user', 'auth_date', 'hash'];
+    for (const field of requiredFields) {
+      if (!parsedData.has(field)) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
+    parsedData.forEach((value, key) => {
+      data[key] = value;
+    });
+
+    try {
+      const userData = JSON.parse(data.user);
+
+      // Validate required user fields
+      const requiredUserFields = ['id', 'first_name', 'username'];
+      for (const field of requiredUserFields) {
+        if (!userData[field]) {
+          throw new Error(`Missing required user field: ${field}`);
+        }
+      }
+
+      return {
+        ...data,
+        user: userData,
+      };
+    } catch {
+      throw new Error('Invalid user data format');
     }
   }
 }
