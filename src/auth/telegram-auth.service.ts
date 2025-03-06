@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -92,10 +96,7 @@ export class TelegramAuthService {
       const parsedAuthData = this.parseTelegramInitData(authData.initData);
 
       if (!this.validateTelegramAuth(parsedAuthData)) {
-        return new ApiResponse<null>(
-          401,
-          '(telegramLogin) Unauthorized: Invalid Telegram authentication data',
-        );
+        throw new HttpException('Invalid Telegram authentication data', 401);
       }
 
       let operator = (await this.operatorModel.findOne({
