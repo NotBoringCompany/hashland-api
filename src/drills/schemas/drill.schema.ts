@@ -19,8 +19,8 @@ export class Drill extends Document {
   /**
    * The database ID of the operator who owns the drill.
    */
-  @Prop({ type: String, required: true, index: true })
-  operatorId: string;
+  @Prop({ type: Types.ObjectId, required: true, index: true, ref: 'Operators' })
+  operatorId: Types.ObjectId;
 
   /**
    * The version of the drill.
