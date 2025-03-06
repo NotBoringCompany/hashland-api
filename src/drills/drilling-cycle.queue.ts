@@ -60,8 +60,6 @@ export class DrillingCycleQueue implements OnModuleInit {
       return;
     }
 
-    this.logger.log(`🔄 Ending previous cycle in the background...`);
-
     // ✅ Step 1: Get current cycle number **before creating a new one**
     const latestCycleNumber = await this.redisService.get(
       'drilling-cycle:current',
@@ -71,13 +69,21 @@ export class DrillingCycleQueue implements OnModuleInit {
         '⚠️ No previous cycle found in Redis. Skipping endCurrentCycle.',
       );
     } else {
-      this.logger.log(`🔄 Processing end of cycle #${latestCycleNumber}...`);
       this.drillingCycleService
         .endCurrentCycle(parseInt(latestCycleNumber, 10))
         .catch((err) => {
           this.logger.error(`❌ Error while ending cycle: ${err.message}`);
         });
     }
+
+    // Fetch HASH issuance from game constants
+    const issuedHash = GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE;
+
+    // Store in Redis for fast access
+    await this.redisService.set(
+      `drilling-cycle:${latestCycleNumber}:issuedHASH`,
+      issuedHash.toString(),
+    );
 
     // ✅ Step 2: Start a new drilling cycle
     this.logger.log(`⛏️ Starting a new drilling cycle...`);

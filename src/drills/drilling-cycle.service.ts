@@ -115,23 +115,29 @@ export class DrillingCycleService {
     const startTime = performance.now();
     this.logger.log(`⏳ (endCurrentCycle) Ending cycle #${cycleNumber}...`);
 
-    // ✅ Fetch cycle data using the explicitly provided cycle number
-    const cycle = await this.drillingCycleModel
-      .findOne(
-        { cycleNumber },
-        {
-          cycleNumber: 1,
-          issuedHASH: 1,
-        },
-      )
-      .lean();
+    // // ✅ Fetch cycle data using the explicitly provided cycle number
+    // const cycle = await this.drillingCycleModel
+    //   .findOne(
+    //     { cycleNumber },
+    //     {
+    //       cycleNumber: 1,
+    //       issuedHASH: 1,
+    //     },
+    //   )
+    //   .lean();
 
-    if (!cycle) {
-      this.logger.error(
-        `❌ (endCurrentCycle) Cycle #${cycleNumber} not found.`,
-      );
-      return;
-    }
+    // if (!cycle) {
+    //   this.logger.error(
+    //     `❌ (endCurrentCycle) Cycle #${cycleNumber} not found.`,
+    //   );
+    //   return;
+    // }
+
+    // Fetch issued HASH from Redis
+    const issuedHASHStr = await this.redisService.get(
+      `drilling-cycle:${cycleNumber}:issuedHASH`,
+    );
+    const issuedHASH = issuedHASHStr ? parseFloat(issuedHASHStr) : 0; // Ensure it's a number
 
     // ✅ Step 1: Select extractor
     const extractorData = await this.selectExtractor();
@@ -141,10 +147,7 @@ export class DrillingCycleService {
       );
     } else {
       // ✅ Step 2: Distribute rewards
-      await this.distributeCycleRewards(
-        extractorData.drillId,
-        cycle.issuedHASH,
-      );
+      await this.distributeCycleRewards(extractorData.drillId, issuedHASH);
     }
 
     // ✅ Step 3: Process Fuel for ALL Operators
