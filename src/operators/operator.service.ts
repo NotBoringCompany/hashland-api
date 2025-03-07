@@ -130,8 +130,8 @@ export class OperatorService {
 
     this.logger.log(
       `⚡ Fuel Processing Completed: 
-     ⛏ Depleted ${fuelUsed} for ${activeOperatorIds.size} active operators.
-     🔋 Replenished up to ${fuelGained} for inactive operators.
+     ⛏ Depleted ${fuelUsed} fuel for ${activeOperatorIds.size} active operators.
+     🔋 Replenished ${fuelGained} fuel for inactive operators.
      🛑 Stopped drilling sessions for operators who dropped below fuel threshold.
      ⏱ Execution Time: ${executionTime}ms`,
     );

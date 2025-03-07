@@ -120,6 +120,18 @@ export class DrillingSessionService {
   }
 
   /**
+   * Fetches the total number of active drilling sessions from Redis.
+   *
+   * More efficient than `fetchActiveDrillingSessions`.
+   */
+  async fetchActiveDrillingSessionsRedis(): Promise<number> {
+    const activeSessions = await this.redisService.get(
+      this.redisActiveSessionsKey,
+    );
+    return activeSessions ? parseInt(activeSessions, 10) : 0;
+  }
+
+  /**
    * Fetches the operator IDs from all active drilling sessions.
    */
   async fetchActiveDrillingSessionOperatorIds(): Promise<Types.ObjectId[]> {

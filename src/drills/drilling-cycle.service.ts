@@ -234,11 +234,20 @@ export class DrillingCycleService {
     }
 
     // Get active pool operator IDs
-    const activePoolOperatorIds = allActiveOperatorIds.filter(
-      async (id) =>
-        !!(await this.poolOperatorModel
-          .findOne({ poolId: poolOperator.poolId, operatorId: id })
-          .lean()),
+    // Get all matching pool operators in one query
+    const activePoolOperators = await this.poolOperatorModel
+      .find(
+        {
+          poolId: poolOperator.poolId,
+          operatorId: { $in: allActiveOperatorIds },
+        },
+        { operatorId: 1 }, // Only fetch operatorId for efficiency
+      )
+      .lean();
+
+    // Convert to a Set for fast lookups
+    const activePoolOperatorIds = new Set(
+      activePoolOperators.map((op) => op.operatorId),
     );
 
     // Split rewards
@@ -250,9 +259,9 @@ export class DrillingCycleService {
     const rewardData = [
       { operatorId: extractorOperatorId, amount: extractorReward },
       { operatorId: pool.leaderId, amount: leaderReward },
-      ...activePoolOperatorIds.map((operatorId) => ({
+      ...Array.from(activePoolOperatorIds).map((operatorId) => ({
         operatorId,
-        amount: activePoolReward / activePoolOperatorIds.length,
+        amount: activePoolReward / activePoolOperatorIds.size,
       })),
     ];
 
