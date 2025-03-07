@@ -13,7 +13,7 @@ import { TonClient } from '@ton/ton';
 import * as nacl from 'tweetnacl';
 import { Operator } from './schemas/operator.schema';
 import { OperatorWallet } from './schemas/operator-wallet.schema';
-import { ConnectWalletDto, TonProofDto } from './dto/wallet.dto';
+import { ConnectWalletDto, TonProofDto } from '../common/dto/wallet.dto';
 
 @Injectable()
 export class WalletService {

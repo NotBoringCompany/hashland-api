@@ -30,7 +30,7 @@ import {
   ValidateSignatureDto,
   WalletValidationResponse,
   WalletValidationResponseData,
-} from './dto/wallet.dto';
+} from '../common/dto/wallet.dto';
 import { ApiResponse as ApiResponseDto } from 'src/common/dto/response.dto';
 
 @ApiTags('Operator Wallets')
