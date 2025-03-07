@@ -25,7 +25,7 @@ async function bootstrap() {
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: '*',
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
   });
 
   // Use the Socket.IO adapter
