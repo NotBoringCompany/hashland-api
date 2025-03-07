@@ -26,6 +26,8 @@ import {
   GenerateProofChallengeDto,
   ProofChallengeResponse,
   ProofChallengeResponseData,
+  TonApiStatusResponse,
+  ValidateSignatureDto,
   WalletValidationResponse,
   WalletValidationResponseData,
 } from './dto/wallet.dto';
@@ -155,6 +157,10 @@ export class WalletController {
     description: 'Proof challenge generated',
     type: ProofChallengeResponse,
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request - Missing or invalid parameters',
+  })
   @Post('generate-proof')
   @HttpCode(200)
   async generateProofChallenge(
@@ -181,12 +187,16 @@ export class WalletController {
     description: 'Wallet validation completed',
     type: WalletValidationResponse,
   })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request - Missing or invalid parameters',
+  })
   @Post('validate-signature')
   @HttpCode(200)
   async validateSignature(
-    @Body() body: { signature: string; message: string; address: string },
+    @Body() validateSignatureDto: ValidateSignatureDto,
   ): Promise<WalletValidationResponse> {
-    const { signature, message, address } = body;
+    const { signature, message, address } = validateSignatureDto;
     const isValid = await this.walletService.validateTonSignature(
       signature,
       message,
@@ -207,14 +217,19 @@ export class WalletController {
   @ApiResponse({
     status: 200,
     description: 'TON API connection status',
+    type: TonApiStatusResponse,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'TON API connection failed',
   })
   @Get('ton-api-status')
   async checkTonApiStatus(): Promise<
-    ApiResponseDto<{ status: string; endpoint: string }>
+    TonApiStatusResponse | ApiResponseDto<{ status: string; endpoint: string }>
   > {
     try {
       const status = await this.walletService.checkTonApiConnection();
-      return new ApiResponseDto(200, 'TON API connection status', status);
+      return new TonApiStatusResponse(status);
     } catch (error) {
       return new ApiResponseDto(500, 'TON API connection failed', {
         status: 'error',

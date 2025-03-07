@@ -197,3 +197,60 @@ export class WalletValidationResponse extends ApiResponse<WalletValidationRespon
     super(200, 'Wallet validation completed', data);
   }
 }
+
+/**
+ * DTO for validating a wallet signature
+ */
+export class ValidateSignatureDto {
+  @ApiProperty({
+    description: 'Signature to verify',
+    example: '0x123abc...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  signature: string;
+
+  @ApiProperty({
+    description: 'Message that was signed',
+    example:
+      'Hashland authentication request for address EQAbc123...\nNonce: 1234abcd\nTimestamp: 1646146412',
+  })
+  @IsString()
+  @IsNotEmpty()
+  message: string;
+
+  @ApiProperty({
+    description: 'Wallet address',
+    example: 'EQAbc123...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  address: string;
+}
+
+/**
+ * Response data for TON API status
+ */
+export class TonApiStatusResponseData {
+  @ApiProperty({
+    description: 'Connection status',
+    example: 'connected',
+    enum: ['connected', 'error'],
+  })
+  status: string;
+
+  @ApiProperty({
+    description: 'TON API endpoint URL',
+    example: 'https://toncenter.com/api/v2/jsonRPC',
+  })
+  endpoint: string;
+}
+
+/**
+ * Response for TON API status
+ */
+export class TonApiStatusResponse extends ApiResponse<TonApiStatusResponseData> {
+  constructor(data: TonApiStatusResponseData) {
+    super(200, 'TON API connection status', data);
+  }
+}
