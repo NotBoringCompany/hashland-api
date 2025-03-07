@@ -17,6 +17,7 @@ import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
 import { Pool } from 'src/pools/schemas/pool.schema';
 import { OperatorService } from 'src/operators/operator.service';
 import { DrillService } from './drill.service';
+import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
 
 @Injectable()
 export class DrillingCycleService {
@@ -36,6 +37,7 @@ export class DrillingCycleService {
     private readonly drillingSessionService: DrillingSessionService,
     private readonly drillService: DrillService,
     private readonly operatorService: OperatorService,
+    private readonly drillingGatewayService: DrillingGatewayService,
   ) {}
 
   /**
@@ -68,21 +70,16 @@ export class DrillingCycleService {
       1,
     );
     const now = new Date();
+    const startFetchTime = performance.now();
 
     this.logger.log(`🛠 Creating Drilling Cycle: #${newCycleNumber}...`);
 
     try {
-      // Measure execution time for fetching active drilling sessions
-      const startFetchTime = performance.now();
       const activeOperators =
         await this.drillingSessionService.fetchActiveDrillingSessions();
-      const endFetchTime = performance.now();
-      const fetchTime = (endFetchTime - startFetchTime).toFixed(2); // Convert to milliseconds
-
-      this.logger.log(`⏳ Fetching active sessions took ${fetchTime}ms.`);
 
       // Create the drilling cycle with active operator count
-      const cycle = await this.drillingCycleModel.create({
+      await this.drillingCycleModel.create({
         cycleNumber: newCycleNumber,
         startTime: now,
         endTime: new Date(now.getTime() + this.cycleDuration),
@@ -92,9 +89,15 @@ export class DrillingCycleService {
         issuedHASH: GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE,
       });
 
+      const endFetchTime = performance.now();
+
       this.logger.log(
-        `✅ New Drilling Cycle Created: #${cycle.cycleNumber} with ${activeOperators} active operators.`,
+        `⏳ (Performance) Drilling Cycle #${newCycleNumber} setup with ${activeOperators} operators took ${endFetchTime - startFetchTime}ms.`,
       );
+
+      // ✅ Step 2: Trigger WebSocket real-time updates (handles active operators, difficulty, etc.)
+      this.drillingGatewayService.sendRealTimeUpdates();
+
       return newCycleNumber;
     } catch (error) {
       this.logger.error(`❌ Error Creating Drilling Cycle: ${error.message}`);

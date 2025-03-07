@@ -14,6 +14,92 @@ export class DrillService {
   ) {}
 
   /**
+   * Calculates the total cumulative EFF from all drills and
+   * an arbitrary difficulty value for ALL operators in one query.
+   */
+  async batchCalculateTotalEffAndDrillingDifficulty(): Promise<
+    Map<Types.ObjectId, { totalEff: number; drillingDifficulty: number }>
+  > {
+    // ✅ Step 1: Fetch total cumulative EFF from all drills
+    const totalCumulativeEff = await this.drillModel.aggregate([
+      { $group: { _id: null, totalEff: { $sum: '$actualEff' } } },
+    ]);
+
+    if (!totalCumulativeEff.length || totalCumulativeEff[0].totalEff === 0) {
+      return new Map(); // No EFF exists
+    }
+
+    const totalEff = totalCumulativeEff[0].totalEff;
+
+    // ✅ Step 2: Fetch total EFF grouped by each operator
+    const operatorEffList = await this.drillModel.aggregate([
+      { $group: { _id: '$operatorId', operatorEff: { $sum: '$actualEff' } } },
+    ]);
+
+    // ✅ Step 3: Compute difficulty for each operator
+    const result = new Map<
+      Types.ObjectId,
+      { totalEff: number; drillingDifficulty: number }
+    >();
+
+    for (const entry of operatorEffList) {
+      const operatorId = entry._id;
+      const operatorEff = entry.operatorEff;
+      const drillingDifficulty = totalEff / operatorEff;
+
+      result.set(operatorId, { totalEff, drillingDifficulty });
+    }
+
+    return result;
+  }
+
+  // /**
+  //  * Calculates the total cumulative EFF from all drills and
+  //  * an arbitrary difficulty value to determine
+  //  * how difficult it is to drill for $HASH this cycle for an operator.
+  //  */
+  // async calculateTotalEffAndDrillingDifficulty(
+  //   operatorId: Types.ObjectId,
+  // ): Promise<{
+  //   totalEff: number;
+  //   drillingDifficulty: number;
+  // }> {
+  //   // ✅ Step 1: Fetch total cumulative EFF from all drills
+  //   const totalCumulativeEff = await this.drillModel.aggregate([
+  //     { $group: { _id: null, totalEff: { $sum: '$actualEff' } } },
+  //   ]);
+
+  //   if (!totalCumulativeEff.length || totalCumulativeEff[0].totalEff === 0) {
+  //     return {
+  //       totalEff: 0,
+  //       drillingDifficulty: 0,
+  //     };
+  //   }
+
+  //   // ✅ Step 2: Fetch total EFF of drills owned by the given operator
+  //   const operatorTotalEff = await this.drillModel.aggregate([
+  //     { $match: { operatorId } }, // Filter by operator
+  //     { $group: { _id: null, operatorEff: { $sum: '$actualEff' } } },
+  //   ]);
+
+  //   if (!operatorTotalEff.length || operatorTotalEff[0].operatorEff === 0) {
+  //     return {
+  //       totalEff: totalCumulativeEff[0].totalEff,
+  //       drillingDifficulty: 0,
+  //     };
+  //   }
+
+  //   // ✅ Step 3: Compute drilling difficulty
+  //   const drillingDifficulty =
+  //     totalCumulativeEff[0].totalEff / operatorTotalEff[0].operatorEff;
+
+  //   return {
+  //     totalEff: totalCumulativeEff[0].totalEff,
+  //     drillingDifficulty,
+  //   };
+  // }
+
+  /**
    * Creates a new drill instance.
    *
    * This is called whenever an operator obtains a new drill.
