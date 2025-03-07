@@ -203,13 +203,13 @@ export class WalletService {
       }
 
       // Verify domain
-      const appDomain = this.configService.get<string>(
-        'APP_DOMAIN',
-        'hashland.ton.app',
-      );
-      if (tonProof.proof.domain.value !== appDomain) {
-        return false;
-      }
+      // const appDomain = this.configService.get<string>(
+      //   'APP_DOMAIN',
+      //   'hashland.ton.app',
+      // );
+      // if (tonProof.proof.domain.value !== appDomain) {
+      //   return false;
+      // }
 
       // Verify the signature
       const tonAddress = Address.parse(address);
@@ -409,6 +409,31 @@ export class WalletService {
         error.stack,
       );
       return false;
+    }
+  }
+
+  /**
+   * Check if the TON API connection is working
+   * @returns Status information about the TON API connection
+   */
+  async checkTonApiConnection(): Promise<{ status: string; endpoint: string }> {
+    try {
+      // Try to get masterchain info as a simple test
+      await this.tonClient.getMasterchainInfo();
+
+      return {
+        status: 'connected',
+        endpoint: this.configService.get<string>(
+          'TON_API_ENDPOINT',
+          'https://toncenter.com/api/v2/jsonRPC',
+        ),
+      };
+    } catch (error) {
+      this.logger.error(
+        `TON API connection error: ${error.message}`,
+        error.stack,
+      );
+      throw new Error(`Failed to connect to TON API: ${error.message}`);
     }
   }
 }

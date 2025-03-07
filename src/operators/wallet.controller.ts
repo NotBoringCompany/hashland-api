@@ -199,4 +199,27 @@ export class WalletController {
 
     return new WalletValidationResponse(responseData);
   }
+
+  @ApiOperation({
+    summary: 'Check TON API connection',
+    description: 'Verifies that the TON API connection is working properly',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'TON API connection status',
+  })
+  @Get('ton-api-status')
+  async checkTonApiStatus(): Promise<
+    ApiResponseDto<{ status: string; endpoint: string }>
+  > {
+    try {
+      const status = await this.walletService.checkTonApiConnection();
+      return new ApiResponseDto(200, 'TON API connection status', status);
+    } catch (error) {
+      return new ApiResponseDto(500, 'TON API connection failed', {
+        status: 'error',
+        endpoint: error.message,
+      });
+    }
+  }
 }
