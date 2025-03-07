@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Operator, OperatorSchema } from './schemas/operator.schema';
 import { OperatorService } from './operator.service';
@@ -11,7 +11,7 @@ import { DrillingSessionModule } from 'src/drills/drilling-session.module';
     MongooseModule.forFeature([
       { name: Operator.name, schema: OperatorSchema },
     ]),
-    DrillingSessionModule,
+    forwardRef(() => DrillingSessionModule),
     PoolModule,
     PoolOperatorModule,
   ],
