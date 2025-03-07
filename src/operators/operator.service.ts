@@ -20,6 +20,35 @@ export class OperatorService {
   ) {}
 
   /**
+   * Checks if the operator currently has enough fuel to start/continue the drilling session.
+   */
+  async hasEnoughFuel(operatorId: Types.ObjectId): Promise<boolean> {
+    try {
+      // Fetch the operator's current fuel level
+      const operator = await this.operatorModel.findOne(
+        {
+          _id: operatorId,
+        },
+        {
+          currentFuel: 1,
+        },
+      );
+
+      if (!operator) {
+        throw new NotFoundException('(hasEnoughFuel) Operator not found');
+      }
+
+      // Check if the operator has enough fuel
+      return (
+        operator.currentFuel >=
+        GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits
+      );
+    } catch (err: any) {
+      throw new Error(`(hasEnoughFuel) Error checking fuel: ${err.message}`);
+    }
+  }
+
+  /**
    * Depletes fuel for active operators (i.e. operators that have an active drilling session)
    * and replenishes fuel for inactive operators (i.e. operators that do not have an active drilling session).
    */
@@ -63,16 +92,38 @@ export class OperatorService {
     );
 
     // **🔴 NEW: Stop drilling sessions for operators who drop below threshold**
-    await this.drillingSessionModel.updateMany(
-      {
-        operatorId: { $in: Array.from(activeOperatorIds) },
-        endTime: null, // ✅ Only stop sessions that are still running
-        currentFuel: {
-          $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
-        }, // ✅ Below depletion threshold
-      },
-      { $set: { endTime: new Date() } }, // ✅ Mark session as ended
-    );
+    // ✅ Step 1: Find all operators whose fuel dropped below threshold
+    const depletedOperatorIds = await this.operatorModel
+      .find(
+        {
+          _id: { $in: Array.from(activeOperatorIds) },
+          currentFuel: {
+            $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
+          },
+        },
+        { _id: 1 }, // Only fetch IDs for efficiency
+      )
+      .lean()
+      .then((operators) => operators.map((op) => op._id)); // Extract ObjectIds
+
+    if (depletedOperatorIds.length === 0) {
+      this.logger.log(
+        `🔋 No operators depleted below threshold. Skipping session termination.`,
+      );
+    } else {
+      // ✅ Step 2: Stop drilling sessions for those operators
+      await this.drillingSessionModel.updateMany(
+        {
+          operatorId: { $in: depletedOperatorIds },
+          endTime: null, // ✅ Only stop sessions that are still running
+        },
+        { $set: { endTime: new Date() } }, // ✅ Mark session as ended
+      );
+
+      this.logger.log(
+        `🛑 Stopped ${depletedOperatorIds.length} drilling sessions due to fuel depletion.`,
+      );
+    }
 
     const endTime = performance.now(); // ⏳ End timing
     const executionTime = (endTime - startTime).toFixed(2);
