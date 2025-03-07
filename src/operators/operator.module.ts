@@ -4,17 +4,14 @@ import { Operator, OperatorSchema } from './schemas/operator.schema';
 import { OperatorService } from './operator.service';
 import { PoolModule } from 'src/pools/pool.module';
 import { PoolOperatorModule } from 'src/pools/pool-operator.module';
-import {
-  DrillingSession,
-  DrillingSessionSchema,
-} from 'src/drills/schemas/drilling-session.schema';
+import { DrillingSessionModule } from 'src/drills/drilling-session.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Operator.name, schema: OperatorSchema },
-      { name: DrillingSession.name, schema: DrillingSessionSchema },
     ]),
+    DrillingSessionModule,
     PoolModule,
     PoolOperatorModule,
   ],

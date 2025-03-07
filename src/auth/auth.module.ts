@@ -22,10 +22,10 @@ import { PoolModule } from 'src/pools/pool.module';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
+      useFactory: async () => ({
+        secret: process.env.JWT_SECRET!,
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRATION', '24h'),
+          expiresIn: process.env.JWT_EXPIRATION || '24h',
         },
       }),
       inject: [ConfigService],
