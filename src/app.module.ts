@@ -10,7 +10,6 @@ import { AuthModule } from './auth/auth.module';
 import { WebSocketModule } from './websocket/websocket.module';
 import { RedisModule } from './common/redis.module';
 import { DrillingCycleModule } from './drills/drilling-cycle.module';
-import { WalletModule } from './wallets/wallet.module';
 
 @Module({
   imports: [
@@ -26,7 +25,6 @@ import { WalletModule } from './wallets/wallet.module';
     DrillingCycleModule,
     AuthModule,
     WebSocketModule,
-    WalletModule,
   ],
   controllers: [AppController],
   providers: [AppService],
