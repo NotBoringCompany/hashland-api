@@ -23,7 +23,7 @@ export class DrillingSessionService {
    *
    * Called whenever an operator starts drilling for $HASH.
    */
-  async createDrillingSession(
+  async startDrillingSession(
     operatorId: Types.ObjectId,
   ): Promise<ApiResponse<null>> {
     try {
@@ -36,7 +36,7 @@ export class DrillingSessionService {
       if (existingSession) {
         return new ApiResponse<null>(
           400,
-          `(createDrillingSession) Operator already has an active drilling session.`,
+          `(startDrillingSession) Operator already has an active drilling session.`,
         );
       }
 
@@ -44,7 +44,7 @@ export class DrillingSessionService {
       if (!(await this.operatorService.hasEnoughFuel(operatorId))) {
         return new ApiResponse<null>(
           400,
-          `(createDrillingSession) Operator does not have enough fuel to start a drilling session.`,
+          `(startDrillingSession) Operator does not have enough fuel to start a drilling session.`,
         );
       }
 
@@ -68,7 +68,46 @@ export class DrillingSessionService {
     } catch (err: any) {
       return new ApiResponse<null>(
         500,
-        `(createDrillingSession) Error starting drilling session: ${err.message}`,
+        `(startDrillingSession) Error starting drilling session: ${err.message}`,
+      );
+    }
+  }
+
+  /**
+   * Ends the drilling session for an operator.
+   */
+  async endDrillingSession(
+    operatorId: Types.ObjectId,
+  ): Promise<ApiResponse<null>> {
+    try {
+      // ✅ Find active session
+      const session = await this.drillingSessionModel.findOneAndUpdate(
+        { operatorId, endTime: null },
+        { endTime: new Date() }, // Mark session as ended
+        { new: true },
+      );
+
+      if (!session) {
+        return new ApiResponse<null>(
+          400,
+          `(endDrillingSession) No active session found for this operator.`,
+        );
+      }
+
+      // ✅ Decrement active session count in Redis
+      await this.redisService.increment(this.redisActiveSessionsKey, -1);
+
+      this.logger.log(
+        `🛑 (endDrillingSession) Operator ${operatorId} stopped drilling.`,
+      );
+      return new ApiResponse<null>(
+        200,
+        `(endDrillingSession) Drilling session stopped.`,
+      );
+    } catch (err: any) {
+      return new ApiResponse<null>(
+        500,
+        `(endDrillingSession) Error ending drilling session: ${err.message}`,
       );
     }
   }
