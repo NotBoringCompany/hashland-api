@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DrillingCycleService } from './drilling-cycle.service';
 import { DrillingCycleQueue } from './drilling-cycle.queue';
@@ -19,7 +19,7 @@ import { RedisModule } from 'src/common/redis.module';
 @Module({
   imports: [
     ConfigModule, // Load environment variables
-    forwardRef(() => DrillingSessionModule), // Import DrillingSessionModule
+    DrillingSessionModule, // Import DrillingSessionModule
     OperatorModule, // Import OperatorModule
     DrillModule, // Import DrillModule
     PoolOperatorModule, // Import PoolOperatorModule
