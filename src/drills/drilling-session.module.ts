@@ -6,13 +6,13 @@ import {
   DrillingSessionSchema,
 } from './schemas/drilling-session.schema';
 import { DrillingSessionService } from './drilling-session.service';
-import { RedisService } from 'src/common/redis.service';
 import { OperatorModule } from 'src/operators/operator.module';
+import { RedisModule } from 'src/common/redis.module';
 
 @Module({
   imports: [
     ConfigModule, // Load environment variables
-    RedisService, // Import the RedisService
+    RedisModule, // Import the RedisModule
     OperatorModule, // Import the OperatorModule
     MongooseModule.forFeature([
       { name: DrillingSession.name, schema: DrillingSessionSchema },
