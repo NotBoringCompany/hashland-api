@@ -13,7 +13,8 @@ import {
 export class WalletConnectionService {
   constructor(
     @InjectModel(Wallet.name) private walletModel: Model<Wallet>,
-    @InjectModel(Operator.name) private operatorModel: Model<Operator & Document>,
+    @InjectModel(Operator.name)
+    private operatorModel: Model<Operator & Document>,
     @InjectModel('WalletConnectionEvent')
     private walletEventModel: Model<WalletConnectionEvent>,
   ) {}
@@ -26,7 +27,9 @@ export class WalletConnectionService {
     operatorId: string,
   ): Promise<WalletConnection> {
     // Check if operator exists
-    const operator = await this.operatorModel.findById(new Types.ObjectId(operatorId));
+    const operator = await this.operatorModel.findById(
+      new Types.ObjectId(operatorId),
+    );
     if (!operator) {
       throw new NotFoundException(`Operator with ID ${operatorId} not found`);
     }
