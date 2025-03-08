@@ -24,17 +24,10 @@ export class Operator extends Document {
   username: string;
 
   /**
-   * The operator's asset equity (in USD) over a period of time (to be decided).
-   *
-   * NOTE: This can also be in real-time.
-   */
-  @Prop({ required: true, default: 0 })
-  weightedAssetEquity: number;
-
-  /**
    * The maximum cumulative EFF rating allowed for all drills owned by the operator.
    *
-   * This is decided by `weightedAssetEquity`.
+   * This is decided by the operator's weighted asset equity
+   * (how much USD worth of USDT, USDC and TON and possibly other assets the operator has).
    */
   @Prop({ required: true, default: 0 })
   maxEffAllowed: number;
@@ -56,6 +49,12 @@ export class Operator extends Document {
     default: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
   })
   currentFuel: number;
+
+  /**
+   * The total $HASH earned by the operator across all sessions so far.
+   */
+  @Prop({ required: true, default: 0 })
+  totalEarnedHASH: number;
 
   /**
    * An optional Telegram profile. Should only be set if the operator logs in via Telegram.

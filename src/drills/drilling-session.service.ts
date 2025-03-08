@@ -28,12 +28,12 @@ export class DrillingSessionService {
   ): Promise<ApiResponse<null>> {
     try {
       // Check if operator already has an active session
-      const existingSession = await this.drillingSessionModel.exists({
-        operatorId,
-        endTime: null, // Active session
-      });
-
-      if (existingSession) {
+      if (
+        !!(await this.drillingSessionModel.exists({
+          operatorId,
+          endTime: null,
+        }))
+      ) {
         return new ApiResponse<null>(
           400,
           `(startDrillingSession) Operator already has an active drilling session.`,
@@ -96,6 +96,12 @@ export class DrillingSessionService {
 
       // ✅ Decrement active session count in Redis
       await this.redisService.increment(this.redisActiveSessionsKey, -1);
+
+      // Updates the operator's total HASH earned
+      await this.operatorService.incrementTotalHASHEarned(
+        operatorId,
+        session.earnedHASH,
+      );
 
       this.logger.log(
         `🛑 (endDrillingSession) Operator ${operatorId} stopped drilling.`,

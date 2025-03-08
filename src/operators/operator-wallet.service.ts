@@ -40,6 +40,13 @@ export class OperatorWalletService {
   }
 
   /**
+   * Checks if an operator has at least one connected wallet in the `OperatorWallet` collection.
+   */
+  async hasWallet(operatorId: Types.ObjectId): Promise<boolean> {
+    return !!(await this.operatorWalletModel.exists({ operatorId }));
+  }
+
+  /**
    * Connect a wallet to an operator
    * @param operatorId - The operator's ID
    * @param walletData - The wallet connection data

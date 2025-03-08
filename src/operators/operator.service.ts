@@ -20,6 +20,24 @@ export class OperatorService {
   ) {}
 
   /**
+   * Increments an operator's `totalHASHEarned` field by a given amount.
+   *
+   * This is usually called after ending a drilling session.
+   */
+  async incrementTotalHASHEarned(operatorId: Types.ObjectId, amount: number) {
+    try {
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        { $inc: { totalHASHEarned: amount } },
+      );
+    } catch (err: any) {
+      throw new Error(
+        `(incrementTotalHASHEarned) Error incrementing total HASH earned: ${err.message}`,
+      );
+    }
+  }
+
+  /**
    * Checks if the operator currently has enough fuel to start/continue the drilling session.
    */
   async hasEnoughFuel(operatorId: Types.ObjectId): Promise<boolean> {
@@ -175,9 +193,11 @@ export class OperatorService {
    * @returns The operator document or null if not found
    */
   async findByTelegramId(id: string): Promise<Operator | null> {
-    const operator = await this.operatorModel.findOne({
-      'tgProfile.tgId': id,
-    });
+    const operator = await this.operatorModel
+      .findOne({
+        'tgProfile.tgId': id,
+      })
+      .lean();
 
     if (!operator) {
       throw new NotFoundException('Operator not found');
@@ -228,6 +248,11 @@ export class OperatorService {
 
     operator = await this.operatorModel.create({
       username,
+      // Update this with checking the operator's weighted asset equity later on.
+      maxEffAllowed: 0,
+      maxFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
+      currentFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
+      totalEarnedHASH: 0,
       tgProfile: {
         tgId: authData.id,
         tgUsername: authData.username || `user_${authData.id}`,

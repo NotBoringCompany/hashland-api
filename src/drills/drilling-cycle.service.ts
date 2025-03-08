@@ -11,13 +11,13 @@ import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { performance } from 'perf_hooks'; // Import high-precision timer
 import { DrillingSessionService } from './drilling-session.service';
-import { Operator } from 'src/operators/schemas/operator.schema';
 import { Drill } from './schemas/drill.schema';
 import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
 import { Pool } from 'src/pools/schemas/pool.schema';
 import { OperatorService } from 'src/operators/operator.service';
 import { DrillService } from './drill.service';
 import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
+import { DrillingSession } from './schemas/drilling-session.schema';
 @Injectable()
 export class DrillingCycleService {
   private readonly logger = new Logger(DrillingCycleService.name);
@@ -27,7 +27,8 @@ export class DrillingCycleService {
   constructor(
     @InjectModel(DrillingCycle.name)
     private drillingCycleModel: Model<DrillingCycle>,
-    @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    @InjectModel(DrillingSession.name)
+    private drillingSessionModel: Model<DrillingSession>,
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
@@ -301,11 +302,12 @@ export class DrillingCycleService {
     // Measure execution time
     const start = performance.now();
 
-    await this.operatorModel.bulkWrite(
+    // ✅ Bulk update `earnedHASH` in active drilling sessions
+    await this.drillingSessionModel.bulkWrite(
       rewardData.map(({ operatorId, amount }) => ({
         updateOne: {
-          filter: { _id: operatorId },
-          update: { $inc: { balance: amount } },
+          filter: { operatorId, endTime: null }, // ✅ Only update active sessions
+          update: { $inc: { earnedHASH: amount } },
         },
       })),
     );
