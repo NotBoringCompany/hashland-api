@@ -18,7 +18,6 @@ import { Pool } from 'src/pools/schemas/pool.schema';
 import { OperatorService } from 'src/operators/operator.service';
 import { DrillService } from './drill.service';
 import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
-
 @Injectable()
 export class DrillingCycleService {
   private readonly logger = new Logger(DrillingCycleService.name);

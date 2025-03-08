@@ -1,7 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DrillingGateway } from './drilling.gateway';
-import { DrillingCycleService } from 'src/drills/drilling-cycle.service';
-import { DrillingSessionService } from 'src/drills/drilling-session.service';
 import { RedisService } from 'src/common/redis.service';
 import { DrillService } from 'src/drills/drill.service';
 
@@ -14,8 +12,6 @@ export class DrillingGatewayService {
 
   constructor(
     private readonly drillingGateway: DrillingGateway,
-    private readonly drillingCycleService: DrillingCycleService,
-    private readonly drillingSessionService: DrillingSessionService,
     private readonly redisService: RedisService,
     private readonly drillService: DrillService,
   ) {}
@@ -24,8 +20,13 @@ export class DrillingGatewayService {
    * Sends real-time updates to all connected WebSocket clients.
    */
   async sendRealTimeUpdates() {
-    const currentCycleNumber =
-      await this.drillingCycleService.getCurrentCycleNumber();
+    // Directly fetch from Redis to prevent circular dependency with DrillingCycleService.
+    const currentCycleNumberStr = await this.redisService.get(
+      'drilling-cycle:current',
+    );
+    const currentCycleNumber = currentCycleNumberStr
+      ? parseInt(currentCycleNumberStr, 10)
+      : 0;
 
     const onlineOperators = this.drillingGateway.getOnlineOperatorCount();
 
