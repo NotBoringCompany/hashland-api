@@ -15,7 +15,7 @@ import { DrillModule } from './drill.module';
 import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 import { PoolModule } from 'src/pools/pool.module';
 import { RedisModule } from 'src/common/redis.module';
-import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
+import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
 
 @Module({
   imports: [
@@ -26,7 +26,7 @@ import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
     PoolOperatorModule, // Import PoolOperatorModule
     PoolModule, // Import PoolModule
     RedisModule, // Import RedisModule
-    DrillingGatewayService, // Import DrillingGatewayService
+    DrillingGatewayModule, // Import DrillingGatewayModule
     MongooseModule.forFeature([
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
     ]),
