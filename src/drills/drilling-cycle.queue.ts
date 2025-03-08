@@ -76,15 +76,6 @@ export class DrillingCycleQueue implements OnModuleInit {
         });
     }
 
-    // Fetch HASH issuance from game constants
-    const issuedHash = GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE;
-
-    // Store in Redis for fast access
-    await this.redisService.set(
-      `drilling-cycle:${latestCycleNumber}:issuedHASH`,
-      issuedHash.toString(),
-    );
-
     // ✅ Step 2: Start a new drilling cycle
     this.logger.log(`⛏️ Starting a new drilling cycle...`);
     await this.drillingCycleService.createDrillingCycle();

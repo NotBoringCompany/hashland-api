@@ -74,9 +74,18 @@ export class DrillingCycleService {
 
     this.logger.log(`🛠 Creating Drilling Cycle: #${newCycleNumber}...`);
 
+    // Fetch HASH issuance from game constants
+    const issuedHash = GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE;
+
+    // Store in Redis for fast access
+    await this.redisService.set(
+      `drilling-cycle:${newCycleNumber}:issuedHASH`,
+      issuedHash.toString(),
+    );
+
     try {
       const activeOperators =
-        await this.drillingSessionService.fetchActiveDrillingSessions();
+        await this.drillingSessionService.fetchActiveDrillingSessionsRedis();
 
       // Create the drilling cycle with active operator count
       await this.drillingCycleModel.create({

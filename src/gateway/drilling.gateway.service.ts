@@ -20,38 +20,32 @@ export class DrillingGatewayService {
     private readonly drillService: DrillService,
   ) {}
 
+  /**
+   * Sends real-time updates to all connected WebSocket clients.
+   */
   async sendRealTimeUpdates() {
-    // ✅ Fetch current cycle number & active operators from Redis
     const currentCycleNumber =
       await this.drillingCycleService.getCurrentCycleNumber();
-    const activeOperators =
-      await this.drillingSessionService.fetchActiveDrillingSessionsRedis();
 
-    // ✅ Fetch issued HASH from Redis
+    const onlineOperators = this.drillingGateway.getOnlineOperatorCount();
+
+    // Fetch issued HASH from Redis
     const issuedHASHStr = await this.redisService.get(
       `drilling-cycle:${currentCycleNumber}:issuedHASH`,
     );
     const issuedHASH = issuedHASHStr ? parseInt(issuedHASHStr, 10) : 0;
 
-    // ✅ Fetch total EFF and drilling difficulty for all operators
-    const operatorData =
+    // Fetch total EFF and drilling difficulty
+    const operatorEffData =
       await this.drillService.batchCalculateTotalEffAndDrillingDifficulty();
 
-    // ✅ Emit updates for each connected operator
-    for (const [operatorId, { totalEff, drillingDifficulty }] of operatorData) {
-      this.drillingGateway.server
-        .to(operatorId.toString())
-        .emit('drilling-update', {
-          currentCycleNumber,
-          activeOperatorCount: activeOperators,
-          issuedHASH,
-          drillingDifficulty,
-          totalEff,
-        });
-    }
+    this.drillingGateway.server.emit('drilling-update', {
+      currentCycleNumber,
+      onlineOperatorCount: onlineOperators,
+      issuedHASH,
+      operatorEffData,
+    });
 
-    this.logger.log(
-      `📡 Sent real-time drilling updates to ${operatorData.size} operators.`,
-    );
+    this.logger.log(`📡 Sent real-time drilling updates.`);
   }
 }
