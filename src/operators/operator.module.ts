@@ -13,9 +13,11 @@ import {
   DrillingSessionSchema,
 } from 'src/drills/schemas/drilling-session.schema';
 import { OperatorWalletModule } from './operator-wallet.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
+    ConfigModule,
     MongooseModule.forFeature([
       { name: Operator.name, schema: OperatorSchema },
       { name: OperatorWallet.name, schema: OperatorWalletSchema },
