@@ -24,10 +24,18 @@ export class Operator extends Document {
   username: string;
 
   /**
+   * The operator's weighted asset equity over a 6 hour period.
+   *
+   * This is calculated by the value of the operator's TON holdings in USD.
+   * In the future, we may add support for other assets like USDT and USDC.
+   */
+  @Prop({ required: true, default: 0 })
+  weightedAssetEquity: number;
+
+  /**
    * A multiplier that's applied to the operator's drills' EFF ratings.
    *
-   * This is decided by the operator's weighted asset equity
-   * (how much USD worth of USDT, USDC and TON and possibly other assets the operator has).
+   * This is decided by the operator's weighted asset equity.
    */
   @Prop({ required: true, default: 1 })
   effMultiplier: number;

@@ -35,7 +35,7 @@ import { OperatorWalletService } from './operator-wallet.service';
 
 @ApiTags('Operator Wallets')
 @Controller('operators/wallets')
-export class WalletController {
+export class OperatorWalletController {
   constructor(private readonly operatorWalletService: OperatorWalletService) {}
 
   @ApiOperation({

@@ -6,6 +6,7 @@ import { PoolOperatorService } from 'src/pools/pool-operator.service';
 import { PoolService } from 'src/pools/pool.service';
 import { DrillingSession } from 'src/drills/schemas/drilling-session.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { OperatorWalletService } from './operator-wallet.service';
 
 @Injectable()
 export class OperatorService {
@@ -17,7 +18,105 @@ export class OperatorService {
     private drillingSessionModel: Model<DrillingSession>,
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
+    private readonly operatorWalletService: OperatorWalletService,
   ) {}
+
+  /**
+   * Updates weighted asset equity & effMultiplier for all operators.
+   */
+  async updateWeightedAssetEquityAndEffMultiplier() {
+    this.logger.log(
+      '🔄 (updateWeightedAssetEquityAndEffMultiplier) Updating weighted asset equity & effMultiplier for operators...',
+    );
+
+    // ✅ Step 1: Fetch aggregated TON balances **per operator**
+    const p1StartTime = performance.now(); // ⏳ Start timing
+    const operatorBalances =
+      await this.operatorWalletService.fetchAllWalletBalances();
+    const p1EndTime = performance.now(); // ⏳ End timing
+
+    this.logger.log(
+      `🔢 (updateWeightedAssetEquityAndEffMultiplier) Fetched TON balances for ${operatorBalances.size} operators in ${(
+        p1EndTime - p1StartTime
+      ).toFixed(2)}ms`,
+    );
+
+    // ✅ Step 2: Fetch TON/USD price
+    const p2StartTime = performance.now(); // ⏳ Start timing
+    const tonUsdRate = await this.operatorWalletService.fetchTonToUsdRate();
+    const p2EndTIme = performance.now(); // ⏳ End timing
+
+    this.logger.log(
+      `💰 (updateWeightedAssetEquityAndEffMultiplier) Fetched TON/USD rate: ${tonUsdRate} in ${(
+        p2EndTIme - p2StartTime
+      ).toFixed(2)}ms`,
+    );
+
+    // ✅ Step 3: Fetch ALL operators in one query
+    const p3StartTime = performance.now(); // ⏳ Start timing
+    const operators = await this.operatorModel
+      .find({}, { _id: 1, weightedAssetEquity: 1 })
+      .lean();
+    const p3EndTime = performance.now(); // ⏳ End timing
+
+    this.logger.log(
+      `🔍 (updateWeightedAssetEquityAndEffMultiplier) Fetched ${operators.length} operators in ${(
+        p3EndTime - p3StartTime
+      ).toFixed(2)}ms`,
+    );
+
+    // ✅ Step 4: Compute new equity & effMultiplier for each operator
+    const p4StartTime = performance.now(); // ⏳ Start timing
+    const bulkUpdates = operators.map((operator) => {
+      const newEquity =
+        (operatorBalances.get(operator._id.toString()) || 0) * tonUsdRate;
+      const newWeightedEquity =
+        (operator.weightedAssetEquity || 0) * 0.85 + newEquity * 0.15;
+
+      // Compute effMultiplier
+      const effMultiplier = this.equityToEffMultiplier(newWeightedEquity);
+
+      return {
+        updateOne: {
+          filter: { _id: operator._id },
+          update: {
+            $set: { weightedAssetEquity: newWeightedEquity, effMultiplier },
+          },
+        },
+      };
+    });
+    const p4EndTime = performance.now(); // ⏳ End timing
+
+    this.logger.log(
+      `🔧 (updateWeightedAssetEquityAndEffMultiplier) Computed new equity & effMultiplier for ${operators.length} operators in ${(
+        p4EndTime - p4StartTime
+      ).toFixed(2)}ms`,
+    );
+
+    // ✅ Step 5: Perform bulk update in a single operation
+    const p5StartTime = performance.now(); // ⏳ Start timing
+    if (bulkUpdates.length > 0) {
+      await this.operatorModel.bulkWrite(bulkUpdates);
+    }
+    const p5EndTime = performance.now(); // ⏳ End timing
+
+    this.logger.log(
+      ` (updateWeightedAssetEquityAndEffMultiplier) Updated weighted asset equity & effMultiplier for ${operators.length} operators in ${(
+        p5EndTime - p5StartTime
+      ).toFixed(2)}ms`,
+    );
+
+    this.logger.log(
+      `✅ Updated weighted asset equity & effMultiplier for ${operators.length} operators.`,
+    );
+  }
+
+  /**
+   * Converts an operator's equity to their effMultiplier value.
+   */
+  private equityToEffMultiplier(equity: number): number {
+    return 1 + Math.log(1 + 0.0000596 * equity);
+  }
 
   /**
    * Increments an operator's `totalHASHEarned` field by a given amount.
@@ -248,6 +347,8 @@ export class OperatorService {
 
     operator = await this.operatorModel.create({
       username,
+      // Update this with checking the operator's weighted asset equity later on.
+      weightedAssetEquity: 0,
       // Update this with checking the operator's weighted asset equity later on.
       effMultiplier: 1,
       maxFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
