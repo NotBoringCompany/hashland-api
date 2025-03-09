@@ -12,11 +12,13 @@ import { OperatorService } from 'src/operators/operator.service';
 import { JwtAuthController } from './jwt-auth.controller';
 import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 import { PoolModule } from 'src/pools/pool.module';
+import { OperatorWalletModule } from 'src/operators/operator-wallet.module';
 
 @Module({
   imports: [
     ConfigModule,
     OperatorModule,
+    OperatorWalletModule,
     PoolOperatorModule,
     PoolModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
