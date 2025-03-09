@@ -44,11 +44,11 @@ export class OperatorService {
     // ✅ Step 2: Fetch TON/USD price
     const p2StartTime = performance.now(); // ⏳ Start timing
     const tonUsdRate = await this.operatorWalletService.fetchTonToUsdRate();
-    const p2EndTIme = performance.now(); // ⏳ End timing
+    const p2EndTime = performance.now(); // ⏳ End timing
 
     this.logger.log(
       `💰 (updateWeightedAssetEquityAndEffMultiplier) Fetched TON/USD rate: ${tonUsdRate} in ${(
-        p2EndTIme - p2StartTime
+        p2EndTime - p2StartTime
       ).toFixed(2)}ms`,
     );
 
@@ -93,21 +93,28 @@ export class OperatorService {
       ).toFixed(2)}ms`,
     );
 
-    // ✅ Step 5: Perform bulk update in a single operation
+    // ✅ Step 5: Perform **batched** bulk update to prevent MongoDB overload
     const p5StartTime = performance.now(); // ⏳ Start timing
-    if (bulkUpdates.length > 0) {
-      await this.operatorModel.bulkWrite(bulkUpdates);
+    const batchSize = 1000; // ✅ Set batch size to prevent overload
+    for (let i = 0; i < bulkUpdates.length; i += batchSize) {
+      const batch = bulkUpdates.slice(i, i + batchSize);
+      await this.operatorModel.bulkWrite(batch);
+      this.logger.log(
+        `✅ (updateWeightedAssetEquityAndEffMultiplier) Processed batch ${
+          i / batchSize + 1
+        }/${Math.ceil(bulkUpdates.length / batchSize)} (${batch.length} updates)`,
+      );
     }
     const p5EndTime = performance.now(); // ⏳ End timing
 
     this.logger.log(
-      ` (updateWeightedAssetEquityAndEffMultiplier) Updated weighted asset equity & effMultiplier for ${operators.length} operators in ${(
+      `📝 (updateWeightedAssetEquityAndEffMultiplier) Updated weighted asset equity & effMultiplier for ${operators.length} operators in ${(
         p5EndTime - p5StartTime
       ).toFixed(2)}ms`,
     );
 
     this.logger.log(
-      `✅ Updated weighted asset equity & effMultiplier for ${operators.length} operators.`,
+      `✅ Finished updating weighted asset equity & effMultiplier for ${operators.length} operators.`,
     );
   }
 
