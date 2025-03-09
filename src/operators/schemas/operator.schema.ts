@@ -24,13 +24,13 @@ export class Operator extends Document {
   username: string;
 
   /**
-   * The maximum cumulative EFF rating allowed for all drills owned by the operator.
+   * A multiplier that's applied to the operator's drills' EFF ratings.
    *
    * This is decided by the operator's weighted asset equity
    * (how much USD worth of USDT, USDC and TON and possibly other assets the operator has).
    */
-  @Prop({ required: true, default: 0 })
-  maxEffAllowed: number;
+  @Prop({ required: true, default: 1 })
+  effMultiplier: number;
 
   /**
    * The maximum fuel capacity of the operator's drills.

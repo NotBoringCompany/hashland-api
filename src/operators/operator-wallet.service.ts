@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { Address, beginCell } from '@ton/core';
 import { TonClient } from '@ton/ton';
@@ -24,26 +23,16 @@ export class OperatorWalletService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel(OperatorWallet.name)
     private operatorWalletModel: Model<OperatorWallet>,
-    private configService: ConfigService,
   ) {
     // Initialize TON client
-    const endpoint = this.configService.get<string>(
-      'TON_API_ENDPOINT',
-      'https://toncenter.com/api/v2/jsonRPC',
-    );
-    const apiKey = this.configService.get<string>('TON_API_KEY', '');
+    const endpoint =
+      process.env.TON_API_ENDPOINT || 'https://toncenter.com/api/v2/jsonRPC';
+    const apiKey = process.env.TON_API_KEY || '';
 
     this.tonClient = new TonClient({
       endpoint,
       apiKey,
     });
-  }
-
-  /**
-   * Checks if an operator has at least one connected wallet in the `OperatorWallet` collection.
-   */
-  async hasWallet(operatorId: Types.ObjectId): Promise<boolean> {
-    return !!(await this.operatorWalletModel.exists({ operatorId }));
   }
 
   /**
@@ -382,7 +371,7 @@ export class OperatorWalletService {
    * @returns The challenge message
    */
   private generateChallengeMessage(address: string, nonce: string): string {
-    const appName = this.configService.get<string>('APP_NAME', 'Hashland');
+    const appName = process.env.APP_NAME || 'Hashland';
     const timestamp = Date.now();
 
     return `${appName} authentication request for address ${address}.\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
@@ -430,10 +419,9 @@ export class OperatorWalletService {
 
       return {
         status: 'connected',
-        endpoint: this.configService.get<string>(
-          'TON_API_ENDPOINT',
+        endpoint:
+          process.env.TON_API_ENDPOINT ||
           'https://toncenter.com/api/v2/jsonRPC',
-        ),
       };
     } catch (error) {
       this.logger.error(

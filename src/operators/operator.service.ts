@@ -249,7 +249,7 @@ export class OperatorService {
     operator = await this.operatorModel.create({
       username,
       // Update this with checking the operator's weighted asset equity later on.
-      maxEffAllowed: 0,
+      effMultiplier: 1,
       maxFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
       totalEarnedHASH: 0,
