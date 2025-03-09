@@ -8,11 +8,13 @@ import { OperatorWalletController } from './operator-wallet.controller';
 import { OperatorWalletService } from './operator-wallet.service';
 import { RedisModule } from 'src/common/redis.module';
 import { ConfigModule } from '@nestjs/config';
+import { Operator, OperatorSchema } from './schemas/operator.schema';
 
 @Module({
   imports: [
     ConfigModule,
     MongooseModule.forFeature([
+      { name: Operator.name, schema: OperatorSchema },
       { name: OperatorWallet.name, schema: OperatorWalletSchema },
     ]),
     RedisModule,
