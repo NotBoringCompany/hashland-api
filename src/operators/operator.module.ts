@@ -12,7 +12,6 @@ import {
   DrillingSession,
   DrillingSessionSchema,
 } from 'src/drills/schemas/drilling-session.schema';
-import { OperatorWalletService } from './operator-wallet.service';
 import { OperatorWalletModule } from './operator-wallet.module';
 
 @Module({
@@ -27,7 +26,7 @@ import { OperatorWalletModule } from './operator-wallet.module';
     PoolOperatorModule,
   ],
   controllers: [], // Expose API endpoints
-  providers: [OperatorService, OperatorWalletService], // Business logic for Operators
-  exports: [MongooseModule, OperatorService, OperatorWalletService], // Allow usage in other modules
+  providers: [OperatorService], // Business logic for Operators
+  exports: [MongooseModule, OperatorService], // Allow usage in other modules
 })
 export class OperatorModule {}
