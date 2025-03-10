@@ -9,6 +9,7 @@ import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { OperatorWalletService } from './operator-wallet.service';
 import { DrillService } from 'src/drills/drill.service';
 import { Drill } from 'src/drills/schemas/drill.schema';
+import { DrillVersion } from 'src/common/enums/drill.enum';
 
 @Injectable()
 export class OperatorService {
@@ -99,7 +100,7 @@ export class OperatorService {
 
       bulkDrillUpdates.push({
         updateOne: {
-          filter: { operatorId: operator._id, version: 'BASIC' }, // ✅ Ensure only BASIC drills are updated
+          filter: { operatorId: operator._id, version: DrillVersion.BASIC }, // ✅ Ensure only BASIC drills are updated
           update: {
             $set: { actualEff: newActualEff },
           },
