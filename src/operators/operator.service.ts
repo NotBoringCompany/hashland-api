@@ -9,7 +9,7 @@ import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { OperatorWalletService } from './operator-wallet.service';
 import { DrillService } from 'src/drills/drill.service';
 import { Drill } from 'src/drills/schemas/drill.schema';
-import { DrillVersion } from 'src/common/enums/drill.enum';
+import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 
 @Injectable()
 export class OperatorService {
@@ -417,6 +417,22 @@ export class OperatorService {
         );
       }
     }
+
+    // Grant a basic drill to the operator
+    await this.drillService
+      .createDrill(
+        operator._id,
+        DrillVersion.BASIC,
+        DrillConfig.BASIC,
+        false,
+        1,
+        GAME_CONSTANTS.DRILLS.BASIC_DRILL_STARTING_ACTUAL_EFF,
+      )
+      .catch((err: any) => {
+        this.logger.warn(
+          `(findOrCreateOperator) Error granting basic drill: ${err.message}`,
+        );
+      });
 
     this.logger.log(
       `🆕(findOrCreateOperator) Created new operator: ${username}`,
