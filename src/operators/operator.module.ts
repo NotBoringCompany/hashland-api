@@ -14,6 +14,8 @@ import {
 } from 'src/drills/schemas/drilling-session.schema';
 import { OperatorWalletModule } from './operator-wallet.module';
 import { ConfigModule } from '@nestjs/config';
+import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
+import { DrillModule } from 'src/drills/drill.module';
 
 @Module({
   imports: [
@@ -22,10 +24,12 @@ import { ConfigModule } from '@nestjs/config';
       { name: Operator.name, schema: OperatorSchema },
       { name: OperatorWallet.name, schema: OperatorWalletSchema },
       { name: DrillingSession.name, schema: DrillingSessionSchema },
+      { name: Drill.name, schema: DrillSchema },
     ]),
     OperatorWalletModule,
     PoolModule,
     PoolOperatorModule,
+    DrillModule,
   ],
   controllers: [], // Expose API endpoints
   providers: [OperatorService], // Business logic for Operators

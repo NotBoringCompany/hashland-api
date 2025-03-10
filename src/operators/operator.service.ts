@@ -7,6 +7,8 @@ import { PoolService } from 'src/pools/pool.service';
 import { DrillingSession } from 'src/drills/schemas/drilling-session.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { OperatorWalletService } from './operator-wallet.service';
+import { DrillService } from 'src/drills/drill.service';
+import { Drill } from 'src/drills/schemas/drill.schema';
 
 @Injectable()
 export class OperatorService {
@@ -16,17 +18,19 @@ export class OperatorService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel(DrillingSession.name)
     private drillingSessionModel: Model<DrillingSession>,
+    @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
     private readonly operatorWalletService: OperatorWalletService,
+    private readonly drillService: DrillService,
   ) {}
 
   /**
-   * Updates weighted asset equity & effMultiplier for all operators.
+   * Updates weighted asset equity, effMultiplier, and actualEff for all operators' basic drills.
    */
-  async updateWeightedAssetEquityAndEffMultiplier() {
+  async updateWeightedAssetEquityRelatedData() {
     this.logger.log(
-      '🔄 (updateWeightedAssetEquityAndEffMultiplier) Updating weighted asset equity & effMultiplier for operators...',
+      '🔄 (updateWeightedAssetEquityRelatedData) Updating weighted asset equity, effMultiplier, and actualEff for basic drills...',
     );
 
     // ✅ Step 1: Fetch aggregated TON balances **per operator**
@@ -36,7 +40,7 @@ export class OperatorService {
     const p1EndTime = performance.now(); // ⏳ End timing
 
     this.logger.log(
-      `🔢 (updateWeightedAssetEquityAndEffMultiplier) Fetched TON balances for ${operatorBalances.size} operators in ${(
+      `🔢 (updateWeightedAssetEquityRelatedData) Fetched TON balances for ${operatorBalances.size} operators in ${(
         p1EndTime - p1StartTime
       ).toFixed(2)}ms`,
     );
@@ -47,7 +51,7 @@ export class OperatorService {
     const p2EndTime = performance.now(); // ⏳ End timing
 
     this.logger.log(
-      `💰 (updateWeightedAssetEquityAndEffMultiplier) Fetched TON/USD rate: ${tonUsdRate} in ${(
+      `💰 (updateWeightedAssetEquityRelatedData) Fetched TON/USD rate: ${tonUsdRate} in ${(
         p2EndTime - p2StartTime
       ).toFixed(2)}ms`,
     );
@@ -60,14 +64,17 @@ export class OperatorService {
     const p3EndTime = performance.now(); // ⏳ End timing
 
     this.logger.log(
-      `🔍 (updateWeightedAssetEquityAndEffMultiplier) Fetched ${operators.length} operators in ${(
+      `🔍 (updateWeightedAssetEquityRelatedData) Fetched ${operators.length} operators in ${(
         p3EndTime - p3StartTime
       ).toFixed(2)}ms`,
     );
 
-    // ✅ Step 4: Compute new equity & effMultiplier for each operator
+    // ✅ Step 4: Compute new equity, effMultiplier & actualEff for each operator
     const p4StartTime = performance.now(); // ⏳ Start timing
-    const bulkUpdates = operators.map((operator) => {
+    const bulkOperatorUpdates = [];
+    const bulkDrillUpdates = [];
+
+    for (const operator of operators) {
       const newEquity =
         (operatorBalances.get(operator._id.toString()) || 0) * tonUsdRate;
       const newWeightedEquity =
@@ -76,45 +83,70 @@ export class OperatorService {
       // Compute effMultiplier
       const effMultiplier = this.equityToEffMultiplier(newWeightedEquity);
 
-      return {
+      // ✅ Prepare bulk update for Operator schema
+      bulkOperatorUpdates.push({
         updateOne: {
           filter: { _id: operator._id },
           update: {
             $set: { weightedAssetEquity: newWeightedEquity, effMultiplier },
           },
         },
-      };
-    });
+      });
+
+      // ✅ Update `actualEff` of the operator's **basic drill only**
+      const newActualEff =
+        this.drillService.equityToActualEff(newWeightedEquity);
+
+      bulkDrillUpdates.push({
+        updateOne: {
+          filter: { operatorId: operator._id, version: 'BASIC' }, // ✅ Ensure only BASIC drills are updated
+          update: {
+            $set: { actualEff: newActualEff },
+          },
+        },
+      });
+    }
     const p4EndTime = performance.now(); // ⏳ End timing
 
     this.logger.log(
-      `🔧 (updateWeightedAssetEquityAndEffMultiplier) Computed new equity & effMultiplier for ${operators.length} operators in ${(
+      `🔧 (updateWeightedAssetEquityRelatedData) Computed new equity, effMultiplier & actualEff for ${operators.length} operators in ${(
         p4EndTime - p4StartTime
       ).toFixed(2)}ms`,
     );
 
-    // ✅ Step 5: Perform **batched** bulk update to prevent MongoDB overload
+    // ✅ Step 5: Perform **batched** bulk updates for both `Operator` and `Drill`
     const p5StartTime = performance.now(); // ⏳ Start timing
     const batchSize = 1000; // ✅ Set batch size to prevent overload
-    for (let i = 0; i < bulkUpdates.length; i += batchSize) {
-      const batch = bulkUpdates.slice(i, i + batchSize);
-      await this.operatorModel.bulkWrite(batch);
+
+    for (let i = 0; i < bulkOperatorUpdates.length; i += batchSize) {
+      const operatorBatch = bulkOperatorUpdates.slice(i, i + batchSize);
+      await this.operatorModel.bulkWrite(operatorBatch);
       this.logger.log(
-        `✅ (updateWeightedAssetEquityAndEffMultiplier) Processed batch ${
+        `✅ (updateWeightedAssetEquityRelatedData) Processed operator batch ${
           i / batchSize + 1
-        }/${Math.ceil(bulkUpdates.length / batchSize)} (${batch.length} updates)`,
+        }/${Math.ceil(bulkOperatorUpdates.length / batchSize)} (${operatorBatch.length} updates)`,
+      );
+    }
+
+    for (let i = 0; i < bulkDrillUpdates.length; i += batchSize) {
+      const drillBatch = bulkDrillUpdates.slice(i, i + batchSize);
+      await this.drillModel.bulkWrite(drillBatch);
+      this.logger.log(
+        `✅ (updateWeightedAssetEquityRelatedData) Processed drill batch ${
+          i / batchSize + 1
+        }/${Math.ceil(bulkDrillUpdates.length / batchSize)} (${drillBatch.length} updates)`,
       );
     }
     const p5EndTime = performance.now(); // ⏳ End timing
 
     this.logger.log(
-      `📝 (updateWeightedAssetEquityAndEffMultiplier) Updated weighted asset equity & effMultiplier for ${operators.length} operators in ${(
+      `📝 (updateWeightedAssetEquityRelatedData) Updated weighted asset equity, effMultiplier & actualEff for ${operators.length} operators in ${(
         p5EndTime - p5StartTime
       ).toFixed(2)}ms`,
     );
 
     this.logger.log(
-      `✅ Finished updating weighted asset equity & effMultiplier for ${operators.length} operators.`,
+      `✅ Finished updating weighted asset equity, effMultiplier & actualEff for ${operators.length} operators.`,
     );
   }
 
