@@ -165,4 +165,18 @@ export const GAME_CONSTANTS = {
      */
     EQUITY_TO_MAX_EFF: 100,
   },
+
+  /**
+   * Luck constants.
+   */
+  LUCK: {
+    /**
+     * The minimum luck multiplier that can be applied to an operator's EFF rating.
+     */
+    MIN_LUCK_MULTIPLIER: 1,
+    /**
+     * The maximum luck multiplier that can be applied to an operator's EFF rating.
+     */
+    MAX_LUCK_MULTIPLIER: 1.1,
+  },
 };

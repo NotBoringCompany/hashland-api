@@ -16,6 +16,10 @@ import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 import { PoolModule } from 'src/pools/pool.module';
 import { RedisModule } from 'src/common/redis.module';
 import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
+import {
+  Operator,
+  OperatorSchema,
+} from 'src/operators/schemas/operator.schema';
 
 @Module({
   imports: [
@@ -29,6 +33,7 @@ import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
     DrillingGatewayModule, // Import DrillingGatewayModule
     MongooseModule.forFeature([
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
+      { name: Operator.name, schema: OperatorSchema },
     ]),
     BullModule.registerQueue({ name: 'drilling-cycles' }), // Register Bull queue
   ],
