@@ -391,6 +391,7 @@ export class OperatorService {
       weightedAssetEquity: 0,
       // Update this with checking the operator's weighted asset equity later on.
       effMultiplier: 1,
+      cumulativeEff: 0,
       maxFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
       totalEarnedHASH: 0,

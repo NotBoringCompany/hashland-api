@@ -41,6 +41,13 @@ export class Operator extends Document {
   effMultiplier: number;
 
   /**
+   * The total cumulative EFF from all drills owned by the operator.
+   *
+   * This is essentially the 'mining power' equivalent of the operator.
+   */
+  cumulativeEff: number;
+
+  /**
    * The maximum fuel capacity of the operator's drills.
    */
   @Prop({
