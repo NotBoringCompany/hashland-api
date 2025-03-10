@@ -13,6 +13,7 @@ import { JwtAuthController } from './jwt-auth.controller';
 import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 import { PoolModule } from 'src/pools/pool.module';
 import { OperatorWalletModule } from 'src/operators/operator-wallet.module';
+import { DrillModule } from 'src/drills/drill.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { OperatorWalletModule } from 'src/operators/operator-wallet.module';
     OperatorWalletModule,
     PoolOperatorModule,
     PoolModule,
+    DrillModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
