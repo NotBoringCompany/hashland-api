@@ -16,6 +16,8 @@ import { OperatorWalletModule } from './operator-wallet.module';
 import { ConfigModule } from '@nestjs/config';
 import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
 import { DrillModule } from 'src/drills/drill.module';
+import { OperatorQueue } from './operator.queue';
+import { BullModule } from '@nestjs/bull';
 
 @Module({
   imports: [
@@ -26,13 +28,16 @@ import { DrillModule } from 'src/drills/drill.module';
       { name: DrillingSession.name, schema: DrillingSessionSchema },
       { name: Drill.name, schema: DrillSchema },
     ]),
+    BullModule.registerQueue({
+      name: 'operator-queue',
+    }),
     OperatorWalletModule,
     PoolModule,
     PoolOperatorModule,
     DrillModule,
   ],
   controllers: [], // Expose API endpoints
-  providers: [OperatorService], // Business logic for Operators
+  providers: [OperatorService, OperatorQueue], // Business logic for Operators
   exports: [MongooseModule, OperatorService], // Allow usage in other modules
 })
 export class OperatorModule {}
