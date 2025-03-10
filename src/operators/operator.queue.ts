@@ -19,7 +19,7 @@ export class OperatorQueue implements OnModuleInit {
    */
   async onModuleInit() {
     this.logger.log(
-      `⏳ Ensuring operator asset equity update job is scheduled...`,
+      `⏳ (operatorQueue) Ensuring operator asset equity update job is scheduled...`,
     );
 
     // ✅ Check if the job is already scheduled
@@ -30,9 +30,13 @@ export class OperatorQueue implements OnModuleInit {
         {},
         { repeat: { every: this.sixHoursInMs } }, // ✅ Runs every 6 hours
       );
-      this.logger.log(`✅ Scheduled asset equity update every 6 hours.`);
+      this.logger.log(
+        `✅ (operatorQueue) Scheduled asset equity update every 6 hours.`,
+      );
     } else {
-      this.logger.log(`🔄 Asset equity update job is already scheduled.`);
+      this.logger.log(
+        `🔄 (operatorQueue) Asset equity update job is already scheduled.`,
+      );
     }
   }
 
@@ -41,14 +45,18 @@ export class OperatorQueue implements OnModuleInit {
    */
   @Process('update-asset-equity')
   async handleAssetEquityUpdate() {
-    this.logger.log(`🔄 Running scheduled asset equity update...`);
+    this.logger.log(
+      `🔄 (update-asset-equity) Running scheduled asset equity update...`,
+    );
     try {
       await this.operatorService.updateWeightedAssetEquityRelatedData();
       this.logger.log(
-        `✅ Successfully updated weighted asset equity & effMultiplier.`,
+        `✅ (update-asset-equity) Successfully updated weighted asset equity & effMultiplier.`,
       );
     } catch (error) {
-      this.logger.error(`❌ Error updating asset equity: ${error.message}`);
+      this.logger.error(
+        `❌ (update-asset-equity) Error updating asset equity: ${error.message}`,
+      );
     }
   }
 }
