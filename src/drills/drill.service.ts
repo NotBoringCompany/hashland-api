@@ -245,4 +245,11 @@ export class DrillService {
 
     return null;
   }
+
+  /**
+   * Converts an operator's equity to their effMultiplier value.
+   */
+  equityToEffMultiplier(equity: number): number {
+    return 1 + Math.log(1 + 0.0000596 * equity);
+  }
 }

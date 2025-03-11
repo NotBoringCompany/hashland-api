@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DrillingCycleService } from './drilling-cycle.service';
-import { DrillingCycleQueue } from './drilling-cycle.queue';
 import {
   DrillingCycle,
   DrillingCycleSchema,
@@ -20,6 +19,10 @@ import {
   Operator,
   OperatorSchema,
 } from 'src/operators/schemas/operator.schema';
+import {
+  DrillingSession,
+  DrillingSessionSchema,
+} from './schemas/drilling-session.schema';
 
 @Module({
   imports: [
@@ -33,12 +36,13 @@ import {
     DrillingGatewayModule, // Import DrillingGatewayModule
     MongooseModule.forFeature([
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
+      { name: DrillingSession.name, schema: DrillingSessionSchema },
       { name: Operator.name, schema: OperatorSchema },
     ]),
     BullModule.registerQueue({ name: 'drilling-cycles' }), // Register Bull queue
   ],
   controllers: [DrillingCycleController],
-  providers: [DrillingCycleService, DrillingCycleQueue],
+  providers: [DrillingCycleService],
   exports: [DrillingCycleService], // Export so other modules can use DrillingCycleService
 })
 export class DrillingCycleModule {}

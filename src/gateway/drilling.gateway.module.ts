@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { DrillingGateway } from './drilling.gateway';
 import { DrillingGatewayService } from './drilling.gateway.service';
 import { DrillModule } from 'src/drills/drill.module';
@@ -13,7 +13,7 @@ import { AuthModule } from 'src/auth/auth.module';
     DrillingSessionModule,
     RedisModule,
     AuthModule,
-    forwardRef(() => OperatorModule), // Handle circular dependency
+    OperatorModule,
   ],
   providers: [DrillingGateway, DrillingGatewayService],
   exports: [DrillingGatewayService, DrillingGateway], // Export DrillingGateway as well

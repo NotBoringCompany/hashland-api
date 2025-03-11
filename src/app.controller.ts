@@ -2,7 +2,6 @@ import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import { DatabaseService } from 'src/common/database.service';
 import { BullQueueService } from './common/bull-queue.service';
-import { DrillingCycleService } from './drills/drilling-cycle.service';
 
 @Controller()
 export class AppController {
@@ -10,7 +9,6 @@ export class AppController {
     private readonly appService: AppService,
     private readonly databaseService: DatabaseService,
     private readonly bullQueueService: BullQueueService,
-    private readonly drillingCycleService: DrillingCycleService,
   ) {}
 
   /**

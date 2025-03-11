@@ -1,22 +1,13 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Operator } from './schemas/operator.schema';
 import { PoolOperatorService } from 'src/pools/pool-operator.service';
 import { PoolService } from 'src/pools/pool.service';
-import { DrillingSession } from 'src/drills/schemas/drilling-session.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { OperatorWalletService } from './operator-wallet.service';
 import { DrillService } from 'src/drills/drill.service';
-import { Drill } from 'src/drills/schemas/drill.schema';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
-import { DrillingGateway } from 'src/gateway/drilling.gateway';
 
 @Injectable()
 export class OperatorService {
@@ -24,187 +15,11 @@ export class OperatorService {
 
   constructor(
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
-    @InjectModel(DrillingSession.name)
-    private drillingSessionModel: Model<DrillingSession>,
-    @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
     private readonly operatorWalletService: OperatorWalletService,
     private readonly drillService: DrillService,
-    @Inject(forwardRef(() => DrillingGateway))
-    private readonly drillingGateway: DrillingGateway,
   ) {}
-
-  /**
-   * Updates weighted asset equity, effMultiplier, actualEff for basic drills,
-   * and adjusts cumulativeEff in Operator schema.
-   */
-  async updateWeightedAssetEquityRelatedData() {
-    this.logger.log(
-      '🔄 (updateWeightedAssetEquityRelatedData) Updating weighted asset equity, effMultiplier, actualEff for basic drills, and cumulativeEff...',
-    );
-
-    // ✅ Step 1: Fetch aggregated TON balances **per operator**
-    const p1StartTime = performance.now();
-    const operatorBalances =
-      await this.operatorWalletService.fetchAllWalletBalances();
-    const p1EndTime = performance.now();
-
-    this.logger.log(
-      `🔢 (updateWeightedAssetEquityRelatedData) Fetched TON balances for ${operatorBalances.size} operators in ${(
-        p1EndTime - p1StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 2: Fetch TON/USD price
-    const p2StartTime = performance.now();
-    const tonUsdRate = await this.operatorWalletService.fetchTonToUsdRate();
-    const p2EndTime = performance.now();
-
-    this.logger.log(
-      `💰 (updateWeightedAssetEquityRelatedData) Fetched TON/USD rate: ${tonUsdRate} in ${(
-        p2EndTime - p2StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 3: Fetch **ONLY operators that have wallet balances**
-    const p3StartTime = performance.now();
-    const operatorIds = Array.from(operatorBalances.keys());
-
-    const operators = await this.operatorModel
-      .find(
-        { _id: { $in: operatorIds } },
-        { _id: 1, weightedAssetEquity: 1, cumulativeEff: 1 },
-      )
-      .lean();
-    const p3EndTime = performance.now();
-
-    this.logger.log(
-      `🔍 (updateWeightedAssetEquityRelatedData) Fetched ${operators.length} operators in ${(
-        p3EndTime - p3StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 4: Fetch ALL basic drills in **one query** to get previous `actualEff`
-    const p4StartTime = performance.now();
-    const basicDrills = await this.drillModel
-      .find(
-        { version: DrillVersion.BASIC, operatorId: { $in: operatorIds } },
-        { operatorId: 1, actualEff: 1 },
-      )
-      .lean();
-    const p4EndTime = performance.now();
-
-    this.logger.log(
-      `🔍 (updateWeightedAssetEquityRelatedData) Fetched ${basicDrills.length} basic drills in ${(
-        p4EndTime - p4StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 5: Compute new equity, effMultiplier, actualEff, and cumulativeEff for each operator
-    const p5StartTime = performance.now();
-    const bulkOperatorUpdates = [];
-    const bulkDrillUpdates = [];
-
-    // Create a map of operator's basic drill actualEff values
-    const basicDrillMap = new Map<string, number>();
-    basicDrills.forEach((drill) => {
-      basicDrillMap.set(drill.operatorId.toString(), drill.actualEff);
-    });
-
-    for (const operator of operators) {
-      const newEquity =
-        (operatorBalances.get(operator._id.toString()) || 0) * tonUsdRate;
-      const newWeightedEquity =
-        (operator.weightedAssetEquity || 0) * 0.85 + newEquity * 0.15;
-
-      // Compute effMultiplier
-      const effMultiplier = this.equityToEffMultiplier(newWeightedEquity);
-
-      // ✅ Compute `actualEff` of the operator's **basic drill only**
-      const newActualEff =
-        this.drillService.equityToActualEff(newWeightedEquity);
-      const oldActualEff = basicDrillMap.get(operator._id.toString()) || 0;
-
-      // ✅ Compute **difference** and adjust `cumulativeEff`
-      const effDifference = newActualEff - oldActualEff;
-      const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
-
-      // ✅ **Single bulk update** for the Operator schema (merging cumulativeEff)
-      bulkOperatorUpdates.push({
-        updateOne: {
-          filter: { _id: operator._id },
-          update: {
-            $set: {
-              weightedAssetEquity: newWeightedEquity,
-              effMultiplier,
-              cumulativeEff: newCumulativeEff, // ✅ Merged cumulativeEff update
-            },
-          },
-        },
-      });
-
-      // ✅ Bulk update for drills
-      bulkDrillUpdates.push({
-        updateOne: {
-          filter: { operatorId: operator._id, version: DrillVersion.BASIC }, // ✅ Ensure only BASIC drills are updated
-          update: {
-            $set: { actualEff: newActualEff },
-          },
-        },
-      });
-    }
-    const p5EndTime = performance.now();
-
-    this.logger.log(
-      `🔧 (updateWeightedAssetEquityRelatedData) Computed new equity, effMultiplier, actualEff & cumulativeEff for ${operators.length} operators in ${(
-        p5EndTime - p5StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 6: Perform **batched** bulk updates for Operator & Drill in a single pass
-    const p6StartTime = performance.now();
-    const batchSize = 1000; // ✅ Set batch size to prevent overload
-
-    for (let i = 0; i < bulkOperatorUpdates.length; i += batchSize) {
-      const operatorBatch = bulkOperatorUpdates.slice(i, i + batchSize);
-      await this.operatorModel.bulkWrite(operatorBatch);
-      this.logger.log(
-        `✅ (updateWeightedAssetEquityRelatedData) Processed operator batch ${
-          i / batchSize + 1
-        }/${Math.ceil(bulkOperatorUpdates.length / batchSize)} (${operatorBatch.length} updates)`,
-      );
-    }
-
-    for (let i = 0; i < bulkDrillUpdates.length; i += batchSize) {
-      const drillBatch = bulkDrillUpdates.slice(i, i + batchSize);
-      await this.drillModel.bulkWrite(drillBatch);
-      this.logger.log(
-        `✅ (updateWeightedAssetEquityRelatedData) Processed drill batch ${
-          i / batchSize + 1
-        }/${Math.ceil(bulkDrillUpdates.length / batchSize)} (${drillBatch.length} updates)`,
-      );
-    }
-
-    const p6EndTime = performance.now();
-
-    this.logger.log(
-      `📝 (updateWeightedAssetEquityRelatedData) Updated weighted asset equity, effMultiplier, actualEff & cumulativeEff for ${operators.length} operators in ${(
-        p6EndTime - p6StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    this.logger.log(
-      `✅ Finished updating weighted asset equity, effMultiplier, actualEff & cumulativeEff for ${operators.length} operators.`,
-    );
-  }
-
-  /**
-   * Converts an operator's equity to their effMultiplier value.
-   */
-  private equityToEffMultiplier(equity: number): number {
-    return 1 + Math.log(1 + 0.0000596 * equity);
-  }
 
   /**
    * Increments an operator's `totalHASHEarned` field by a given amount.
@@ -251,124 +66,6 @@ export class OperatorService {
     } catch (err: any) {
       throw new Error(`(hasEnoughFuel) Error checking fuel: ${err.message}`);
     }
-  }
-
-  /**
-   * Depletes fuel for active operators (i.e. operators that have an active drilling session)
-   * and replenishes fuel for inactive operators (i.e. operators that do not have an active drilling session).
-   */
-  async processFuelForAllOperators() {
-    const startTime = performance.now(); // ⏳ Start timing
-
-    const activeOperatorIds = await this.fetchActiveOperatorIds();
-
-    // Generate a random depletion/replenishment value
-    const fuelUsed = this.getRandomFuelValue(
-      GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.minUnits,
-      GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
-    );
-
-    const fuelGained = this.getRandomFuelValue(
-      GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.minUnits,
-      GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.maxUnits,
-    );
-
-    // 🛠 Bulk update ACTIVE operators (deplete fuel)
-    await this.operatorModel.updateMany(
-      { _id: { $in: Array.from(activeOperatorIds) } }, // Only active operators
-      { $inc: { currentFuel: -fuelUsed } },
-    );
-
-    // 🛠 Bulk update INACTIVE operators (replenish fuel)
-    await this.operatorModel.updateMany(
-      {
-        _id: { $nin: Array.from(activeOperatorIds) }, // Only inactive operators
-        $expr: { $lt: ['$currentFuel', '$maxFuel'] }, // ✅ Exclude those already at max fuel
-      },
-      [
-        {
-          $set: {
-            currentFuel: {
-              $min: ['$maxFuel', { $add: ['$currentFuel', fuelGained] }],
-            },
-          },
-        },
-      ],
-    );
-
-    // **🔴 NEW: Stop drilling sessions for operators who drop below threshold**
-    // ✅ Step 1: Find all operators whose fuel dropped below threshold
-    const depletedOperatorIds = await this.operatorModel
-      .find(
-        {
-          _id: { $in: Array.from(activeOperatorIds) },
-          currentFuel: {
-            $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
-          },
-        },
-        { _id: 1 }, // Only fetch IDs for efficiency
-      )
-      .lean()
-      .then((operators) => operators.map((op) => op._id)); // Extract ObjectIds
-
-    if (depletedOperatorIds.length === 0) {
-      this.logger.log(
-        `🔋 No operators depleted below threshold. Skipping session termination.`,
-      );
-    } else {
-      // ✅ Step 2: Stop drilling sessions for those operators
-      await this.drillingSessionModel.updateMany(
-        {
-          operatorId: { $in: depletedOperatorIds },
-          endTime: null, // ✅ Only stop sessions that are still running
-        },
-        { $set: { endTime: new Date() } }, // ✅ Mark session as ended
-      );
-
-      this.logger.log(
-        `🛑 Stopped ${depletedOperatorIds.length} drilling sessions due to fuel depletion.`,
-      );
-
-      // ✅ Step 3: Notify the WebSocket gateway to stop drilling for these operators
-      for (const operatorId of depletedOperatorIds) {
-        try {
-          await this.drillingGateway.stopDrillingDueToFuelDepletion(operatorId);
-        } catch (error) {
-          this.logger.error(
-            `Error notifying WebSocket for operator ${operatorId}: ${error.message}`,
-          );
-        }
-      }
-    }
-
-    const endTime = performance.now(); // ⏳ End timing
-    const executionTime = (endTime - startTime).toFixed(2);
-
-    this.logger.log(
-      `⚡ Fuel Processing Completed: 
-     ⛏ Depleted ${fuelUsed} fuel for ${activeOperatorIds.size} active operators.
-     🔋 Replenished ${fuelGained} fuel for inactive operators.
-     🛑 Stopped drilling sessions for operators who dropped below fuel threshold.
-     ⏱ Execution Time: ${executionTime}ms`,
-    );
-  }
-
-  /**
-   * Fetches the IDs of operators who currently have an active `DrillingSession` instance.
-   */
-  private async fetchActiveOperatorIds(): Promise<Set<Types.ObjectId>> {
-    const activeSessions = await this.drillingSessionModel
-      .find({ endTime: null })
-      .select('operatorId')
-      .lean();
-    return new Set(activeSessions.map((session) => session.operatorId));
-  }
-
-  /**
-   * Generates a random fuel value between `min` and `max`.
-   */
-  private getRandomFuelValue(min: number, max: number): number {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
   /**
@@ -498,5 +195,75 @@ export class OperatorService {
       `🆕(findOrCreateOperator) Created new operator: ${username}`,
     );
     return operator;
+  }
+
+  /**
+   * Fetches IDs of operators whose fuel has dropped below the minimum threshold.
+   * @param activeOperatorIds Set of active operator IDs to check
+   * @returns Array of ObjectIds for operators with depleted fuel
+   */
+  async fetchDepletedOperatorIds(
+    activeOperatorIds: Set<Types.ObjectId>,
+  ): Promise<Types.ObjectId[]> {
+    return this.operatorModel
+      .find(
+        {
+          _id: { $in: Array.from(activeOperatorIds) },
+          currentFuel: {
+            $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
+          },
+        },
+        { _id: 1 },
+      )
+      .lean()
+      .then((operators) => operators.map((op) => op._id));
+  }
+
+  /**
+   * Depletes fuel for active operators.
+   * @param activeOperatorIds Set of operator IDs currently active
+   * @param fuelUsed Amount of fuel to deplete
+   */
+  async depleteFuel(
+    activeOperatorIds: Set<Types.ObjectId>,
+    fuelUsed: number,
+  ): Promise<void> {
+    await this.operatorModel.updateMany(
+      { _id: { $in: Array.from(activeOperatorIds) } },
+      { $inc: { currentFuel: -fuelUsed } },
+    );
+  }
+
+  /**
+   * Replenishes fuel for inactive operators up to their max fuel capacity.
+   * @param activeOperatorIds Set of operator IDs currently active (to exclude)
+   * @param fuelGained Amount of fuel to replenish
+   */
+  async replenishFuel(
+    activeOperatorIds: Set<Types.ObjectId>,
+    fuelGained: number,
+  ): Promise<void> {
+    await this.operatorModel.updateMany(
+      {
+        _id: { $nin: Array.from(activeOperatorIds) },
+        $expr: { $lt: ['$currentFuel', '$maxFuel'] },
+      },
+      [
+        {
+          $set: {
+            currentFuel: {
+              $min: ['$maxFuel', { $add: ['$currentFuel', fuelGained] }],
+            },
+          },
+        },
+      ],
+    );
+  }
+
+  /**
+   * Generates a random fuel value between `min` and `max`.
+   */
+  getRandomFuelValue(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 }

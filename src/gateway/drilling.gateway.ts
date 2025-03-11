@@ -6,7 +6,7 @@ import {
   SubscribeMessage,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import { DrillingSessionService } from 'src/drills/drilling-session.service';
 import { OperatorService } from 'src/operators/operator.service';
 import { Types } from 'mongoose';
@@ -51,7 +51,6 @@ export class DrillingGateway
   private activeDrillingOperators = new Map<string, string>();
 
   constructor(
-    @Inject(forwardRef(() => DrillingSessionService))
     private readonly drillingSessionService: DrillingSessionService,
     private readonly operatorService: OperatorService,
     private readonly redisService: RedisService,
@@ -385,6 +384,54 @@ export class DrillingGateway
         );
       }
     }
+  }
+
+  /**
+   * Broadcasts stop drilling event to multiple operators due to fuel depletion.
+   *
+   * @param operatorIds Array of operator IDs to stop drilling
+   * @param payload The payload to emit to clients
+   */
+  async broadcastStopDrilling(
+    operatorIds: Types.ObjectId[],
+    payload: { message: string; reason: string },
+  ) {
+    for (const operatorId of operatorIds) {
+      const operatorIdStr = operatorId.toString();
+
+      // Check if this operator is actively drilling
+      if (this.activeDrillingOperators.has(operatorIdStr)) {
+        const socketId = this.activeDrillingOperators.get(operatorIdStr);
+
+        try {
+          // End the drilling session
+          await this.drillingSessionService.endDrillingSession(operatorId);
+
+          // Remove from active drilling operators
+          this.activeDrillingOperators.delete(operatorIdStr);
+
+          // Notify the client if they're still connected
+          if (socketId && this.server.sockets.sockets.has(socketId)) {
+            this.server.to(socketId).emit('drilling-stopped', {
+              ...payload,
+              operatorId: operatorIdStr,
+            });
+          }
+
+          this.logger.log(
+            `⚠️ Operator ${operatorIdStr} stopped drilling due to fuel depletion`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Error stopping drilling due to fuel depletion for ${operatorIdStr}: ${error.message}`,
+          );
+        }
+      }
+    }
+
+    // Save active drilling operators to Redis and broadcast once after processing all operators
+    await this.saveActiveDrillingOperatorsToRedis();
+    this.broadcastOnlineOperators();
   }
 
   /**

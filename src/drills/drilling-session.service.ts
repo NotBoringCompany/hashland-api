@@ -146,4 +146,42 @@ export class DrillingSessionService {
       .distinct('operatorId')
       .lean();
   }
+
+  /**
+   * Fetches the IDs of operators who currently have an active `DrillingSession` instance.
+   */
+  async fetchActiveOperatorIds(): Promise<Set<Types.ObjectId>> {
+    const activeSessions = await this.drillingSessionModel
+      .find({ endTime: null })
+      .select('operatorId')
+      .lean();
+    return new Set(activeSessions.map((session) => session.operatorId));
+  }
+
+  /**
+   * Stops drilling sessions for operators who have depleted their fuel below threshold.
+   * @param depletedOperatorIds Array of operator IDs whose fuel is depleted
+   */
+  async stopDrillingForDepletedOperators(
+    depletedOperatorIds: Types.ObjectId[],
+  ): Promise<void> {
+    if (depletedOperatorIds.length === 0) {
+      this.logger.log(
+        `🔋 No operators depleted below threshold. Skipping session termination.`,
+      );
+      return;
+    }
+
+    await this.drillingSessionModel.updateMany(
+      {
+        operatorId: { $in: depletedOperatorIds },
+        endTime: null,
+      },
+      { $set: { endTime: new Date() } },
+    );
+
+    this.logger.log(
+      `🛑 Stopped ${depletedOperatorIds.length} drilling sessions due to fuel depletion.`,
+    );
+  }
 }

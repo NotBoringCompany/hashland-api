@@ -4,15 +4,14 @@ import { AppService } from './app.service';
 import { DatabaseModule } from 'src/common/database.module';
 import { ConfigModule } from '@nestjs/config';
 import { PoolModule } from './pools/pool.module';
-import { ShopDrillModule } from './shops/shop-drill.module';
 import { BullQueueModule } from './common/bull-queue.module';
-import { AuthModule } from './auth/auth.module';
-import { WebSocketModule } from './websocket/websocket.module';
 import { RedisModule } from './common/redis.module';
-import { DrillingCycleModule } from './drills/drilling-cycle.module';
-import { DrillingGatewayModule } from './gateway/drilling.gateway.module';
+import { ShopDrillModule } from './shops/shop-drill.module';
 import { OperatorModule } from './operators/operator.module';
+import { AuthModule } from './auth/auth.module';
 import { OperatorWalletModule } from './operators/operator-wallet.module';
+import { DrillingGatewayModule } from './gateway/drilling.gateway.module';
+import { DrillingCycleModule } from './drills/drilling-cycle.module';
 
 @Module({
   imports: [
@@ -25,12 +24,11 @@ import { OperatorWalletModule } from './operators/operator-wallet.module';
     BullQueueModule,
     PoolModule,
     ShopDrillModule,
-    DrillingCycleModule,
-    AuthModule,
-    WebSocketModule,
-    DrillingGatewayModule,
     OperatorModule,
     OperatorWalletModule,
+    AuthModule,
+    DrillingGatewayModule,
+    DrillingCycleModule,
   ],
   controllers: [AppController],
   providers: [AppService],
