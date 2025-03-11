@@ -76,6 +76,9 @@ export class TelegramAuthService {
         throw new HttpException('Failed to create operator', 500);
       }
 
+      // ✅ Update asset equity when the operator logs in
+      await this.operatorService.updateAssetEquityForOperator(operator._id);
+
       const accessToken = this.generateToken({ _id: operator._id });
 
       return new AuthenticatedResponse({

@@ -258,10 +258,14 @@ export class OperatorService {
    * @param authData - Telegram authentication data
    * @returns The operator's data (or null if not found)
    */
-  async findOrCreateOperator(authData: {
-    id: string;
-    username?: string;
-  }): Promise<Operator | null> {
+  async findOrCreateOperator(
+    authData: {
+      id: string;
+      username?: string;
+      // Optional projection
+    },
+    projection?: Record<string, number>,
+  ): Promise<Operator | null> {
     this.logger.log(
       `🔍 (findOrCreateOperator) Searching for operator with Telegram ID: ${authData.id}`,
     );
@@ -271,7 +275,7 @@ export class OperatorService {
       authData.username
         ? { $set: { 'tgProfile.tgUsername': authData.username } }
         : {},
-      { new: true },
+      { new: true, projection },
     );
 
     if (operator) {

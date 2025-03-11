@@ -27,6 +27,9 @@ export class DrillingSessionService {
     operatorId: Types.ObjectId,
   ): Promise<ApiResponse<null>> {
     try {
+      // ✅ Ensure latest asset equity is fetched **before starting**
+      await this.operatorService.updateAssetEquityForOperator(operatorId);
+
       // Check if operator already has an active session
       if (
         !!(await this.drillingSessionModel.exists({
