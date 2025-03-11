@@ -13,10 +13,14 @@ export class RedisService {
   }
 
   /**
-   * Set a value in Redis.
+   * Set a value in Redis. Optionally set an expiry in seconds.
    */
-  async set(key: string, value: string) {
-    await this.redis.set(key, value);
+  async set(key: string, value: string, expiryInSeconds?: number) {
+    if (expiryInSeconds) {
+      await this.redis.set(key, value, 'EX', expiryInSeconds);
+    } else {
+      await this.redis.set(key, value);
+    }
   }
 
   /**

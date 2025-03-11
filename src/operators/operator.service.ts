@@ -9,6 +9,8 @@ import { OperatorWalletService } from './operator-wallet.service';
 import { DrillService } from 'src/drills/drill.service';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Drill } from 'src/drills/schemas/drill.schema';
+import { OperatorWallet } from './schemas/operator-wallet.schema';
+import { AllowedChain } from 'src/common/enums/chain.enum';
 
 @Injectable()
 export class OperatorService {
@@ -16,6 +18,8 @@ export class OperatorService {
 
   constructor(
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    @InjectModel(OperatorWallet.name)
+    private operatorWalletModel: Model<OperatorWallet>,
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
@@ -75,167 +79,89 @@ export class OperatorService {
   }
 
   /**
-   * Updates weighted asset equity, effMultiplier, actualEff for basic drills,
-   * and adjusts cumulativeEff in Operator schema.
+   * Updates asset equity, effMultiplier, actualEff for basic drills,
+   * and adjusts cumulativeEff in the Operator schema.
    */
-  async updateWeightedAssetEquityRelatedData() {
-    this.logger.log(
-      '🔄 (updateWeightedAssetEquityRelatedData) Updating weighted asset equity, effMultiplier, actualEff for basic drills, and cumulativeEff...',
-    );
+  async updateAssetEquityForOperator(
+    operatorId: Types.ObjectId,
+  ): Promise<void> {
+    try {
+      this.logger.log(
+        `🔄 (updateAssetEquityForOperator) Updating asset equity for operator ${operatorId}...`,
+      );
 
-    // ✅ Step 1: Fetch aggregated TON balances **per operator**
-    const p1StartTime = performance.now();
-    const operatorBalances =
-      await this.operatorWalletService.fetchAllWalletBalances();
-    const p1EndTime = performance.now();
+      // ✅ Step 1: Fetch the operator's wallets **including chains**
+      const walletDocuments = await this.operatorWalletModel
+        .find({ operatorId }, { address: 1, chain: 1 }) // Include chain
+        .lean();
 
-    this.logger.log(
-      `🔢 (updateWeightedAssetEquityRelatedData) Fetched TON balances for ${operatorBalances.size} operators in ${(
-        p1EndTime - p1StartTime
-      ).toFixed(2)}ms`,
-    );
+      if (walletDocuments.length === 0) {
+        this.logger.log(
+          `⚠️ (updateAssetEquityForOperator) Operator ${operatorId} has no wallets.`,
+        );
+        return;
+      }
 
-    // ✅ Step 2: Fetch TON/USD price
-    const p2StartTime = performance.now();
-    const tonUsdRate = await this.operatorWalletService.fetchTonToUsdRate();
-    const p2EndTime = performance.now();
-
-    this.logger.log(
-      `💰 (updateWeightedAssetEquityRelatedData) Fetched TON/USD rate: ${tonUsdRate} in ${(
-        p2EndTime - p2StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 3: Fetch **ONLY operators that have wallet balances**
-    const p3StartTime = performance.now();
-    const operatorIds = Array.from(operatorBalances.keys());
-
-    const operators = await this.operatorModel
-      .find(
-        { _id: { $in: operatorIds } },
-        { _id: 1, weightedAssetEquity: 1, cumulativeEff: 1 },
-      )
-      .lean();
-    const p3EndTime = performance.now();
-
-    this.logger.log(
-      `🔍 (updateWeightedAssetEquityRelatedData) Fetched ${operators.length} operators in ${(
-        p3EndTime - p3StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 4: Fetch ALL basic drills in **one query** to get previous `actualEff`
-    const p4StartTime = performance.now();
-    const basicDrills = await this.drillModel
-      .find(
-        { version: DrillVersion.BASIC, operatorId: { $in: operatorIds } },
-        { operatorId: 1, actualEff: 1 },
-      )
-      .lean();
-    const p4EndTime = performance.now();
-
-    this.logger.log(
-      `🔍 (updateWeightedAssetEquityRelatedData) Fetched ${basicDrills.length} basic drills in ${(
-        p4EndTime - p4StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 5: Compute new equity, effMultiplier, actualEff, and cumulativeEff for each operator
-    const p5StartTime = performance.now();
-    const bulkOperatorUpdates = [];
-    const bulkDrillUpdates = [];
-
-    // Create a map of operator's basic drill actualEff values
-    const basicDrillMap = new Map<string, number>();
-    basicDrills.forEach((drill) => {
-      basicDrillMap.set(drill.operatorId.toString(), drill.actualEff);
-    });
-
-    for (const operator of operators) {
+      // ✅ Step 2: Fetch total balance in USD (handles multiple chains)
       const newEquity =
-        (operatorBalances.get(operator._id.toString()) || 0) * tonUsdRate;
-      const newWeightedEquity =
-        (operator.weightedAssetEquity || 0) * 0.85 + newEquity * 0.15;
+        await this.operatorWalletService.fetchTotalBalanceForWallets(
+          walletDocuments.map((wallet) => ({
+            address: wallet.address,
+            chain: wallet.chain as AllowedChain, // Explicitly cast to AllowedChain
+          })),
+        );
 
-      // Compute effMultiplier
-      const effMultiplier = this.equityToEffMultiplier(newWeightedEquity);
+      // ✅ Step 3: Fetch operator document
+      const operator = await this.operatorModel
+        .findById(operatorId, { assetEquity: 1, cumulativeEff: 1 })
+        .lean();
+      if (!operator) return;
 
-      // ✅ Compute `actualEff` of the operator's **basic drill only**
-      const newActualEff =
-        this.drillService.equityToActualEff(newWeightedEquity);
-      const oldActualEff = basicDrillMap.get(operator._id.toString()) || 0;
+      const newEffMultiplier = this.equityToEffMultiplier(newEquity);
 
-      // ✅ Compute **difference** and adjust `cumulativeEff`
+      // ✅ Step 4: Fetch the operator's **basic drill**
+      const basicDrill = await this.drillModel
+        .findOne(
+          { operatorId, version: DrillVersion.BASIC },
+          { _id: 1, actualEff: 1 },
+        )
+        .lean();
+
+      const oldActualEff = basicDrill ? basicDrill.actualEff : 0;
+      const newActualEff = this.drillService.equityToActualEff(newEquity);
+
+      // ✅ Step 5: Compute `cumulativeEff` adjustment
       const effDifference = newActualEff - oldActualEff;
       const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
 
-      // ✅ **Single bulk update** for the Operator schema (merging cumulativeEff)
-      bulkOperatorUpdates.push({
-        updateOne: {
-          filter: { _id: operator._id },
-          update: {
-            $set: {
-              weightedAssetEquity: newWeightedEquity,
-              effMultiplier,
-              cumulativeEff: newCumulativeEff, // ✅ Merged cumulativeEff update
-            },
+      // ✅ Step 6: Perform **single** bulk update on the Operator document
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        {
+          $set: {
+            assetEquity: newEquity,
+            effMultiplier: newEffMultiplier,
+            cumulativeEff: newCumulativeEff,
           },
         },
-      });
+      );
 
-      // ✅ Bulk update for drills
-      bulkDrillUpdates.push({
-        updateOne: {
-          filter: { operatorId: operator._id, version: DrillVersion.BASIC }, // ✅ Ensure only BASIC drills are updated
-          update: {
-            $set: { actualEff: newActualEff },
-          },
-        },
-      });
-    }
-    const p5EndTime = performance.now();
+      // ✅ Step 7: Update the actualEff of the **basic drill** (if applicable)
+      if (basicDrill) {
+        await this.drillModel.updateOne(
+          { _id: basicDrill._id },
+          { $set: { actualEff: newActualEff } },
+        );
+      }
 
-    this.logger.log(
-      `🔧 (updateWeightedAssetEquityRelatedData) Computed new equity, effMultiplier, actualEff & cumulativeEff for ${operators.length} operators in ${(
-        p5EndTime - p5StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    // ✅ Step 6: Perform **batched** bulk updates for Operator & Drill in a single pass
-    const p6StartTime = performance.now();
-    const batchSize = 1000; // ✅ Set batch size to prevent overload
-
-    for (let i = 0; i < bulkOperatorUpdates.length; i += batchSize) {
-      const operatorBatch = bulkOperatorUpdates.slice(i, i + batchSize);
-      await this.operatorModel.bulkWrite(operatorBatch);
       this.logger.log(
-        `✅ (updateWeightedAssetEquityRelatedData) Processed operator batch ${
-          i / batchSize + 1
-        }/${Math.ceil(bulkOperatorUpdates.length / batchSize)} (${operatorBatch.length} updates)`,
+        `✅ (updateAssetEquityForOperator) Updated asset equity for operator ${operatorId}.`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ (updateAssetEquityForOperator) Error: ${error.message}`,
       );
     }
-
-    for (let i = 0; i < bulkDrillUpdates.length; i += batchSize) {
-      const drillBatch = bulkDrillUpdates.slice(i, i + batchSize);
-      await this.drillModel.bulkWrite(drillBatch);
-      this.logger.log(
-        `✅ (updateWeightedAssetEquityRelatedData) Processed drill batch ${
-          i / batchSize + 1
-        }/${Math.ceil(bulkDrillUpdates.length / batchSize)} (${drillBatch.length} updates)`,
-      );
-    }
-
-    const p6EndTime = performance.now();
-
-    this.logger.log(
-      `📝 (updateWeightedAssetEquityRelatedData) Updated weighted asset equity, effMultiplier, actualEff & cumulativeEff for ${operators.length} operators in ${(
-        p6EndTime - p6StartTime
-      ).toFixed(2)}ms`,
-    );
-
-    this.logger.log(
-      `✅ Finished updating weighted asset equity, effMultiplier, actualEff & cumulativeEff for ${operators.length} operators.`,
-    );
   }
 
   /**
@@ -367,9 +293,7 @@ export class OperatorService {
 
     operator = await this.operatorModel.create({
       username,
-      // Update this with checking the operator's weighted asset equity later on.
-      weightedAssetEquity: 0,
-      // Update this with checking the operator's weighted asset equity later on.
+      assetEquity: 0,
       effMultiplier: 1,
       cumulativeEff: 0,
       maxFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,

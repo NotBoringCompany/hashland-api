@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { AllowedChain } from 'src/common/enums/chain.enum';
 
 /**
  * `OperatorWallet` represents a wallet linked by an operator to calculate asset equity, amongst other things.
@@ -34,7 +35,7 @@ export class OperatorWallet extends Document {
   /**
    * The chain this wallet was linked on.
    */
-  @Prop({ required: true })
+  @Prop({ required: true, enum: AllowedChain })
   chain: string;
 
   /**

@@ -14,8 +14,8 @@ import { Operator } from './schemas/operator.schema';
 import { OperatorWallet } from './schemas/operator-wallet.schema';
 import { ConnectWalletDto, TonProofDto } from '../common/dto/wallet.dto';
 import axios from 'axios';
-import { sleep } from 'src/common/utils/sleep';
 import { RedisService } from 'src/common/redis.service';
+import { AllowedChain } from 'src/common/enums/chain.enum';
 
 @Injectable()
 export class OperatorWalletService {
@@ -25,8 +25,6 @@ export class OperatorWalletService {
   // ✅ Explicitly defined batch size and max requests per second (for fetching TON balance)
   private readonly batchSize = 1024; // Max 1024 wallets per request
   private readonly maxRequestsPerSecond = 10; // API rate limit: 10 requests/sec
-  private readonly maxWalletsPerSecond =
-    this.batchSize * this.maxRequestsPerSecond; // 10,240 wallets/sec
   private readonly tonPriceApi = `https://data-api.binance.vision/api/v3/ticker/price?symbols=[%22TONUSDT%22]`;
 
   constructor(
@@ -47,111 +45,64 @@ export class OperatorWalletService {
   }
 
   /**
-   * Fetches and aggregates TON balances **directly per operator** efficiently.
+   * Fetches the total USD balance for a list of wallets based on specific assets held.
    */
-  async fetchAllWalletBalances(): Promise<Map<string, number>> {
+  async fetchTotalBalanceForWallets(
+    wallets: { address: string; chain: AllowedChain }[],
+  ): Promise<number> {
+    if (wallets.length === 0) return 0;
+
     try {
-      this.logger.log(
-        '🔄 (fetchAllWalletBalances) Fetching and aggregating TON balances for all operators...',
-      );
+      let totalUsdBalance = 0;
 
-      const balances = new Map<string, number>();
-      let totalFetched = 0;
+      // ✅ Dynamically initialize the object
+      const chainWalletsMap: Partial<Record<AllowedChain, string[]>> = {};
 
-      // ✅ Step 1: Fetch all wallet-to-operator mappings in ONE query
-      const walletMappings = await this.operatorWalletModel
-        .find({}, { address: 1, operatorId: 1 })
-        .lean();
+      for (const wallet of wallets) {
+        if (!chainWalletsMap[wallet.chain]) {
+          chainWalletsMap[wallet.chain] = []; // Initialize only if needed
+        }
+        chainWalletsMap[wallet.chain]!.push(wallet.address);
+      }
 
-      // ✅ Step 2: Organize wallets into batches for API calls
-      const walletToOperatorMap = new Map<string, string>();
-      let walletBatch: string[] = [];
+      // ✅ Batch fetch TON balances
+      if (chainWalletsMap[AllowedChain.TON]?.length) {
+        const tonApiKey = process.env.TON_API_KEY || '';
+        const apiUrl =
+          `https://toncenter.com/api/v3/accountStates?include_boc=false&api_key=${tonApiKey}&` +
+          chainWalletsMap[AllowedChain.TON]!.map(
+            (addr) => `address=${addr}`,
+          ).join('&');
 
-      for (const { address, operatorId } of walletMappings) {
-        walletToOperatorMap.set(address, operatorId.toString());
-        walletBatch.push(address);
-
-        // ✅ Fetch balances in batches (to respect API rate limits)
-        if (walletBatch.length === this.batchSize) {
-          await this.fetchBatchBalances(
-            walletBatch,
-            walletToOperatorMap,
-            balances,
+        const response = await axios.get(apiUrl);
+        if (response.data?.accounts) {
+          const totalTonBalance = response.data.accounts.reduce(
+            (sum: number, walletData: any) =>
+              sum +
+              (walletData.balance ? parseFloat(walletData.balance) / 1e9 : 0),
+            0,
           );
-          totalFetched += walletBatch.length;
-          walletBatch = [];
 
-          // ✅ Respect API rate limits (10 requests/sec)
-          if (totalFetched % this.maxWalletsPerSecond === 0) {
-            this.logger.log(
-              '⏳ (fetchAllWalletBalances) Rate limit reached, waiting 1 second...',
-            );
-            await sleep(1000);
-          }
+          // Fetch TON/USD price
+          const tonUsdRate = await this.fetchTonToUsdRate();
+
+          // Compute total USD balance for TON wallets
+          totalUsdBalance += totalTonBalance * tonUsdRate;
+        } else {
+          this.logger.warn(
+            `⚠️ (fetchTotalBalanceForWallets) Unexpected response from Toncenter.`,
+          );
         }
+      } else {
+        // Other chains are not yet supported.
       }
 
-      // ✅ Fetch remaining wallets (if any)
-      if (walletBatch.length > 0) {
-        await this.fetchBatchBalances(
-          walletBatch,
-          walletToOperatorMap,
-          balances,
-        );
-        totalFetched += walletBatch.length;
-      }
-
-      this.logger.log(
-        `✅ Completed fetching and aggregating balances for ${totalFetched} wallets.`,
-      );
-
-      return balances;
-    } catch (err: any) {
-      this.logger.error(
-        `(fetchAllWalletBalances) Error: ${err.message}`,
-        err.stack,
-      );
-      return new Map<string, number>();
-    }
-  }
-
-  /**
-   * Fetches a batch of wallet balances and aggregates them per operator.
-   */
-  private async fetchBatchBalances(
-    walletBatch: string[],
-    walletToOperatorMap: Map<string, string>,
-    balances: Map<string, number>,
-  ) {
-    try {
-      const tonApiKey = process.env.TON_API_KEY || '';
-      const apiUrl =
-        `https://toncenter.com/api/v3/accountStates?include_boc=false&api_key=${tonApiKey}&` +
-        walletBatch.map((addr) => `address=${addr}`).join('&');
-
-      const response = await axios.get(apiUrl);
-      if (!response.data?.accounts) {
-        this.logger.warn('⚠️ Unexpected response from Toncenter.');
-        return;
-      }
-
-      response.data.accounts.forEach((walletData: any, index: number) => {
-        const balance = walletData.balance
-          ? parseFloat(walletData.balance) / 1e9
-          : 0;
-        const walletAddress = walletBatch[index];
-        const operatorId = walletToOperatorMap.get(walletAddress);
-
-        if (operatorId) {
-          balances.set(operatorId, (balances.get(operatorId) || 0) + balance);
-        }
-      });
-
-      this.logger.log(
-        `📥 Cached aggregated balances for ${walletBatch.length} wallets.`,
-      );
+      return totalUsdBalance;
     } catch (error) {
-      this.logger.error(`❌ Error fetching wallet balances: ${error.message}`);
+      this.logger.error(
+        `❌ (fetchTotalBalanceForWallets) Error: ${error.message}`,
+      );
+      return 0;
     }
   }
 
@@ -161,9 +112,23 @@ export class OperatorWalletService {
   async fetchTonToUsdRate(): Promise<number> {
     try {
       const cacheKey = 'ton-usd-rate';
-      const cachedRate = await this.redisService.get(cacheKey);
+      const lockKey = 'ton-usd-rate:lock';
+      const expiryInSeconds = 300;
 
+      // Check cache first
+      const cachedRate = await this.redisService.get(cacheKey);
       if (cachedRate) return parseFloat(cachedRate);
+
+      // Check if another request is already fetching the price
+      const lock = await this.redisService.get(lockKey);
+      if (lock) {
+        // Wait and retry (polling mechanism, can be optimized further)
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return this.fetchTonToUsdRate(); // Retry fetching
+      }
+
+      // Set lock to prevent duplicate API calls
+      await this.redisService.set(lockKey, '1', 5); // Lock expires in 5 seconds
 
       // Fetch from API if cache is expired
       const response = await axios.get(this.tonPriceApi);
@@ -171,7 +136,14 @@ export class OperatorWalletService {
         ? parseFloat(response.data.price)
         : 10;
 
-      await this.redisService.set(cacheKey, tonToUsdRate.toString()); // Cache the value
+      // Store new value and remove the lock
+      await this.redisService.set(
+        cacheKey,
+        tonToUsdRate.toString(),
+        expiryInSeconds,
+      );
+      await this.redisService.set(lockKey, '', 1); // Unlock
+
       return tonToUsdRate;
     } catch (error) {
       this.logger.error(`❌ Error fetching TON price: ${error.message}`);
