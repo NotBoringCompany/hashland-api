@@ -23,6 +23,7 @@ import {
   DrillingSession,
   DrillingSessionSchema,
 } from './schemas/drilling-session.schema';
+import { DrillingCycleQueue } from './drilling-cycle.queue';
 
 @Module({
   imports: [
@@ -42,7 +43,7 @@ import {
     BullModule.registerQueue({ name: 'drilling-cycles' }), // Register Bull queue
   ],
   controllers: [DrillingCycleController],
-  providers: [DrillingCycleService],
+  providers: [DrillingCycleService, DrillingCycleQueue],
   exports: [DrillingCycleService], // Export so other modules can use DrillingCycleService
 })
 export class DrillingCycleModule {}

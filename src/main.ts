@@ -34,7 +34,7 @@ async function bootstrap() {
   // Swagger configuration
   const config = new DocumentBuilder()
     .setTitle('HashLand API')
-    .setDescription('The HashLand API documentation')
+    .setDescription(`Hashland's API Documentation`)
     .setVersion('1.0')
     .addBearerAuth()
     .build();
