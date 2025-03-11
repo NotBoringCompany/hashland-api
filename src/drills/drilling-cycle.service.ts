@@ -19,6 +19,7 @@ import { DrillService } from './drill.service';
 import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
 import { DrillingSession } from './schemas/drilling-session.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
+import { DrillingGateway } from 'src/gateway/drilling.gateway';
 @Injectable()
 export class DrillingCycleService {
   private readonly logger = new Logger(DrillingCycleService.name);
@@ -40,6 +41,7 @@ export class DrillingCycleService {
     private readonly drillService: DrillService,
     private readonly operatorService: OperatorService,
     private readonly drillingGatewayService: DrillingGatewayService,
+    private readonly drillingGateway: DrillingGateway,
   ) {}
 
   /**
@@ -147,7 +149,7 @@ export class DrillingCycleService {
     }
 
     // ✅ Step 3: Process Fuel for ALL Operators
-    await this.operatorService.processFuelForAllOperators();
+    await this.processFuelForAllOperators();
 
     // ✅ Step 4: Update the cycle with extractor ID
     if (extractorData) {
@@ -463,6 +465,61 @@ export class DrillingCycleService {
     return new ApiResponse<null>(
       200,
       `(toggleCycle) Drilling Cycles are now ${enabled ? 'enabled' : 'disabled'}.`,
+    );
+  }
+
+  /**
+   * Depletes fuel for active operators (i.e. operators that have an active drilling session)
+   * and replenishes fuel for inactive operators (i.e. operators that do not have an active drilling session).
+   */
+  async processFuelForAllOperators() {
+    const startTime = performance.now(); // ⏳ Start timing
+
+    const activeOperatorIds =
+      await this.drillingSessionService.fetchActiveOperatorIds();
+
+    // Generate a random depletion/replenishment value
+    const fuelUsed = this.operatorService.getRandomFuelValue(
+      GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.minUnits,
+      GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
+    );
+
+    const fuelGained = this.operatorService.getRandomFuelValue(
+      GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.minUnits,
+      GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.maxUnits,
+    );
+
+    // 🛠 Bulk update ACTIVE operators (deplete fuel)
+    await this.operatorService.depleteFuel(activeOperatorIds, fuelUsed);
+
+    // 🛠 Bulk update INACTIVE operators (replenish fuel)
+    await this.operatorService.replenishFuel(activeOperatorIds, fuelGained);
+
+    // **🔴 NEW: Stop drilling sessions for operators who drop below threshold**
+    // ✅ Step 1: Find all operators whose fuel dropped below threshold
+    const depletedOperatorIds =
+      await this.operatorService.fetchDepletedOperatorIds(activeOperatorIds);
+
+    // ✅ Step 2: Stop drilling sessions for those operators
+    await this.drillingSessionService.stopDrillingForDepletedOperators(
+      depletedOperatorIds,
+    );
+
+    // ✅ Step 3: Broadcast stop drilling event to depleted operators
+    this.drillingGateway.broadcastStopDrilling(depletedOperatorIds, {
+      message: 'Drilling stopped due to insufficient fuel',
+      reason: 'fuel_depleted',
+    });
+
+    const endTime = performance.now(); // ⏳ End timing
+    const executionTime = (endTime - startTime).toFixed(2);
+
+    this.logger.log(
+      `⚡ Fuel Processing Completed:
+     ⛏ Depleted ${fuelUsed} fuel for ${activeOperatorIds.size} active operators.
+     🔋 Replenished ${fuelGained} fuel for inactive operators.
+     🛑 Stopped drilling sessions for operators who dropped below fuel threshold.
+     ⏱ Execution Time: ${executionTime}ms`,
     );
   }
 }

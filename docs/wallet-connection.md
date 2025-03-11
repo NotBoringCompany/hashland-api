@@ -349,5 +349,3 @@ Common issues and solutions:
 2. **Connection timeout**: Check network connectivity and wallet provider status.
 3. **Wallet not supported**: Ensure you're using a compatible wallet provider.
 4. **Authorization errors**: Verify the JWT token is valid and not expired.
-
-For additional support, contact the HashLand development team. 

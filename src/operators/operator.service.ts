@@ -4,12 +4,11 @@ import { Model, Types } from 'mongoose';
 import { Operator } from './schemas/operator.schema';
 import { PoolOperatorService } from 'src/pools/pool-operator.service';
 import { PoolService } from 'src/pools/pool.service';
-import { DrillingSession } from 'src/drills/schemas/drilling-session.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { OperatorWalletService } from './operator-wallet.service';
 import { DrillService } from 'src/drills/drill.service';
-import { Drill } from 'src/drills/schemas/drill.schema';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
+import { Drill } from 'src/drills/schemas/drill.schema';
 
 @Injectable()
 export class OperatorService {
@@ -17,8 +16,6 @@ export class OperatorService {
 
   constructor(
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
-    @InjectModel(DrillingSession.name)
-    private drillingSessionModel: Model<DrillingSession>,
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
@@ -296,113 +293,6 @@ export class OperatorService {
   }
 
   /**
-   * Depletes fuel for active operators (i.e. operators that have an active drilling session)
-   * and replenishes fuel for inactive operators (i.e. operators that do not have an active drilling session).
-   */
-  async processFuelForAllOperators() {
-    const startTime = performance.now(); // ⏳ Start timing
-
-    const activeOperatorIds = await this.fetchActiveOperatorIds();
-
-    // Generate a random depletion/replenishment value
-    const fuelUsed = this.getRandomFuelValue(
-      GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.minUnits,
-      GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
-    );
-
-    const fuelGained = this.getRandomFuelValue(
-      GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.minUnits,
-      GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.maxUnits,
-    );
-
-    // 🛠 Bulk update ACTIVE operators (deplete fuel)
-    await this.operatorModel.updateMany(
-      { _id: { $in: Array.from(activeOperatorIds) } }, // Only active operators
-      { $inc: { currentFuel: -fuelUsed } },
-    );
-
-    // 🛠 Bulk update INACTIVE operators (replenish fuel)
-    await this.operatorModel.updateMany(
-      {
-        _id: { $nin: Array.from(activeOperatorIds) }, // Only inactive operators
-        $expr: { $lt: ['$currentFuel', '$maxFuel'] }, // ✅ Exclude those already at max fuel
-      },
-      [
-        {
-          $set: {
-            currentFuel: {
-              $min: ['$maxFuel', { $add: ['$currentFuel', fuelGained] }],
-            },
-          },
-        },
-      ],
-    );
-
-    // **🔴 NEW: Stop drilling sessions for operators who drop below threshold**
-    // ✅ Step 1: Find all operators whose fuel dropped below threshold
-    const depletedOperatorIds = await this.operatorModel
-      .find(
-        {
-          _id: { $in: Array.from(activeOperatorIds) },
-          currentFuel: {
-            $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
-          },
-        },
-        { _id: 1 }, // Only fetch IDs for efficiency
-      )
-      .lean()
-      .then((operators) => operators.map((op) => op._id)); // Extract ObjectIds
-
-    if (depletedOperatorIds.length === 0) {
-      this.logger.log(
-        `🔋 No operators depleted below threshold. Skipping session termination.`,
-      );
-    } else {
-      // ✅ Step 2: Stop drilling sessions for those operators
-      await this.drillingSessionModel.updateMany(
-        {
-          operatorId: { $in: depletedOperatorIds },
-          endTime: null, // ✅ Only stop sessions that are still running
-        },
-        { $set: { endTime: new Date() } }, // ✅ Mark session as ended
-      );
-
-      this.logger.log(
-        `🛑 Stopped ${depletedOperatorIds.length} drilling sessions due to fuel depletion.`,
-      );
-    }
-
-    const endTime = performance.now(); // ⏳ End timing
-    const executionTime = (endTime - startTime).toFixed(2);
-
-    this.logger.log(
-      `⚡ Fuel Processing Completed: 
-     ⛏ Depleted ${fuelUsed} fuel for ${activeOperatorIds.size} active operators.
-     🔋 Replenished ${fuelGained} fuel for inactive operators.
-     🛑 Stopped drilling sessions for operators who dropped below fuel threshold.
-     ⏱ Execution Time: ${executionTime}ms`,
-    );
-  }
-
-  /**
-   * Fetches the IDs of operators who currently have an active `DrillingSession` instance.
-   */
-  private async fetchActiveOperatorIds(): Promise<Set<Types.ObjectId>> {
-    const activeSessions = await this.drillingSessionModel
-      .find({ endTime: null })
-      .select('operatorId')
-      .lean();
-    return new Set(activeSessions.map((session) => session.operatorId));
-  }
-
-  /**
-   * Generates a random fuel value between `min` and `max`.
-   */
-  private getRandomFuelValue(min: number, max: number): number {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
-
-  /**
    * Finds an operator by their ID
    * @param id - The operator's ID
    * @returns The operator document or null if not found
@@ -529,5 +419,75 @@ export class OperatorService {
       `🆕(findOrCreateOperator) Created new operator: ${username}`,
     );
     return operator;
+  }
+
+  /**
+   * Fetches IDs of operators whose fuel has dropped below the minimum threshold.
+   * @param activeOperatorIds Set of active operator IDs to check
+   * @returns Array of ObjectIds for operators with depleted fuel
+   */
+  async fetchDepletedOperatorIds(
+    activeOperatorIds: Set<Types.ObjectId>,
+  ): Promise<Types.ObjectId[]> {
+    return this.operatorModel
+      .find(
+        {
+          _id: { $in: Array.from(activeOperatorIds) },
+          currentFuel: {
+            $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
+          },
+        },
+        { _id: 1 },
+      )
+      .lean()
+      .then((operators) => operators.map((op) => op._id));
+  }
+
+  /**
+   * Depletes fuel for active operators.
+   * @param activeOperatorIds Set of operator IDs currently active
+   * @param fuelUsed Amount of fuel to deplete
+   */
+  async depleteFuel(
+    activeOperatorIds: Set<Types.ObjectId>,
+    fuelUsed: number,
+  ): Promise<void> {
+    await this.operatorModel.updateMany(
+      { _id: { $in: Array.from(activeOperatorIds) } },
+      { $inc: { currentFuel: -fuelUsed } },
+    );
+  }
+
+  /**
+   * Replenishes fuel for inactive operators up to their max fuel capacity.
+   * @param activeOperatorIds Set of operator IDs currently active (to exclude)
+   * @param fuelGained Amount of fuel to replenish
+   */
+  async replenishFuel(
+    activeOperatorIds: Set<Types.ObjectId>,
+    fuelGained: number,
+  ): Promise<void> {
+    await this.operatorModel.updateMany(
+      {
+        _id: { $nin: Array.from(activeOperatorIds) },
+        $expr: { $lt: ['$currentFuel', '$maxFuel'] },
+      },
+      [
+        {
+          $set: {
+            currentFuel: {
+              $min: ['$maxFuel', { $add: ['$currentFuel', fuelGained] }],
+            },
+          },
+        },
+      ],
+    );
+  }
+
+  /**
+   * Generates a random fuel value between `min` and `max`.
+   */
+  getRandomFuelValue(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 }
