@@ -6,10 +6,11 @@ import {
   SubscribeMessage,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, Inject, forwardRef } from '@nestjs/common';
+import { Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { DrillingSessionService } from 'src/drills/drilling-session.service';
 import { OperatorService } from 'src/operators/operator.service';
 import { Types } from 'mongoose';
+import { RedisService } from 'src/common/redis.service';
 
 /**
  * WebSocket Gateway for handling real-time drilling updates.
@@ -24,11 +25,16 @@ import { Types } from 'mongoose';
   cors: { origin: '*' }, // ✅ Allow WebSocket connections from any frontend
 })
 export class DrillingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
 {
   @WebSocketServer()
   server: Server;
   private readonly logger = new Logger(DrillingGateway.name);
+
+  // Redis keys for storing operator data
+  private readonly redisOnlineOperatorsKey = 'drilling:onlineOperators';
+  private readonly redisActiveDrillingOperatorsKey =
+    'drilling:activeDrillingOperators';
 
   /**
    * Keeps track of online operators.
@@ -47,7 +53,86 @@ export class DrillingGateway
     @Inject(forwardRef(() => DrillingSessionService))
     private readonly drillingSessionService: DrillingSessionService,
     private readonly operatorService: OperatorService,
+    private readonly redisService: RedisService,
   ) {}
+
+  /**
+   * Initializes the gateway by loading operator data from Redis.
+   */
+  async onModuleInit() {
+    await this.loadOperatorsFromRedis();
+  }
+
+  /**
+   * Loads operator data from Redis when the server starts.
+   */
+  private async loadOperatorsFromRedis() {
+    try {
+      // Load online operators
+      const onlineOperatorsJson = await this.redisService.get(
+        this.redisOnlineOperatorsKey,
+      );
+      if (onlineOperatorsJson) {
+        const onlineOperatorsArray = JSON.parse(onlineOperatorsJson);
+        this.onlineOperators = new Set(onlineOperatorsArray);
+        this.logger.log(
+          `Loaded ${this.onlineOperators.size} online operators from Redis`,
+        );
+      }
+
+      // Load active drilling operators
+      const activeDrillingOperatorsJson = await this.redisService.get(
+        this.redisActiveDrillingOperatorsKey,
+      );
+      if (activeDrillingOperatorsJson) {
+        const activeDrillingOperatorsArray = JSON.parse(
+          activeDrillingOperatorsJson,
+        );
+        this.activeDrillingOperators = new Map(activeDrillingOperatorsArray);
+        this.logger.log(
+          `Loaded ${this.activeDrillingOperators.size} active drilling operators from Redis`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Error loading operators from Redis: ${error.message}`);
+    }
+  }
+
+  /**
+   * Saves online operators to Redis.
+   */
+  private async saveOnlineOperatorsToRedis() {
+    try {
+      const onlineOperatorsArray = Array.from(this.onlineOperators);
+      await this.redisService.set(
+        this.redisOnlineOperatorsKey,
+        JSON.stringify(onlineOperatorsArray),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error saving online operators to Redis: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Saves active drilling operators to Redis.
+   */
+  private async saveActiveDrillingOperatorsToRedis() {
+    try {
+      const activeDrillingOperatorsArray = Array.from(
+        this.activeDrillingOperators.entries(),
+      );
+      await this.redisService.set(
+        this.redisActiveDrillingOperatorsKey,
+        JSON.stringify(activeDrillingOperatorsArray),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error saving active drilling operators to Redis: ${error.message}`,
+      );
+    }
+  }
 
   /**
    * Handles a new WebSocket connection.
@@ -56,11 +141,13 @@ export class DrillingGateway
    *
    * @param client The connected WebSocket client.
    */
-  handleConnection(client: Socket) {
+  async handleConnection(client: Socket) {
     const operatorId = client.handshake.query.operatorId as string;
 
     if (operatorId) {
       this.onlineOperators.add(operatorId);
+      await this.saveOnlineOperatorsToRedis();
+
       this.logger.log(
         `🔗 Operator Connected: ${operatorId} (Online Operators: ${this.onlineOperators.size})`,
       );
@@ -86,6 +173,8 @@ export class DrillingGateway
       }
 
       this.onlineOperators.delete(operatorId);
+      await this.saveOnlineOperatorsToRedis();
+
       this.logger.log(
         `❌ Operator Disconnected: ${operatorId} (Online Operators: ${this.onlineOperators.size})`,
       );
@@ -160,6 +249,7 @@ export class DrillingGateway
       if (response.status === 200) {
         // Track this operator as actively drilling
         this.activeDrillingOperators.set(operatorId, client.id);
+        await this.saveActiveDrillingOperatorsToRedis();
 
         client.emit('drilling-started', {
           message: 'Drilling session started successfully',
@@ -212,6 +302,7 @@ export class DrillingGateway
       if (response.status === 200) {
         // Remove from active drilling operators
         this.activeDrillingOperators.delete(operatorId);
+        await this.saveActiveDrillingOperatorsToRedis();
 
         client.emit('drilling-stopped', {
           message: 'Drilling session stopped successfully',
@@ -255,6 +346,7 @@ export class DrillingGateway
 
         // Remove from active drilling operators
         this.activeDrillingOperators.delete(operatorIdStr);
+        await this.saveActiveDrillingOperatorsToRedis();
 
         // Notify the client if they're still connected
         if (socketId && this.server.sockets.sockets.has(socketId)) {
