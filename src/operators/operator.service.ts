@@ -27,6 +27,57 @@ export class OperatorService {
   ) {}
 
   /**
+   * Updates cumulativeEff for all operators by summing their drills' actualEff values.
+   *
+   * This is called periodically to keep the cumulativeEff values up-to-date.
+   */
+  async updateCumulativeEff() {
+    this.logger.log(
+      '🔄 (updateCumulativeEff) Updating cumulativeEff for all operators...',
+    );
+    const startTime = performance.now();
+
+    // ✅ Step 1: Aggregate Total `actualEff` per Operator
+    const operatorEffData = await this.drillModel.aggregate([
+      {
+        $group: {
+          _id: '$operatorId',
+          totalEff: { $sum: '$actualEff' },
+        },
+      },
+    ]);
+
+    if (operatorEffData.length === 0) {
+      this.logger.warn(
+        '⚠️ (updateCumulativeEff) No drills found. Skipping update.',
+      );
+      return;
+    }
+
+    // ✅ Step 2: Prepare Bulk Updates
+    const bulkUpdates = operatorEffData.map(({ _id, totalEff }) => ({
+      updateOne: {
+        filter: { _id },
+        update: { $set: { cumulativeEff: totalEff } },
+      },
+    }));
+
+    // ✅ Step 3: Batch Process Updates for Large Datasets
+    const batchSize = 1000;
+    for (let i = 0; i < bulkUpdates.length; i += batchSize) {
+      await this.operatorModel.bulkWrite(bulkUpdates.slice(i, i + batchSize));
+      this.logger.log(
+        `✅ (updateCumulativeEff) Processed batch ${i / batchSize + 1}/${Math.ceil(bulkUpdates.length / batchSize)}`,
+      );
+    }
+
+    const endTime = performance.now();
+    this.logger.log(
+      `✅ (updateCumulativeEff) Updated cumulativeEff for ${operatorEffData.length} operators in ${(endTime - startTime).toFixed(2)}ms.`,
+    );
+  }
+
+  /**
    * Updates weighted asset equity, effMultiplier, actualEff for basic drills,
    * and adjusts cumulativeEff in Operator schema.
    */

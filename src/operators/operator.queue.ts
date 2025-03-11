@@ -7,7 +7,7 @@ import { OperatorService } from './operator.service';
 @Processor('operator-queue')
 export class OperatorQueue implements OnModuleInit {
   private readonly logger = new Logger(OperatorQueue.name);
-  private readonly sixHoursInMs = 6 * 60 * 60 * 1000; // 6 hours
+  private readonly oneHourInMs = 60 * 60 * 1000; // 1 hour
 
   constructor(
     private readonly operatorService: OperatorService,
@@ -15,47 +15,48 @@ export class OperatorQueue implements OnModuleInit {
   ) {}
 
   /**
-   * Called when the module initializes. Ensures asset equity updates are scheduled.
+   * Called when the module initializes.
    */
   async onModuleInit() {
-    this.logger.log(
-      `⏳ (operatorQueue) Ensuring operator asset equity update job is scheduled...`,
-    );
+    // ✅ Schedule Cumulative Eff Update (Every 1 Hour)
+    await this.ensureJobScheduled('update-cumulative-eff', this.oneHourInMs);
+  }
 
-    // ✅ Check if the job is already scheduled
+  /**
+   * Ensures a Bull job is scheduled, preventing duplicates.
+   */
+  private async ensureJobScheduled(jobName: string, intervalMs: number) {
     const existingJobs = await this.operatorQueue.getRepeatableJobs();
-    if (!existingJobs.some((job) => job.name === 'update-asset-equity')) {
+    if (!existingJobs.some((job) => job.name === jobName)) {
       await this.operatorQueue.add(
-        'update-asset-equity',
+        jobName,
         {},
-        { repeat: { every: this.sixHoursInMs } }, // ✅ Runs every 6 hours
+        { repeat: { every: intervalMs } },
       );
       this.logger.log(
-        `✅ (operatorQueue) Scheduled asset equity update every 6 hours.`,
+        `✅ (operatorQueue) Scheduled job: ${jobName} every ${intervalMs / 1000 / 60} minutes.`,
       );
     } else {
-      this.logger.log(
-        `🔄 (operatorQueue) Asset equity update job is already scheduled.`,
-      );
+      this.logger.log(`🔄 (operatorQueue) Job already scheduled: ${jobName}.`);
     }
   }
 
   /**
-   * Processes the asset equity update job.
+   * Processes the cumulativeEff update job (now runs **every hour**).
    */
-  @Process('update-asset-equity')
-  async handleAssetEquityUpdate() {
+  @Process('update-cumulative-eff')
+  async handleCumulativeEffUpdate() {
     this.logger.log(
-      `🔄 (update-asset-equity) Running scheduled asset equity update...`,
+      `🔄 (update-cumulative-eff) Running scheduled cumulativeEff update...`,
     );
     try {
-      await this.operatorService.updateWeightedAssetEquityRelatedData();
+      await this.operatorService.updateCumulativeEff();
       this.logger.log(
-        `✅ (update-asset-equity) Successfully updated weighted asset equity & effMultiplier.`,
+        `✅ (update-cumulative-eff) Successfully updated cumulativeEff for all operators.`,
       );
     } catch (error) {
       this.logger.error(
-        `❌ (update-asset-equity) Error updating asset equity: ${error.message}`,
+        `❌ (update-cumulative-eff) Error updating cumulativeEff: ${error.message}`,
       );
     }
   }
