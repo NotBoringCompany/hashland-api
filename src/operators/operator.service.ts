@@ -79,7 +79,7 @@ export class OperatorService {
   }
 
   /**
-   * Updates asset equity, effMultiplier, actualEff for basic drills,
+   * Updates asset equity, effMultiplier (in Operator), actualEff for basic drills,
    * and adjusts cumulativeEff in the Operator schema.
    */
   async updateAssetEquityForOperator(
@@ -117,24 +117,24 @@ export class OperatorService {
         .lean();
       if (!operator) return;
 
+      // ✅ Step 4: Compute `effMultiplier`
       const newEffMultiplier = this.equityToEffMultiplier(newEquity);
 
-      // ✅ Step 4: Fetch the operator's **basic drill**
-      const basicDrill = await this.drillModel
-        .findOne(
-          { operatorId, version: DrillVersion.BASIC },
-          { _id: 1, actualEff: 1 },
-        )
-        .lean();
-
-      const oldActualEff = basicDrill ? basicDrill.actualEff : 0;
+      // ✅ Step 5: Update `actualEff` of **Basic Drill** & Compute `cumulativeEff`
       const newActualEff = this.drillService.equityToActualEff(newEquity);
 
-      // ✅ Step 5: Compute `cumulativeEff` adjustment
+      const updatedDrill = await this.drillModel.findOneAndUpdate(
+        { operatorId, version: DrillVersion.BASIC },
+        { $set: { actualEff: newActualEff } },
+        { new: true, projection: { actualEff: 1 } }, // Return the updated `actualEff`
+      );
+
+      // ✅ Step 6: Compute `cumulativeEff`
+      const oldActualEff = updatedDrill ? updatedDrill.actualEff : 0;
       const effDifference = newActualEff - oldActualEff;
       const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
 
-      // ✅ Step 6: Perform **single** bulk update on the Operator document
+      // ✅ Step 7: Update `assetEquity`, `effMultiplier` & `cumulativeEff` in Operator document
       await this.operatorModel.updateOne(
         { _id: operatorId },
         {
@@ -146,16 +146,8 @@ export class OperatorService {
         },
       );
 
-      // ✅ Step 7: Update the actualEff of the **basic drill** (if applicable)
-      if (basicDrill) {
-        await this.drillModel.updateOne(
-          { _id: basicDrill._id },
-          { $set: { actualEff: newActualEff } },
-        );
-      }
-
       this.logger.log(
-        `✅ (updateAssetEquityForOperator) Updated asset equity for operator ${operatorId}.`,
+        `✅ (updateAssetEquityForOperator) Updated asset equity & effMultiplier for operator ${operatorId}.`,
       );
     } catch (error) {
       this.logger.error(
@@ -298,8 +290,8 @@ export class OperatorService {
     operator = await this.operatorModel.create({
       username,
       assetEquity: 0,
-      effMultiplier: 1,
       cumulativeEff: 0,
+      effMultiplier: 1,
       maxFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
       totalEarnedHASH: 0,

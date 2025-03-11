@@ -32,20 +32,20 @@ export class Operator extends Document {
   assetEquity: number;
 
   /**
-   * A multiplier that's applied to the operator's drills' EFF ratings.
-   *
-   * This is decided by the operator's asset equity.
-   */
-  @Prop({ required: true, default: 1 })
-  effMultiplier: number;
-
-  /**
    * The total cumulative EFF from all drills owned by the operator.
    *
    * This is essentially the 'mining power' equivalent of the operator.
    */
   @Prop({ required: true, default: 0 })
   cumulativeEff: number;
+
+  /**
+   * A multiplier that's applied to the operator's drills' `actualEff`.
+   *
+   * This is decided by the operator's asset equity.
+   */
+  @Prop({ required: true, default: 1 })
+  effMultiplier: number;
 
   /**
    * The maximum fuel capacity of the operator's drills.
