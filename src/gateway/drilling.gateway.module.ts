@@ -5,12 +5,14 @@ import { DrillModule } from 'src/drills/drill.module';
 import { DrillingSessionModule } from 'src/drills/drilling-session.module';
 import { RedisModule } from 'src/common/redis.module';
 import { OperatorModule } from 'src/operators/operator.module';
+import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
   imports: [
     DrillModule,
     DrillingSessionModule,
     RedisModule,
+    AuthModule,
     forwardRef(() => OperatorModule), // Handle circular dependency
   ],
   providers: [DrillingGateway, DrillingGatewayService],

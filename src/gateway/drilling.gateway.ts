@@ -11,6 +11,7 @@ import { DrillingSessionService } from 'src/drills/drilling-session.service';
 import { OperatorService } from 'src/operators/operator.service';
 import { Types } from 'mongoose';
 import { RedisService } from 'src/common/redis.service';
+import { JwtService } from '@nestjs/jwt';
 
 /**
  * WebSocket Gateway for handling real-time drilling updates.
@@ -54,6 +55,7 @@ export class DrillingGateway
     private readonly drillingSessionService: DrillingSessionService,
     private readonly operatorService: OperatorService,
     private readonly redisService: RedisService,
+    private readonly jwtService: JwtService,
   ) {}
 
   /**
@@ -136,15 +138,27 @@ export class DrillingGateway
 
   /**
    * Handles a new WebSocket connection.
+   * - Authenticates the operator using JWT.
    * - Adds the operator to the online tracking list.
    * - Emits an updated online operator count.
    *
    * @param client The connected WebSocket client.
    */
   async handleConnection(client: Socket) {
-    const operatorId = client.handshake.query.operatorId as string;
+    try {
+      // Authenticate the client using JWT
+      const operatorId = await this.authenticateClient(client);
 
-    if (operatorId) {
+      if (!operatorId) {
+        this.logger.warn(`Client ${client.id} failed authentication`);
+        client.disconnect();
+        return;
+      }
+
+      // Store the authenticated operatorId in the client data for easy access
+      client.data.operatorId = operatorId;
+
+      // Add to online operators
       this.onlineOperators.add(operatorId);
       await this.saveOnlineOperatorsToRedis();
 
@@ -152,6 +166,9 @@ export class DrillingGateway
         `🔗 Operator Connected: ${operatorId} (Online Operators: ${this.onlineOperators.size})`,
       );
       this.broadcastOnlineOperators(); // Notify all clients
+    } catch (error) {
+      this.logger.error(`Error in handleConnection: ${error.message}`);
+      client.disconnect();
     }
   }
 
@@ -164,21 +181,25 @@ export class DrillingGateway
    * @param client The disconnected WebSocket client.
    */
   async handleDisconnect(client: Socket) {
-    const operatorId = client.handshake.query.operatorId as string;
+    try {
+      const operatorId = client.data.operatorId;
 
-    if (operatorId) {
-      // Stop drilling if the operator was actively drilling
-      if (this.activeDrillingOperators.has(operatorId)) {
-        await this.stopDrilling(client);
+      if (operatorId) {
+        // Stop drilling if the operator was actively drilling
+        if (this.activeDrillingOperators.has(operatorId)) {
+          await this.stopDrilling(client);
+        }
+
+        this.onlineOperators.delete(operatorId);
+        await this.saveOnlineOperatorsToRedis();
+
+        this.logger.log(
+          `❌ Operator Disconnected: ${operatorId} (Online Operators: ${this.onlineOperators.size})`,
+        );
+        this.broadcastOnlineOperators(); // Notify all clients
       }
-
-      this.onlineOperators.delete(operatorId);
-      await this.saveOnlineOperatorsToRedis();
-
-      this.logger.log(
-        `❌ Operator Disconnected: ${operatorId} (Online Operators: ${this.onlineOperators.size})`,
-      );
-      this.broadcastOnlineOperators(); // Notify all clients
+    } catch (error) {
+      this.logger.error(`Error in handleDisconnect: ${error.message}`);
     }
   }
 
@@ -220,16 +241,16 @@ export class DrillingGateway
    */
   @SubscribeMessage('start-drilling')
   async startDrilling(client: Socket) {
-    const operatorId = client.handshake.query.operatorId as string;
-
-    if (!operatorId) {
-      client.emit('drilling-error', {
-        message: 'No operator ID provided',
-      });
-      return;
-    }
-
     try {
+      const operatorId = client.data.operatorId;
+
+      if (!operatorId) {
+        client.emit('drilling-error', {
+          message: 'Authentication required',
+        });
+        return;
+      }
+
       // Convert string ID to MongoDB ObjectId
       const objectId = new Types.ObjectId(operatorId);
 
@@ -265,9 +286,7 @@ export class DrillingGateway
         });
       }
     } catch (error) {
-      this.logger.error(
-        `Error starting drilling for ${operatorId}: ${error.message}`,
-      );
+      this.logger.error(`Error starting drilling: ${error.message}`);
       client.emit('drilling-error', {
         message: `Failed to start drilling: ${error.message}`,
       });
@@ -282,16 +301,16 @@ export class DrillingGateway
    */
   @SubscribeMessage('stop-drilling')
   async stopDrilling(client: Socket) {
-    const operatorId = client.handshake.query.operatorId as string;
-
-    if (!operatorId) {
-      client.emit('drilling-error', {
-        message: 'No operator ID provided',
-      });
-      return;
-    }
-
     try {
+      const operatorId = client.data.operatorId;
+
+      if (!operatorId) {
+        client.emit('drilling-error', {
+          message: 'Authentication required',
+        });
+        return;
+      }
+
       // Convert string ID to MongoDB ObjectId
       const objectId = new Types.ObjectId(operatorId);
 
@@ -318,9 +337,7 @@ export class DrillingGateway
         });
       }
     } catch (error) {
-      this.logger.error(
-        `Error stopping drilling for ${operatorId}: ${error.message}`,
-      );
+      this.logger.error(`Error stopping drilling: ${error.message}`);
       client.emit('drilling-error', {
         message: `Failed to stop drilling: ${error.message}`,
       });
@@ -367,6 +384,36 @@ export class DrillingGateway
           `Error stopping drilling due to fuel depletion for ${operatorIdStr}: ${error.message}`,
         );
       }
+    }
+  }
+
+  /**
+   * Authenticates a client using JWT from the authorization header.
+   *
+   * @param client The WebSocket client to authenticate.
+   * @returns The operator ID if authentication is successful, null otherwise.
+   */
+  private async authenticateClient(client: Socket): Promise<string | null> {
+    try {
+      const authHeader = client.handshake.headers.authorization;
+
+      if (!authHeader) {
+        this.logger.warn(`Client ${client.id} has no authorization header`);
+        return null;
+      }
+
+      const token = authHeader.split(' ')[1];
+      const payload = this.jwtService.verify(token);
+
+      if (!payload || !payload.operatorId) {
+        this.logger.warn(`Client ${client.id} has invalid token payload`);
+        return null;
+      }
+
+      return payload.operatorId.toString();
+    } catch (error) {
+      this.logger.error(`Authentication failed: ${error.message}`);
+      return null;
     }
   }
 }
