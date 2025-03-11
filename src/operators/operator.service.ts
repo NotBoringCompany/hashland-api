@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Operator } from './schemas/operator.schema';
@@ -10,6 +16,7 @@ import { OperatorWalletService } from './operator-wallet.service';
 import { DrillService } from 'src/drills/drill.service';
 import { Drill } from 'src/drills/schemas/drill.schema';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
+import { DrillingGateway } from 'src/gateway/drilling.gateway';
 
 @Injectable()
 export class OperatorService {
@@ -24,6 +31,8 @@ export class OperatorService {
     private readonly poolService: PoolService,
     private readonly operatorWalletService: OperatorWalletService,
     private readonly drillService: DrillService,
+    @Inject(forwardRef(() => DrillingGateway))
+    private readonly drillingGateway: DrillingGateway,
   ) {}
 
   /**
@@ -319,6 +328,17 @@ export class OperatorService {
       this.logger.log(
         `🛑 Stopped ${depletedOperatorIds.length} drilling sessions due to fuel depletion.`,
       );
+
+      // ✅ Step 3: Notify the WebSocket gateway to stop drilling for these operators
+      for (const operatorId of depletedOperatorIds) {
+        try {
+          await this.drillingGateway.stopDrillingDueToFuelDepletion(operatorId);
+        } catch (error) {
+          this.logger.error(
+            `Error notifying WebSocket for operator ${operatorId}: ${error.message}`,
+          );
+        }
+      }
     }
 
     const endTime = performance.now(); // ⏳ End timing

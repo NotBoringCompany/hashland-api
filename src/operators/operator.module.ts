@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Operator, OperatorSchema } from './schemas/operator.schema';
 import {
@@ -18,6 +18,7 @@ import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
 import { DrillModule } from 'src/drills/drill.module';
 import { OperatorQueue } from './operator.queue';
 import { BullModule } from '@nestjs/bull';
+import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { BullModule } from '@nestjs/bull';
     PoolModule,
     PoolOperatorModule,
     DrillModule,
+    forwardRef(() => DrillingGatewayModule),
   ],
   controllers: [], // Expose API endpoints
   providers: [OperatorService, OperatorQueue], // Business logic for Operators

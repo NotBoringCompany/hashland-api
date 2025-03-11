@@ -1,13 +1,19 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DrillingGateway } from './drilling.gateway';
 import { DrillingGatewayService } from './drilling.gateway.service';
 import { DrillModule } from 'src/drills/drill.module';
 import { DrillingSessionModule } from 'src/drills/drilling-session.module';
 import { RedisModule } from 'src/common/redis.module';
+import { OperatorModule } from 'src/operators/operator.module';
 
 @Module({
-  imports: [DrillModule, DrillingSessionModule, RedisModule],
+  imports: [
+    DrillModule,
+    DrillingSessionModule,
+    RedisModule,
+    forwardRef(() => OperatorModule), // Handle circular dependency
+  ],
   providers: [DrillingGateway, DrillingGatewayService],
-  exports: [DrillingGatewayService], // ✅ Export so other modules can use it
+  exports: [DrillingGatewayService, DrillingGateway], // Export DrillingGateway as well
 })
 export class DrillingGatewayModule {}
