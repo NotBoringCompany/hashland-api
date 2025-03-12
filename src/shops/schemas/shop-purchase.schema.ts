@@ -1,5 +1,4 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { ShopItem } from 'src/common/enums/shop.enum';
 import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
 import { Document, Types } from 'mongoose';
 import { TGStarsData } from 'src/common/schemas/telegram-payment.schema';
@@ -29,9 +28,9 @@ export class ShopPurchase extends Document {
   operatorId: Types.ObjectId;
 
   /**
-   * The item purchased from the shop.
+   * The name of the item purchased from the shop.
    */
-  @Prop({ type: String, enum: ShopItem, required: true })
+  @Prop({ type: String, required: true })
   itemPurchased: string;
 
   /**
@@ -41,7 +40,7 @@ export class ShopPurchase extends Document {
   amount: number;
 
   /**
-   * The total cost of the purchase.
+   * The total cost of the purchase (in `currency`).
    */
   @Prop({ required: true })
   totalCost: number;

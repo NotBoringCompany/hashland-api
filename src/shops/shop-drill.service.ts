@@ -6,7 +6,7 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 
 @Injectable()
-export class ShopDrillsService {
+export class ShopDrillService {
   constructor(
     @InjectModel(ShopDrill.name) private shopDrillModel: Model<ShopDrill>,
   ) {}

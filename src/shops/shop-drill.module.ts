@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ShopDrill, ShopDrillSchema } from './schemas/shop-drill.schema';
-import { ShopDrillsService } from './shop-drill.service';
+import { ShopDrillService } from './shop-drill.service';
 
 @Module({
   imports: [
@@ -10,7 +10,7 @@ import { ShopDrillsService } from './shop-drill.service';
     ]), // Register ShopDrill schema
   ],
   controllers: [], // Expose API endpoints
-  providers: [ShopDrillsService], // Business logic for ShopDrills
-  exports: [MongooseModule, ShopDrillsService], // Allow usage in other modules
+  providers: [ShopDrillService], // Business logic for ShopDrill
+  exports: [MongooseModule, ShopDrillService], // Allow usage in other modules
 })
 export class ShopDrillModule {}
