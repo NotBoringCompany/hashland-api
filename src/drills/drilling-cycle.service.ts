@@ -11,7 +11,6 @@ import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { performance } from 'perf_hooks'; // Import high-precision timer
 import { DrillingSessionService } from './drilling-session.service';
-import { Drill } from './schemas/drill.schema';
 import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
 import { Pool } from 'src/pools/schemas/pool.schema';
 import { OperatorService } from 'src/operators/operator.service';
@@ -22,6 +21,7 @@ import { Operator } from 'src/operators/schemas/operator.schema';
 import { DrillingGateway } from 'src/gateway/drilling.gateway';
 import { OperatorWalletService } from 'src/operators/operator-wallet.service';
 import { AllowedChain } from 'src/common/enums/chain.enum';
+import { HashReserveService } from 'src/hash-reserve/hash-reserve.service';
 @Injectable()
 export class DrillingCycleService {
   private readonly logger = new Logger(DrillingCycleService.name);
@@ -33,7 +33,6 @@ export class DrillingCycleService {
     private drillingCycleModel: Model<DrillingCycle>,
     @InjectModel(DrillingSession.name)
     private drillingSessionModel: Model<DrillingSession>,
-    @InjectModel(Drill.name) private drillModel: Model<Drill>,
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private poolModel: Model<Pool>,
@@ -45,6 +44,7 @@ export class DrillingCycleService {
     private readonly operatorService: OperatorService,
     private readonly drillingGatewayService: DrillingGatewayService,
     private readonly drillingGateway: DrillingGateway,
+    private readonly hashReserveService: HashReserveService,
   ) {}
 
   /**
@@ -296,7 +296,13 @@ export class DrillingCycleService {
     }
 
     if (extractorOperatorId === null) {
-      // 🟡 **No Extractor Selected - Distribute Only Active Operators' Rewards**
+      // 🟡 **No Extractor Selected - Reserve Extractor's HASH**
+      const extractorHashAllocation =
+        issuedHash *
+        GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.extractorOperator;
+      await this.hashReserveService.addToHASHReserve(extractorHashAllocation);
+
+      // Active operator reward share
       const activeOperatorsReward =
         issuedHash *
         GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.allActiveOperators;
@@ -610,4 +616,3 @@ export class DrillingCycleService {
     );
   }
 }
-
