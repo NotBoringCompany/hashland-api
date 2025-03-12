@@ -27,11 +27,11 @@ export class Drill extends Document {
    */
   @Prop({
     type: String,
-    enum: DrillVersion,
     required: true,
+    enum: DrillVersion,
     default: DrillVersion.BASIC,
   })
-  version: string;
+  version: DrillVersion;
 
   /**
    * The configuration of the drill.
@@ -42,7 +42,7 @@ export class Drill extends Document {
     required: true,
     default: DrillConfig.BASIC,
   })
-  config: string;
+  config: DrillConfig;
 
   /**
    * If this drill is allowed to be an extractor.
