@@ -37,4 +37,56 @@ export class RedisService {
     await this.redis.set('drilling-cycle:current', newCycleNumber.toString());
     console.warn(`🔄 Drilling Cycle Number Reset to: ${newCycleNumber}`);
   }
+
+  /**
+   * Scan Redis for keys matching a pattern.
+   * @param pattern The pattern to match keys against
+   * @param count The number of keys to return per iteration (default: 100)
+   * @returns Array of matching keys
+   */
+  async scanKeys(pattern: string, count: number = 100): Promise<string[]> {
+    let cursor = '0';
+    const keys: string[] = [];
+
+    do {
+      const [nextCursor, matchedKeys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        count,
+      );
+      cursor = nextCursor;
+      keys.push(...matchedKeys);
+    } while (cursor !== '0');
+
+    return keys;
+  }
+
+  /**
+   * Get multiple values from Redis.
+   * @param keys Array of keys to retrieve
+   * @returns Array of values (null for non-existent keys)
+   */
+  async mget(keys: string[]): Promise<(string | null)[]> {
+    if (keys.length === 0) return [];
+    return this.redis.mget(keys);
+  }
+
+  /**
+   * Delete a key from Redis.
+   * @param key The key to delete
+   * @returns 1 if the key was deleted, 0 if it didn't exist
+   */
+  async del(key: string): Promise<number> {
+    return this.redis.del(key);
+  }
+
+  /**
+   * Set multiple key-value pairs in Redis.
+   * @param keyValuePairs Object containing key-value pairs
+   */
+  async mset(keyValuePairs: Record<string, string>): Promise<'OK'> {
+    return this.redis.mset(keyValuePairs);
+  }
 }
