@@ -91,8 +91,27 @@ export class DrillingCycleService {
     );
 
     try {
+      // Activate all waiting sessions for this new cycle
+      const activationResult =
+        await this.drillingSessionService.activateWaitingSessionsForNewCycle(
+          newCycleNumber,
+        );
+
+      this.logger.log(
+        `✅ Activated ${activationResult.count} waiting drilling sessions for cycle #${newCycleNumber}`,
+      );
+
+      // Notify operators that their sessions were activated
+      if (activationResult.operatorIds.length > 0) {
+        this.drillingGatewayService.notifySessionsActivated(
+          activationResult.operatorIds,
+          newCycleNumber,
+        );
+      }
+
+      // Get total active operators after activation
       const activeOperators =
-        await this.drillingSessionService.fetchActiveDrillingSessionsRedis();
+        await this.drillingSessionService.fetchActiveDrillingSessionsCount();
 
       // Create the drilling cycle with active operator count
       await this.drillingCycleModel.create({
@@ -129,6 +148,7 @@ export class DrillingCycleService {
    * 2. Distributing rewards to operators.
    * 3. Depleting or replenishing fuel for operators.
    * 4. Updating the cycle with the selected extractor.
+   * 5. Completing any stopping sessions.
    */
   async endCurrentCycle(cycleNumber: number) {
     const startTime = performance.now();
@@ -142,7 +162,7 @@ export class DrillingCycleService {
 
     // ✅ Step 2: Select extractor
     const extractorData = await this.drillService.selectExtractor();
-    let extractorId: Types.ObjectId | null = null;
+    let finalExtractorOperatorId: Types.ObjectId | null = null;
 
     if (extractorData) {
       const extractorOperatorId = extractorData.drillOperatorId;
@@ -182,7 +202,7 @@ export class DrillingCycleService {
 
         // ✅ Ensure operator meets minimum equity threshold
         if (currentEquity >= minThreshold) {
-          extractorId = extractorData.drillId; // ✅ Extractor is valid
+          finalExtractorOperatorId = extractorData.drillId; // ✅ Extractor is valid, add the extractor operator.
         } else {
           this.logger.warn(
             `(endCurrentCycle) Extractor operator ${extractorOperatorId} has dropped below the asset equity threshold. Skipping extractor for this cycle.`,
@@ -195,16 +215,16 @@ export class DrillingCycleService {
       );
     }
 
-    // ✅ Step 3: Distribute rewards (extractorId could be null)
-    await this.distributeCycleRewards(extractorId, issuedHASH);
+    // ✅ Step 3: Distribute rewards to extractor operator and active operators (extractorOperatorId could be null)
+    await this.distributeCycleRewards(finalExtractorOperatorId, issuedHASH);
 
     // ✅ Step 4: Process Fuel for ALL Operators
-    await this.processFuelForAllOperators();
+    await this.processFuelForAllOperators(cycleNumber);
 
     // ✅ Step 5: Update the cycle with extractor ID (can be null)
     await this.drillingCycleModel.updateOne(
       { cycleNumber },
-      { extractorId: extractorId || null }, // ✅ Store null if no extractor is chosen
+      { extractorId: extractorData.drillId || null }, // ✅ Store null if no extractor is chosen
     );
 
     const endTime = performance.now();
@@ -414,7 +434,17 @@ export class DrillingCycleService {
     // Measure execution time
     const start = performance.now();
 
-    // ✅ Bulk update `earnedHASH` in active drilling sessions
+    // Process rewards in batches
+    const batchPromises = [];
+
+    for (const { operatorId, amount } of rewardData) {
+      // Update Redis session
+      batchPromises.push(
+        this.drillingSessionService.updateSessionEarnedHash(operatorId, amount),
+      );
+    }
+
+    // Also update MongoDB for historical records
     await this.drillingSessionModel.bulkWrite(
       rewardData.map(({ operatorId, amount }) => ({
         updateOne: {
@@ -423,6 +453,9 @@ export class DrillingCycleService {
         },
       })),
     );
+
+    // Wait for all Redis updates to complete
+    await Promise.all(batchPromises);
 
     const end = performance.now();
 
@@ -525,7 +558,7 @@ export class DrillingCycleService {
    * Depletes fuel for active operators (i.e. operators that have an active drilling session)
    * and replenishes fuel for inactive operators (i.e. operators that do not have an active drilling session).
    */
-  async processFuelForAllOperators() {
+  async processFuelForAllOperators(currentCycleNumber: number) {
     const startTime = performance.now(); // ⏳ Start timing
 
     const activeOperatorIds =
@@ -556,6 +589,7 @@ export class DrillingCycleService {
     // ✅ Step 2: Stop drilling sessions for those operators
     await this.drillingSessionService.stopDrillingForDepletedOperators(
       depletedOperatorIds,
+      currentCycleNumber,
     );
 
     // ✅ Step 3: Broadcast stop drilling event to depleted operators
@@ -576,3 +610,4 @@ export class DrillingCycleService {
     );
   }
 }
+

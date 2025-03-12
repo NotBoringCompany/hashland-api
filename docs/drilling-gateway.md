@@ -3,10 +3,28 @@
 ## Overview
 The Drilling Gateway provides real-time WebSocket communication for the drilling functionality in the Hashland API. It handles operator connections, drilling sessions, and broadcasts real-time updates to connected clients.
 
+## Session Lifecycle
+Drilling sessions follow a specific lifecycle:
+
+1. **WAITING**: When a session is first created, it enters a waiting state until the next drilling cycle begins
+2. **ACTIVE**: When a new drilling cycle begins, all waiting sessions are activated
+3. **STOPPING**: When a user requests to stop drilling, the session enters a stopping state until the current cycle ends
+4. **COMPLETED**: At the end of a cycle, all stopping sessions are completed and removed from Redis
+
 ## Authentication
 The gateway uses JWT authentication. Clients must include a valid JWT token in the authorization header when connecting.
 
 ## Available Events
+
+### Client-to-Server Events
+1. **start-drilling**: Request to start a new drilling session
+   - No parameters required
+
+2. **stop-drilling**: Request to stop an active drilling session
+   - No parameters required
+
+3. **get-drilling-status**: Request the current status of the operator's drilling session
+   - No parameters required
 
 ### Server-to-Client Events
 1. **online-operator-update**: Broadcasts when operators connect/disconnect
@@ -15,133 +33,115 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
 
 2. **drilling-started**: Sent when drilling starts successfully
    - `message`: Success message
+   - `status`: Session status (WAITING)
 
-3. **drilling-stopped**: Sent when drilling stops
+3. **drilling-info**: Sent with additional information about the drilling session
+   - `message`: Informational message
+
+4. **drilling-activated**: Sent when a session is activated at the start of a new cycle
+   - `message`: Success message
+   - `status`: Session status (ACTIVE)
+   - `cycleNumber`: The cycle number when the session was activated
+
+5. **drilling-stopping**: Sent when a stop request is initiated
    - `message`: Status message
-   - `reason`: Optional reason (e.g., `fuel_depleted`)
+   - `status`: Session status (STOPPING)
 
-4. **drilling-error**: Sent when an error occurs
-   - `message`: Error details
+6. **drilling-completed**: Sent when a session is completed at the end of a cycle
+   - `message`: Success message
+   - `status`: Session status (COMPLETED)
+   - `cycleNumber`: The cycle number when the session was completed
+   - `earnedHASH`: Amount of HASH earned during the session
 
-### Client-to-Server Events
-1. **start-drilling**: Start a drilling session
-2. **stop-drilling**: Stop a drilling session
+7. **drilling-stopped**: Sent when a session is force-stopped (e.g., due to fuel depletion)
+   - `message`: Status message
+   - `reason`: Reason for stopping (e.g., 'fuel_depleted')
+   - `status`: Session status (COMPLETED)
 
-## Implementation in React
+8. **drilling-status**: Sent in response to a get-drilling-status request
+   - `status`: Current session status (WAITING, ACTIVE, STOPPING, or 'inactive')
+   - `startTime`: When the session started (ISO date string)
+   - `earnedHASH`: Current amount of HASH earned
+   - `cycleStarted`: Cycle number when the session was activated
+   - `cycleEnded`: Cycle number when the session was stopped (if stopping)
+   - `currentCycleNumber`: The current cycle number
+   - `message`: Only present if status is 'inactive'
 
-```jsx
-import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
+9. **drilling-error**: Sent when an error occurs
+   - `message`: Error message
 
-const useDrillingSocket = (token) => {
-  const [socket, setSocket] = useState(null);
-  const [connected, setConnected] = useState(false);
-  const [isDrilling, setIsDrilling] = useState(false);
-  const [stats, setStats] = useState({
-    onlineOperators: 0,
-    activeDrillingOperators: 0
-  });
-  const [error, setError] = useState(null);
+## Usage Example
 
-  useEffect(() => {
-    if (!token) return;
+```javascript
+// Connect to the WebSocket server with authentication
+const socket = io('https://api.hashland.com', {
+  extraHeaders: {
+    Authorization: `Bearer ${jwtToken}`
+  }
+});
 
-    // Initialize socket with JWT auth
-    const newSocket = io(process.env.REACT_APP_API_URL, {
-      extraHeaders: {
-        Authorization: `Bearer ${token}`
-      }
-    });
+// Connection events
+socket.on('connect', () => console.log('Connected to WebSocket server'));
+socket.on('disconnect', () => console.log('Disconnected from WebSocket server'));
 
-    // Connection events
-    newSocket.on('connect', () => setConnected(true));
-    newSocket.on('disconnect', () => {
-      setConnected(false);
-      setIsDrilling(false);
-    });
+// Request current drilling status
+socket.emit('get-drilling-status');
 
-    // Drilling events
-    newSocket.on('drilling-started', () => setIsDrilling(true));
-    newSocket.on('drilling-stopped', () => setIsDrilling(false));
-    newSocket.on('drilling-error', (data) => setError(data.message));
+// Listen for drilling status response
+socket.on('drilling-status', (data) => {
+  console.log('Current drilling status:', data.status);
+  if (data.status !== 'inactive') {
+    console.log('Earned HASH:', data.earnedHASH);
+    console.log('Current cycle:', data.currentCycleNumber);
+  }
+});
 
-    // Stats updates
-    newSocket.on('online-operator-update', (data) => setStats({
-      onlineOperators: data.onlineOperatorCount,
-      activeDrillingOperators: data.activeDrillingOperatorCount
-    }));
+// Start drilling
+socket.emit('start-drilling');
 
-    setSocket(newSocket);
+// Listen for drilling events
+socket.on('drilling-started', (data) => console.log('Drilling started:', data));
+socket.on('drilling-activated', (data) => console.log('Drilling activated:', data));
+socket.on('drilling-stopping', (data) => console.log('Drilling stopping:', data));
+socket.on('drilling-completed', (data) => console.log('Drilling completed:', data));
+socket.on('drilling-stopped', (data) => console.log('Drilling stopped:', data));
+socket.on('drilling-error', (data) => console.error('Drilling error:', data.message));
 
-    return () => {
-      newSocket.disconnect();
-    };
-  }, [token]);
-
-  // Control functions
-  const startDrilling = () => {
-    if (socket && connected) {
-      socket.emit('start-drilling');
-    }
-  };
-
-  const stopDrilling = () => {
-    if (socket && connected) {
-      socket.emit('stop-drilling');
-    }
-  };
-
-  return {
-    connected,
-    isDrilling,
-    stats,
-    error,
-    startDrilling,
-    stopDrilling
-  };
-};
-
-// Usage example
-const DrillingComponent = ({ token }) => {
-  const { 
-    connected, 
-    isDrilling, 
-    stats, 
-    error, 
-    startDrilling, 
-    stopDrilling 
-  } = useDrillingSocket(token);
-
-  return (
-    <div>
-      <div>Connection status: {connected ? 'Connected' : 'Disconnected'}</div>
-      <div>Drilling status: {isDrilling ? 'Drilling' : 'Not drilling'}</div>
-      <div>Online operators: {stats.onlineOperators}</div>
-      <div>Active drilling: {stats.activeDrillingOperators}</div>
-      {error && <div className="error">Error: {error}</div>}
-      
-      <button 
-        onClick={startDrilling} 
-        disabled={!connected || isDrilling}>
-        Start Drilling
-      </button>
-      
-      <button 
-        onClick={stopDrilling} 
-        disabled={!connected || !isDrilling}>
-        Stop Drilling
-      </button>
-    </div>
-  );
-};
+// Stop drilling
+socket.emit('stop-drilling');
 ```
 
 ## Key Features
 - JWT authentication for secure connections
 - Automatic session termination on disconnection
 - Fuel monitoring with automatic drilling stoppage
-- Redis persistence for operator status across server restarts
+- Redis persistence for operator status and session data
 - Real-time stats broadcasting
+- Cycle-based session activation and completion
+
+## Redis Storage
+The gateway uses Redis to persist operator status and session data:
+- `drilling:onlineOperators`: Stores the list of online operators
+- `drilling:activeDrillingOperators`: Stores the mapping of actively drilling operators to their socket IDs
+- `drilling:activeSessionsCount`: Counts active drilling sessions
+- `drilling:waitingSessionsCount`: Counts waiting drilling sessions
+- `drilling:stoppingSessionsCount`: Counts stopping drilling sessions
+- `drilling:session:{operatorId}`: Stores the session data for each operator
+
+## Session Data Structure
+Each drilling session in Redis contains:
+- `operatorId`: The ID of the operator
+- `startTime`: When the session started
+- `endTime`: When the session ended (null if active)
+- `earnedHASH`: Amount of HASH earned during the session
+- `status`: Current status (WAITING, ACTIVE, STOPPING, COMPLETED)
+- `cycleStarted`: The cycle number when the session became active
+- `cycleEnded`: The cycle number when the session was marked for stopping
+
+## Cycle Integration
+- Sessions are activated in batch at the start of each cycle
+- Sessions are completed in batch at the end of each cycle
+- HASH rewards are distributed only to active sessions
 
 ## Error Handling
 The gateway handles various error scenarios including:
@@ -152,17 +152,10 @@ The gateway handles various error scenarios including:
 
 All errors are logged server-side and relevant errors are sent to clients via the `drilling-error` event.
 
-## Technical Implementation Details
-
-### Redis Storage
-The gateway uses Redis to persist operator status:
-- `drilling:onlineOperators`: Stores the list of online operators
-- `drilling:activeDrillingOperators`: Stores the mapping of actively drilling operators to their socket IDs
-
-### Automatic Fuel Monitoring
+## Automatic Fuel Monitoring
 The system automatically stops drilling when an operator's fuel drops below the threshold defined in `GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits`.
 
-### Disconnection Handling
+## Disconnection Handling
 When an operator disconnects, the system:
 1. Automatically ends any active drilling session
 2. Updates Redis to reflect the operator's offline status
