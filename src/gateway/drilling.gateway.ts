@@ -15,6 +15,16 @@ import { OperatorService } from 'src/operators/operator.service';
 import { Types } from 'mongoose';
 import { RedisService } from 'src/common/redis.service';
 import { JwtService } from '@nestjs/jwt';
+import {
+  DrillingStartedResponse,
+  DrillingInfoResponse,
+  DrillingStoppingResponse,
+  DrillingStoppedResponse,
+  DrillingErrorResponse,
+  DrillingStatusResponse,
+  OnlineOperatorUpdateResponse,
+  BroadcastStopDrillingPayload,
+} from './drilling.gateway.types';
 
 /**
  * WebSocket Gateway for handling real-time drilling updates.
@@ -242,7 +252,7 @@ export class DrillingGateway
     this.server.emit('online-operator-update', {
       onlineOperatorCount: this.getOnlineOperatorCount(),
       activeDrillingOperatorCount: this.getActiveDrillingOperatorCount(),
-    });
+    } as OnlineOperatorUpdateResponse);
   }
 
   /**
@@ -259,7 +269,7 @@ export class DrillingGateway
       if (!operatorId) {
         client.emit('drilling-error', {
           message: 'Authentication required',
-        });
+        } as DrillingErrorResponse);
         return;
       }
 
@@ -271,7 +281,7 @@ export class DrillingGateway
       if (!hasEnoughFuel) {
         client.emit('drilling-error', {
           message: 'Not enough fuel to start drilling',
-        });
+        } as DrillingErrorResponse);
         return;
       }
 
@@ -287,7 +297,7 @@ export class DrillingGateway
         client.emit('drilling-started', {
           message: 'Drilling session started successfully',
           status: DrillingSessionStatus.WAITING,
-        });
+        } as DrillingStartedResponse);
 
         // Broadcast updated counts
         this.broadcastOnlineOperators();
@@ -300,17 +310,17 @@ export class DrillingGateway
         client.emit('drilling-info', {
           message:
             'Your drilling session will be activated at the start of the next cycle',
-        });
+        } as DrillingInfoResponse);
       } else {
         client.emit('drilling-error', {
           message: response.message,
-        });
+        } as DrillingErrorResponse);
       }
     } catch (error) {
       this.logger.error(`Error starting drilling: ${error.message}`);
       client.emit('drilling-error', {
         message: `Failed to start drilling: ${error.message}`,
-      });
+      } as DrillingErrorResponse);
     }
   }
 
@@ -328,7 +338,7 @@ export class DrillingGateway
       if (!operatorId) {
         client.emit('drilling-error', {
           message: 'Authentication required',
-        });
+        } as DrillingErrorResponse);
         return;
       }
 
@@ -355,20 +365,20 @@ export class DrillingGateway
           cycleStarted: session.cycleStarted,
           cycleEnded: session.cycleEnded,
           currentCycleNumber,
-        });
+        } as DrillingStatusResponse);
 
         this.logger.log(`📊 Sent drilling status to operator ${operatorId}`);
       } else {
         client.emit('drilling-status', {
           status: 'inactive',
           message: 'No active drilling session found',
-        });
+        } as DrillingStatusResponse);
       }
     } catch (error) {
       this.logger.error(`Error getting drilling status: ${error.message}`);
       client.emit('drilling-error', {
         message: `Failed to get drilling status: ${error.message}`,
-      });
+      } as DrillingErrorResponse);
     }
   }
 
@@ -386,7 +396,7 @@ export class DrillingGateway
       if (!operatorId) {
         client.emit('drilling-error', {
           message: 'Authentication required',
-        });
+        } as DrillingErrorResponse);
         return;
       }
 
@@ -415,7 +425,7 @@ export class DrillingGateway
           message:
             'Drilling session stopping initiated. Will complete at end of cycle.',
           status: DrillingSessionStatus.STOPPING,
-        });
+        } as DrillingStoppingResponse);
 
         // Broadcast updated counts
         this.broadcastOnlineOperators();
@@ -426,13 +436,13 @@ export class DrillingGateway
       } else {
         client.emit('drilling-error', {
           message: response.message,
-        });
+        } as DrillingErrorResponse);
       }
     } catch (error) {
       this.logger.error(`Error stopping drilling: ${error.message}`);
       client.emit('drilling-error', {
         message: `Failed to stop drilling: ${error.message}`,
-      });
+      } as DrillingErrorResponse);
     }
   }
 
@@ -472,7 +482,7 @@ export class DrillingGateway
             message: 'Drilling stopped due to insufficient fuel',
             reason: 'fuel_depleted',
             status: DrillingSessionStatus.COMPLETED,
-          });
+          } as DrillingStoppedResponse);
         }
 
         // Broadcast updated counts
@@ -497,7 +507,7 @@ export class DrillingGateway
    */
   async broadcastStopDrilling(
     operatorIds: Types.ObjectId[],
-    payload: { message: string; reason: string },
+    payload: BroadcastStopDrillingPayload,
   ) {
     // Get current cycle number
     const cycleNumberStr = await this.redisService.get(
@@ -528,7 +538,7 @@ export class DrillingGateway
               ...payload,
               operatorId: operatorIdStr,
               status: DrillingSessionStatus.COMPLETED,
-            });
+            } as DrillingStoppedResponse);
           }
 
           this.logger.log(

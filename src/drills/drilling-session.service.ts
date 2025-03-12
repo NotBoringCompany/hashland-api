@@ -5,6 +5,7 @@ import { Model, Types } from 'mongoose';
 import { RedisService } from 'src/common/redis.service';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from 'src/operators/operator.service';
+import { RedisDrillingSession } from 'src/gateway/drilling.gateway.types';
 
 // Define session status enum
 export enum DrillingSessionStatus {
@@ -12,17 +13,6 @@ export enum DrillingSessionStatus {
   ACTIVE = 'active',
   STOPPING = 'stopping',
   COMPLETED = 'completed',
-}
-
-// Define Redis drilling session interface
-export interface RedisDrillingSession {
-  operatorId: string;
-  startTime: string; // ISO date string
-  endTime: string | null; // ISO date string or null
-  earnedHASH: number;
-  status: DrillingSessionStatus;
-  cycleStarted: number | null; // Cycle number when session became active
-  cycleEnded: number | null; // Cycle number when session was stopped
 }
 
 @Injectable()
