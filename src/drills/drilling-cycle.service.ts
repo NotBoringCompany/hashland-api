@@ -211,7 +211,7 @@ export class DrillingCycleService {
       }
     } else {
       this.logger.warn(
-        `(endCurrentCycle) No valid extractor drill found. Skipping reward distribution.`,
+        `(endCurrentCycle) No valid extractor drill found. Skipping extractor distribution.`,
       );
     }
 
@@ -224,7 +224,7 @@ export class DrillingCycleService {
     // ✅ Step 5: Update the cycle with extractor ID (can be null)
     await this.drillingCycleModel.updateOne(
       { cycleNumber },
-      { extractorId: extractorData.drillId || null }, // ✅ Store null if no extractor is chosen
+      { extractorId: extractorData?.drillId || null }, // ✅ Store null if no extractor is chosen
     );
 
     const endTime = performance.now();
