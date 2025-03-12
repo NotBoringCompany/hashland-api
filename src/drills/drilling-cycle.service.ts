@@ -564,55 +564,71 @@ export class DrillingCycleService {
    * Depletes fuel for active operators (i.e. operators that have an active drilling session)
    * and replenishes fuel for inactive operators (i.e. operators that do not have an active drilling session).
    */
-  async processFuelForAllOperators(currentCycleNumber: number) {
-    const startTime = performance.now(); // ⏳ Start timing
+  async processFuelForAllOperators(currentCycleNumber: number): Promise<void> {
+    const startTime = performance.now();
 
-    const activeOperatorIds =
-      await this.drillingSessionService.fetchActiveOperatorIds();
+    try {
+      // Fetch active operator IDs
+      const activeOperatorIds =
+        await this.drillingSessionService.fetchActiveOperatorIds();
 
-    // Generate a random depletion/replenishment value
-    const fuelUsed = this.operatorService.getRandomFuelValue(
-      GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.minUnits,
-      GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
-    );
+      // Generate random fuel values based on game constants
+      const fuelUsed = this.operatorService.getRandomFuelValue(
+        GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.minUnits,
+        GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
+      );
 
-    const fuelGained = this.operatorService.getRandomFuelValue(
-      GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.minUnits,
-      GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.maxUnits,
-    );
+      const fuelGained = this.operatorService.getRandomFuelValue(
+        GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.minUnits,
+        GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.maxUnits,
+      );
 
-    // 🛠 Bulk update ACTIVE operators (deplete fuel)
-    await this.operatorService.depleteFuel(activeOperatorIds, fuelUsed);
+      // Process fuel updates in parallel
+      const [, , depletedOperatorIds] = await Promise.all([
+        // Deplete fuel for active operators
+        this.operatorService.depleteFuel(activeOperatorIds, fuelUsed),
 
-    // 🛠 Bulk update INACTIVE operators (replenish fuel)
-    await this.operatorService.replenishFuel(activeOperatorIds, fuelGained);
+        // Replenish fuel for inactive operators
+        this.operatorService.replenishFuel(activeOperatorIds, fuelGained),
 
-    // **🔴 NEW: Stop drilling sessions for operators who drop below threshold**
-    // ✅ Step 1: Find all operators whose fuel dropped below threshold
-    const depletedOperatorIds =
-      await this.operatorService.fetchDepletedOperatorIds(activeOperatorIds);
+        // Find operators whose fuel dropped below threshold
+        this.operatorService.fetchDepletedOperatorIds(activeOperatorIds),
+      ]);
 
-    // ✅ Step 2: Stop drilling sessions for those operators
-    await this.drillingSessionService.stopDrillingForDepletedOperators(
-      depletedOperatorIds,
-      currentCycleNumber,
-    );
+      // Handle depleted operators
+      if (depletedOperatorIds.length > 0) {
+        await Promise.all([
+          // Stop drilling sessions for depleted operators
+          this.drillingSessionService.stopDrillingForDepletedOperators(
+            depletedOperatorIds,
+            currentCycleNumber,
+          ),
 
-    // ✅ Step 3: Broadcast stop drilling event to depleted operators
-    this.drillingGateway.broadcastStopDrilling(depletedOperatorIds, {
-      message: 'Drilling stopped due to insufficient fuel',
-      reason: 'fuel_depleted',
-    });
+          // Broadcast stop drilling event to depleted operators
+          this.drillingGateway.broadcastStopDrilling(depletedOperatorIds, {
+            message: 'Drilling stopped due to insufficient fuel',
+            reason: 'fuel_depleted',
+          }),
+        ]);
+      }
 
-    const endTime = performance.now(); // ⏳ End timing
-    const executionTime = (endTime - startTime).toFixed(2);
+      const endTime = performance.now();
+      const executionTime = (endTime - startTime).toFixed(2);
 
-    this.logger.log(
-      `⚡ Fuel Processing Completed:
-     ⛏ Depleted ${fuelUsed} fuel for ${activeOperatorIds.size} active operators.
-     🔋 Replenished ${fuelGained} fuel for inactive operators.
-     🛑 Stopped drilling sessions for operators who dropped below fuel threshold.
-     ⏱ Execution Time: ${executionTime}ms`,
-    );
+      this.logger.log(
+        `⚡ Fuel Processing Completed:
+         ⛏ Depleted ${fuelUsed} fuel for ${activeOperatorIds.size} active operators.
+         🔋 Replenished ${fuelGained} fuel for inactive operators.
+         🛑 Stopped drilling for ${depletedOperatorIds.length} operators below fuel threshold.
+         ⏱ Execution Time: ${executionTime}ms`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Error processing fuel: ${error.message}`,
+        error.stack,
+      );
+      // Consider implementing a retry mechanism or fallback strategy
+      // Optionally, rethrow the error if it should be handled by the caller
+    }
   }
 }
