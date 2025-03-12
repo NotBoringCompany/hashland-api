@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: hashland-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=8080
+      - MONGO_URI=mongodb://mongo:27017/main
+      - REDIS_URI=redis://redis:6379
+      - DATABASE_NAME=main
+      - JWT_SECRET=your_jwt_secret_here
+      - JWT_EXPIRATION=24h
+      - TON_API_ENDPOINT=https://toncenter.com/api/v2/jsonRPC
+    depends_on:
+      - mongo
+      - redis
+    command: npm run start:dev
+
+  mongo:
+    image: mongo:latest
+    container_name: hashland-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=main
+
+  redis:
+    image: redis:alpine
+    container_name: hashland-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  mongo-data:
+  redis-data: 
