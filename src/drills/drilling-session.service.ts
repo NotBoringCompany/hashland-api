@@ -52,7 +52,18 @@ export class DrillingSessionService {
       const sessionKey = this.getSessionKey(operatorIdStr);
 
       // ✅ Ensure latest asset equity is fetched **before starting**
-      await this.operatorService.updateAssetEquityForOperator(operatorId);
+      await this.operatorService
+        .updateAssetEquityForOperator(operatorId)
+        .catch((err) => {
+          this.logger.error(
+            `❌ (startDrillingSession) Error updating asset equity for operator ${operatorId}: ${err.message}`,
+          );
+
+          return new ApiResponse<null>(
+            500,
+            `(startDrillingSession) Error updating asset equity for operator ${operatorId}: ${err.message}. Please try again.`,
+          );
+        });
 
       // Check if operator already has an active session in Redis
       const existingSession = await this.redisService.get(sessionKey);
