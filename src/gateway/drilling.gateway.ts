@@ -7,7 +7,10 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, OnModuleInit } from '@nestjs/common';
-import { DrillingSessionService } from 'src/drills/drilling-session.service';
+import {
+  DrillingSessionService,
+  DrillingSessionStatus,
+} from 'src/drills/drilling-session.service';
 import { OperatorService } from 'src/operators/operator.service';
 import { Types } from 'mongoose';
 import { RedisService } from 'src/common/redis.service';
@@ -222,6 +225,16 @@ export class DrillingGateway
   }
 
   /**
+   * Gets the socket ID for a specific operator.
+   *
+   * @param operatorId The operator ID to look up
+   * @returns The socket ID if found, undefined otherwise
+   */
+  getSocketIdForOperator(operatorId: string): string | undefined {
+    return this.activeDrillingOperators.get(operatorId);
+  }
+
+  /**
    * Emits the updated online operator count to all connected clients.
    * - Helps frontend display real-time active user count.
    */
@@ -273,12 +286,21 @@ export class DrillingGateway
 
         client.emit('drilling-started', {
           message: 'Drilling session started successfully',
+          status: DrillingSessionStatus.WAITING,
         });
 
         // Broadcast updated counts
         this.broadcastOnlineOperators();
 
-        this.logger.log(`🔄 Operator ${operatorId} started drilling`);
+        this.logger.log(
+          `🔄 Operator ${operatorId} started drilling in waiting status`,
+        );
+
+        // Inform the client that the session will be activated on the next cycle
+        client.emit('drilling-info', {
+          message:
+            'Your drilling session will be activated at the start of the next cycle',
+        });
       } else {
         client.emit('drilling-error', {
           message: response.message,
@@ -313,23 +335,36 @@ export class DrillingGateway
       // Convert string ID to MongoDB ObjectId
       const objectId = new Types.ObjectId(operatorId);
 
-      // End drilling session
+      // Get current cycle number
+      const cycleNumberStr = await this.redisService.get(
+        'drilling-cycle:current',
+      );
+      const cycleNumber = cycleNumberStr ? parseInt(cycleNumberStr, 10) : 0;
+
+      // Initiate stopping the drilling session
       const response =
-        await this.drillingSessionService.endDrillingSession(objectId);
+        await this.drillingSessionService.initiateStopDrillingSession(
+          objectId,
+          cycleNumber,
+        );
 
       if (response.status === 200) {
         // Remove from active drilling operators
         this.activeDrillingOperators.delete(operatorId);
         await this.saveActiveDrillingOperatorsToRedis();
 
-        client.emit('drilling-stopped', {
-          message: 'Drilling session stopped successfully',
+        client.emit('drilling-stopping', {
+          message:
+            'Drilling session stopping initiated. Will complete at end of cycle.',
+          status: DrillingSessionStatus.STOPPING,
         });
 
         // Broadcast updated counts
         this.broadcastOnlineOperators();
 
-        this.logger.log(`🛑 Operator ${operatorId} stopped drilling`);
+        this.logger.log(
+          `🛑 Operator ${operatorId} initiated stopping drilling`,
+        );
       } else {
         client.emit('drilling-error', {
           message: response.message,
@@ -357,8 +392,17 @@ export class DrillingGateway
       const socketId = this.activeDrillingOperators.get(operatorIdStr);
 
       try {
-        // End the drilling session
-        await this.drillingSessionService.endDrillingSession(operatorId);
+        // Get current cycle number
+        const cycleNumberStr = await this.redisService.get(
+          'drilling-cycle:current',
+        );
+        const cycleNumber = cycleNumberStr ? parseInt(cycleNumberStr, 10) : 0;
+
+        // Force end the drilling session
+        await this.drillingSessionService.forceEndDrillingSession(
+          operatorId,
+          cycleNumber,
+        );
 
         // Remove from active drilling operators
         this.activeDrillingOperators.delete(operatorIdStr);
@@ -369,6 +413,7 @@ export class DrillingGateway
           this.server.to(socketId).emit('drilling-stopped', {
             message: 'Drilling stopped due to insufficient fuel',
             reason: 'fuel_depleted',
+            status: DrillingSessionStatus.COMPLETED,
           });
         }
 
@@ -396,6 +441,12 @@ export class DrillingGateway
     operatorIds: Types.ObjectId[],
     payload: { message: string; reason: string },
   ) {
+    // Get current cycle number
+    const cycleNumberStr = await this.redisService.get(
+      'drilling-cycle:current',
+    );
+    const cycleNumber = cycleNumberStr ? parseInt(cycleNumberStr, 10) : 0;
+
     for (const operatorId of operatorIds) {
       const operatorIdStr = operatorId.toString();
 
@@ -404,8 +455,11 @@ export class DrillingGateway
         const socketId = this.activeDrillingOperators.get(operatorIdStr);
 
         try {
-          // End the drilling session
-          await this.drillingSessionService.endDrillingSession(operatorId);
+          // Force end the drilling session
+          await this.drillingSessionService.forceEndDrillingSession(
+            operatorId,
+            cycleNumber,
+          );
 
           // Remove from active drilling operators
           this.activeDrillingOperators.delete(operatorIdStr);
@@ -415,6 +469,7 @@ export class DrillingGateway
             this.server.to(socketId).emit('drilling-stopped', {
               ...payload,
               operatorId: operatorIdStr,
+              status: DrillingSessionStatus.COMPLETED,
             });
           }
 
