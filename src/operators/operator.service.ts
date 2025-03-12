@@ -215,8 +215,11 @@ export class OperatorService {
    * @param id - The operator's ID
    * @returns The operator document or null if not found
    */
-  async findById(id: string): Promise<Operator | null> {
-    const operator = await this.operatorModel.findById(new Types.ObjectId(id));
+  async findById(
+    id: Types.ObjectId,
+    projection?: Record<string, number>,
+  ): Promise<Operator | null> {
+    const operator = await this.operatorModel.findById(id, projection).lean();
     if (!operator) {
       throw new NotFoundException('Operator not found');
     }
@@ -229,11 +232,17 @@ export class OperatorService {
    * @param id - The operator's ID
    * @returns The operator document or null if not found
    */
-  async findByTelegramId(id: string): Promise<Operator | null> {
+  async findByTelegramId(
+    id: Types.ObjectId,
+    projection?: Record<string, number>,
+  ): Promise<Operator | null> {
     const operator = await this.operatorModel
-      .findOne({
-        'tgProfile.tgId': id,
-      })
+      .findOne(
+        {
+          'tgProfile.tgId': id,
+        },
+        projection,
+      )
       .lean();
 
     if (!operator) {

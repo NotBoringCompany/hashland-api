@@ -179,4 +179,18 @@ export const GAME_CONSTANTS = {
      */
     MAX_LUCK_MULTIPLIER: 1.1,
   },
+
+  /**
+   * Extractor constants.
+   */
+  EXTRACTOR: {
+    /**
+     * The minimum asset equity threshold required for an extractor to be valid.
+     *
+     * For instance, if the operator's asset equity is $1000 and the minimum threshold is 0.8,
+     * the operator must have AT LEAST $800 in asset equity upon checking for extractor validity.
+     * If not, the operator will not be considered as a valid extractor and the cycle will not have an extractor.
+     */
+    OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD: 0.8,
+  },
 };

@@ -20,6 +20,8 @@ import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
 import { DrillingSession } from './schemas/drilling-session.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { DrillingGateway } from 'src/gateway/drilling.gateway';
+import { OperatorWalletService } from 'src/operators/operator-wallet.service';
+import { AllowedChain } from 'src/common/enums/chain.enum';
 @Injectable()
 export class DrillingCycleService {
   private readonly logger = new Logger(DrillingCycleService.name);
@@ -36,6 +38,7 @@ export class DrillingCycleService {
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private poolModel: Model<Pool>,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    private readonly operatorWalletService: OperatorWalletService,
     private readonly redisService: RedisService,
     private readonly drillingSessionService: DrillingSessionService,
     private readonly drillService: DrillService,
@@ -131,33 +134,78 @@ export class DrillingCycleService {
     const startTime = performance.now();
     this.logger.log(`⏳ (endCurrentCycle) Ending cycle #${cycleNumber}...`);
 
-    // Fetch issued HASH from Redis
+    // ✅ Step 1: Fetch issued HASH from Redis
     const issuedHASHStr = await this.redisService.get(
       `drilling-cycle:${cycleNumber}:issuedHASH`,
     );
     const issuedHASH = issuedHASHStr ? parseFloat(issuedHASHStr) : 0; // Ensure it's a number
 
-    // ✅ Step 1: Select extractor
+    // ✅ Step 2: Select extractor
     const extractorData = await this.drillService.selectExtractor();
-    if (!extractorData) {
+    let extractorId: Types.ObjectId | null = null;
+
+    if (extractorData) {
+      const extractorOperatorId = extractorData.drillOperatorId;
+
+      // ✅ Step 2B: Fetch operator's stored asset equity **and their wallets** in a single query
+      const [extractorOperator, extractorOperatorWallets] = await Promise.all([
+        this.operatorService.findById(extractorOperatorId, {
+          assetEquity: 1,
+        }),
+        this.operatorWalletService.getOperatorWallets(extractorOperatorId, {
+          address: 1,
+          chain: 1,
+        }),
+      ]);
+
+      if (!extractorOperator) {
+        this.logger.warn(
+          `(endCurrentCycle) Extractor operator ${extractorOperatorId} not found. Skipping extractor.`,
+        );
+      } else {
+        const storedAssetEquity = extractorOperator.assetEquity;
+        const minThreshold =
+          GAME_CONSTANTS.EXTRACTOR.OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD *
+          storedAssetEquity;
+
+        // ✅ Fetch real-time asset equity **only if operator has wallets**
+        let currentEquity = 0;
+        if (extractorOperatorWallets.length > 0) {
+          currentEquity =
+            await this.operatorWalletService.fetchTotalBalanceForWallets(
+              extractorOperatorWallets.map((wallet) => ({
+                address: wallet.address,
+                chain: wallet.chain as AllowedChain,
+              })),
+            );
+        }
+
+        // ✅ Ensure operator meets minimum equity threshold
+        if (currentEquity >= minThreshold) {
+          extractorId = extractorData.drillId; // ✅ Extractor is valid
+        } else {
+          this.logger.warn(
+            `(endCurrentCycle) Extractor operator ${extractorOperatorId} has dropped below the asset equity threshold. Skipping extractor for this cycle.`,
+          );
+        }
+      }
+    } else {
       this.logger.warn(
         `(endCurrentCycle) No valid extractor drill found. Skipping reward distribution.`,
       );
-    } else {
-      // ✅ Step 2: Distribute rewards
-      await this.distributeCycleRewards(extractorData.drillId, issuedHASH);
     }
 
-    // ✅ Step 3: Process Fuel for ALL Operators
+    // ✅ Step 3: Distribute rewards (extractorId could be null)
+    await this.distributeCycleRewards(extractorId, issuedHASH);
+
+    // ✅ Step 4: Process Fuel for ALL Operators
     await this.processFuelForAllOperators();
 
-    // ✅ Step 4: Update the cycle with extractor ID
-    if (extractorData) {
-      await this.drillingCycleModel.updateOne(
-        { cycleNumber },
-        { extractorId: extractorData.drillId },
-      );
-    }
+    // ✅ Step 5: Update the cycle with extractor ID (can be null)
+    await this.drillingCycleModel.updateOne(
+      { cycleNumber },
+      { extractorId: extractorId || null }, // ✅ Store null if no extractor is chosen
+    );
 
     const endTime = performance.now();
     this.logger.log(
@@ -169,25 +217,13 @@ export class DrillingCycleService {
    * Distributes $HASH rewards to operators at the end of a drilling cycle.
    */
   async distributeCycleRewards(
-    extractorId: Types.ObjectId,
+    extractorOperatorId: Types.ObjectId | null, // ✅ Extractor operator ID can be null
     issuedHash: number,
   ) {
     const now = performance.now();
+    const rewardData: { operatorId: Types.ObjectId; amount: number }[] = [];
 
-    // ✅ Step 1: Fetch Extractor's Operator ID
-    const extractorDrill = await this.drillModel
-      .findById(extractorId)
-      .select('operatorId')
-      .lean();
-    if (!extractorDrill) {
-      this.logger.error(
-        `(distributeCycleRewards) Extractor drill not found: ${extractorId}`,
-      );
-      return;
-    }
-    const extractorOperatorId = extractorDrill.operatorId;
-
-    // ✅ Step 2: Fetch All Active Operators' IDs
+    // ✅ Step 1: Fetch All Active Operators' IDs
     const allActiveOperatorIds =
       await this.drillingSessionService.fetchActiveDrillingSessionOperatorIds();
     if (allActiveOperatorIds.length === 0) {
@@ -197,14 +233,7 @@ export class DrillingCycleService {
       return;
     }
 
-    // ✅ Step 3: Check If Extractor is in a Pool
-    const poolOperator = await this.poolOperatorModel
-      .findOne({ operatorId: extractorOperatorId })
-      .select('poolId')
-      .lean();
-    const isSoloOperator = !poolOperator;
-
-    // ✅ Step 4: Fetch Active Operators' Data (Cumulative Eff, Eff Multiplier)
+    // ✅ Step 2: Fetch Active Operators' Data (Cumulative Eff, Eff Multiplier)
     const activeOperators = await this.operatorModel
       .find(
         { _id: { $in: allActiveOperatorIds } },
@@ -219,7 +248,7 @@ export class DrillingCycleService {
       return;
     }
 
-    // ✅ Step 5: Apply Luck Factor & Compute Weighted Eff
+    // ✅ Step 3: Apply Luck Factor & Compute Weighted Eff
     const operatorsWithLuck = activeOperators.map((operator) => {
       const luckFactor =
         GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
@@ -234,7 +263,7 @@ export class DrillingCycleService {
       };
     });
 
-    // ✅ Step 6: Compute Total Weighted Eff Sum
+    // ✅ Step 4: Compute Total Weighted Eff Sum
     const totalWeightedEff = operatorsWithLuck.reduce(
       (sum, op) => sum + op.weightedEff,
       0,
@@ -246,102 +275,126 @@ export class DrillingCycleService {
       return;
     }
 
-    // ✅ Step 7: Compute Extractor and Active Operators' Rewards
-    const rewardData: { operatorId: Types.ObjectId; amount: number }[] = [];
-
-    if (isSoloOperator) {
-      // 🟢 SOLO OPERATOR REWARD LOGIC
-      const extractorReward =
-        issuedHash *
-        GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.extractorOperator;
+    if (extractorOperatorId === null) {
+      // 🟡 **No Extractor Selected - Distribute Only Active Operators' Rewards**
       const activeOperatorsReward =
         issuedHash *
         GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.allActiveOperators;
 
-      // ✅ Step 8A: Compute Each Operator’s Reward Share Based on Weighted Eff
+      // ✅ Compute Each Operator’s Reward Share Based on Weighted Eff
+      // This includes the supposed extractor as well even if they didn't get selected due to validation issues.
       const weightedRewards = operatorsWithLuck.map((operator) => ({
         operatorId: operator.operatorId,
         amount:
           (operator.weightedEff / totalWeightedEff) * activeOperatorsReward,
       }));
 
-      // ✅ Step 8B: Store Rewards for Batch Update
-      rewardData.push(
-        { operatorId: extractorOperatorId, amount: extractorReward }, // Extractor Reward
-        ...weightedRewards, // Active Operators' Rewards
-      );
+      rewardData.push(...weightedRewards);
 
-      this.logger.log(
-        `✅ (distributeCycleRewards) SOLO rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH.`,
+      this.logger.warn(
+        `⚠️ (distributeCycleRewards) No extractor selected. Only active operators received rewards.`,
       );
     } else {
-      // 🟢 POOL OPERATOR REWARD LOGIC
-      const pool = await this.poolModel
-        .findById(poolOperator.poolId)
-        .select('leaderId rewardSystem')
+      // ✅ Step 5: Check If Extractor is in a Pool
+      const poolOperator = await this.poolOperatorModel
+        .findOne({ operatorId: extractorOperatorId })
+        .select('poolId')
         .lean();
-      if (!pool) {
-        this.logger.error(
-          `(distributeCycleRewards) Pool not found for extractor operator: ${extractorOperatorId}`,
+      const isSoloOperator = !poolOperator;
+
+      if (isSoloOperator) {
+        // 🟢 **SOLO OPERATOR REWARD LOGIC**
+        const extractorReward =
+          issuedHash *
+          GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.extractorOperator;
+        const activeOperatorsReward =
+          issuedHash *
+          GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.allActiveOperators;
+
+        // ✅ Compute Each Operator’s Reward Share Based on Weighted Eff
+        const weightedRewards = operatorsWithLuck.map((operator) => ({
+          operatorId: operator.operatorId,
+          amount:
+            (operator.weightedEff / totalWeightedEff) * activeOperatorsReward,
+        }));
+
+        rewardData.push(
+          { operatorId: extractorOperatorId, amount: extractorReward }, // Extractor Reward
+          ...weightedRewards, // Active Operators' Rewards
         );
-        return;
-      }
 
-      // ✅ Step 8A: Get Active Pool Operators
-      const activePoolOperators = await this.poolOperatorModel
-        .find(
-          {
-            poolId: poolOperator.poolId,
-            operatorId: { $in: allActiveOperatorIds },
-          },
-          { operatorId: 1 },
-        )
-        .lean();
-
-      const activePoolOperatorIds = new Set(
-        activePoolOperators.map((op) => op.operatorId),
-      );
-
-      // ✅ Step 8B: Compute Rewards Based on Weighted Eff (Only for Active Pool Operators)
-      const weightedPoolOperators = operatorsWithLuck.filter((op) =>
-        activePoolOperatorIds.has(op.operatorId),
-      );
-      const totalPoolEff = weightedPoolOperators.reduce(
-        (sum, op) => sum + op.weightedEff,
-        0,
-      );
-
-      if (totalPoolEff === 0) {
-        this.logger.warn(
-          `⚠️ (distributeCycleRewards) No valid weighted EFF for pool reward distribution.`,
+        this.logger.log(
+          `✅ (distributeCycleRewards) SOLO rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH.`,
         );
-        return;
+      } else {
+        // 🟢 **POOL OPERATOR REWARD LOGIC**
+        const pool = await this.poolModel
+          .findById(poolOperator.poolId)
+          .select('leaderId rewardSystem')
+          .lean();
+        if (!pool) {
+          this.logger.error(
+            `(distributeCycleRewards) Pool not found for extractor operator: ${extractorOperatorId}`,
+          );
+          return;
+        }
+
+        // ✅ Step 6: Get Active Pool Operators
+        const activePoolOperators = await this.poolOperatorModel
+          .find(
+            {
+              poolId: poolOperator.poolId,
+              operatorId: { $in: allActiveOperatorIds },
+            },
+            { operatorId: 1 },
+          )
+          .lean();
+
+        const activePoolOperatorIds = new Set(
+          activePoolOperators.map((op) => op.operatorId),
+        );
+
+        // ✅ Step 7: Compute Rewards Based on Weighted Eff (Only for Active Pool Operators)
+        const weightedPoolOperators = operatorsWithLuck.filter((op) =>
+          activePoolOperatorIds.has(op.operatorId),
+        );
+        const totalPoolEff = weightedPoolOperators.reduce(
+          (sum, op) => sum + op.weightedEff,
+          0,
+        );
+
+        if (totalPoolEff === 0) {
+          this.logger.warn(
+            `⚠️ (distributeCycleRewards) No valid weighted EFF for pool reward distribution.`,
+          );
+          return;
+        }
+
+        const extractorReward =
+          issuedHash * pool.rewardSystem.extractorOperator;
+        const leaderReward = issuedHash * pool.rewardSystem.leader;
+        const activePoolReward =
+          issuedHash * pool.rewardSystem.activePoolOperators;
+
+        // ✅ Compute Weighted Pool Rewards
+        const weightedPoolRewards = weightedPoolOperators.map((operator) => ({
+          operatorId: operator.operatorId,
+          amount: (operator.weightedEff / totalPoolEff) * activePoolReward,
+        }));
+
+        rewardData.push(
+          { operatorId: extractorOperatorId, amount: extractorReward },
+          { operatorId: pool.leaderId, amount: leaderReward },
+          ...weightedPoolRewards,
+        );
+
+        this.logger.log(
+          `✅ (distributeCycleRewards) POOL rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH. Leader received ${leaderReward} $HASH.`,
+        );
       }
-
-      const extractorReward = issuedHash * pool.rewardSystem.extractorOperator;
-      const leaderReward = issuedHash * pool.rewardSystem.leader;
-      const activePoolReward =
-        issuedHash * pool.rewardSystem.activePoolOperators;
-
-      // ✅ Step 8C: Compute Weighted Pool Rewards
-      const weightedPoolRewards = weightedPoolOperators.map((operator) => ({
-        operatorId: operator.operatorId,
-        amount: (operator.weightedEff / totalPoolEff) * activePoolReward,
-      }));
-
-      // ✅ Step 8D: Store Rewards for Batch Update
-      rewardData.push(
-        { operatorId: extractorOperatorId, amount: extractorReward },
-        { operatorId: pool.leaderId, amount: leaderReward },
-        ...weightedPoolRewards,
-      );
-
-      this.logger.log(
-        `✅ (distributeCycleRewards) POOL rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH. Leader received ${leaderReward} $HASH.`,
-      );
     }
 
-    // ✅ Step 9: Batch Issue Rewards
+    // ✅ Step 8: Batch Issue Rewards
     await this.batchIssueHashRewards(rewardData);
 
     const end = performance.now();

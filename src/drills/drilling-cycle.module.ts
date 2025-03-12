@@ -24,6 +24,7 @@ import {
   DrillingSessionSchema,
 } from './schemas/drilling-session.schema';
 import { DrillingCycleQueue } from './drilling-cycle.queue';
+import { OperatorWalletModule } from 'src/operators/operator-wallet.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { DrillingCycleQueue } from './drilling-cycle.queue';
     PoolModule, // Import PoolModule
     RedisModule, // Import RedisModule
     DrillingGatewayModule, // Import DrillingGatewayModule
+    OperatorWalletModule, // Import OperatorWalletModule
     MongooseModule.forFeature([
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
       { name: DrillingSession.name, schema: DrillingSessionSchema },

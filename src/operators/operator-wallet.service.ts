@@ -232,9 +232,10 @@ export class OperatorWalletService {
    */
   async getOperatorWallets(
     operatorId: Types.ObjectId,
+    projection?: Record<string, number>,
   ): Promise<OperatorWallet[]> {
     try {
-      return this.operatorWalletModel.find({ operatorId });
+      return this.operatorWalletModel.find({ operatorId }, projection).lean();
     } catch (error) {
       this.logger.error(
         `Error getting operator wallets: ${error.message}`,

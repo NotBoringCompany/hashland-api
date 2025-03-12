@@ -122,6 +122,7 @@ export class DrillService {
    */
   async selectExtractor(): Promise<{
     drillId: Types.ObjectId;
+    drillOperatorId: Types.ObjectId;
     eff: number;
   } | null> {
     const selectionStartTime = performance.now();
@@ -233,6 +234,7 @@ export class DrillService {
 
         return {
           drillId: drill._id,
+          drillOperatorId: selectedOperator.operatorId,
           eff: drill.actualEff,
         };
       }
