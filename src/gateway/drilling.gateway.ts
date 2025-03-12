@@ -315,6 +315,64 @@ export class DrillingGateway
   }
 
   /**
+   * WebSocket event handler for requesting the current drilling session status.
+   *
+   * @param client The WebSocket client.
+   * @returns Current drilling session status.
+   */
+  @SubscribeMessage('get-drilling-status')
+  async getDrillingStatus(client: Socket) {
+    try {
+      const operatorId = client.data.operatorId;
+
+      if (!operatorId) {
+        client.emit('drilling-error', {
+          message: 'Authentication required',
+        });
+        return;
+      }
+
+      // Convert string ID to MongoDB ObjectId
+      const objectId = new Types.ObjectId(operatorId);
+
+      // Get the current session from Redis
+      const session =
+        await this.drillingSessionService.getOperatorSession(objectId);
+
+      if (session) {
+        // Get current cycle number for context
+        const cycleNumberStr = await this.redisService.get(
+          'drilling-cycle:current',
+        );
+        const currentCycleNumber = cycleNumberStr
+          ? parseInt(cycleNumberStr, 10)
+          : 0;
+
+        client.emit('drilling-status', {
+          status: session.status,
+          startTime: session.startTime,
+          earnedHASH: session.earnedHASH,
+          cycleStarted: session.cycleStarted,
+          cycleEnded: session.cycleEnded,
+          currentCycleNumber,
+        });
+
+        this.logger.log(`📊 Sent drilling status to operator ${operatorId}`);
+      } else {
+        client.emit('drilling-status', {
+          status: 'inactive',
+          message: 'No active drilling session found',
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Error getting drilling status: ${error.message}`);
+      client.emit('drilling-error', {
+        message: `Failed to get drilling status: ${error.message}`,
+      });
+    }
+  }
+
+  /**
    * WebSocket event handler for stopping a drilling session.
    *
    * @param client The WebSocket client.
