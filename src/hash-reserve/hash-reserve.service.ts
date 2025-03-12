@@ -8,7 +8,7 @@ export class HashReserveService {
   private readonly logger = new Logger(HashReserveService.name);
 
   constructor(
-    @InjectModel('HashReserve')
+    @InjectModel(HASHReserve.name)
     private readonly hashReserveModel: Model<HASHReserve>,
   ) {}
 
