@@ -16,6 +16,16 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
 
 ## Available Events
 
+### Client-to-Server Events
+1. **start-drilling**: Request to start a new drilling session
+   - No parameters required
+
+2. **stop-drilling**: Request to stop an active drilling session
+   - No parameters required
+
+3. **get-drilling-status**: Request the current status of the operator's drilling session
+   - No parameters required
+
 ### Server-to-Client Events
 1. **online-operator-update**: Broadcasts when operators connect/disconnect
    - `onlineOperatorCount`: Number of online operators
@@ -38,187 +48,67 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
    - `status`: Session status (STOPPING)
 
 6. **drilling-completed**: Sent when a session is completed at the end of a cycle
-   - `message`: Status message
+   - `message`: Success message
    - `status`: Session status (COMPLETED)
    - `cycleNumber`: The cycle number when the session was completed
-   - `earnedHASH`: The amount of HASH earned during the session
+   - `earnedHASH`: Amount of HASH earned during the session
 
-7. **drilling-stopped**: Sent when drilling stops immediately (e.g., due to fuel depletion)
+7. **drilling-stopped**: Sent when a session is force-stopped (e.g., due to fuel depletion)
    - `message`: Status message
-   - `reason`: Reason for stopping (e.g., `fuel_depleted`)
+   - `reason`: Reason for stopping (e.g., 'fuel_depleted')
    - `status`: Session status (COMPLETED)
 
-8. **drilling-error**: Sent when an error occurs
-   - `message`: Error details
-
-9. **drilling-update**: Broadcasts real-time updates about the current drilling cycle
+8. **drilling-status**: Sent in response to a get-drilling-status request
+   - `status`: Current session status (WAITING, ACTIVE, STOPPING, or 'inactive')
+   - `startTime`: When the session started (ISO date string)
+   - `earnedHASH`: Current amount of HASH earned
+   - `cycleStarted`: Cycle number when the session was activated
+   - `cycleEnded`: Cycle number when the session was stopped (if stopping)
    - `currentCycleNumber`: The current cycle number
-   - `onlineOperatorCount`: Number of online operators
-   - `issuedHASH`: Amount of HASH issued in the current cycle
-   - `operatorEffData`: Data about operator efficiency and drilling difficulty
+   - `message`: Only present if status is 'inactive'
 
-### Client-to-Server Events
-1. **start-drilling**: Start a drilling session
-2. **stop-drilling**: Stop a drilling session
+9. **drilling-error**: Sent when an error occurs
+   - `message`: Error message
 
-## Implementation in React
+## Usage Example
 
-```jsx
-import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
+```javascript
+// Connect to the WebSocket server with authentication
+const socket = io('https://api.hashland.com', {
+  extraHeaders: {
+    Authorization: `Bearer ${jwtToken}`
+  }
+});
 
-const useDrillingSocket = (token) => {
-  const [socket, setSocket] = useState(null);
-  const [connected, setConnected] = useState(false);
-  const [drillingStatus, setDrillingStatus] = useState('inactive'); // inactive, waiting, active, stopping, completed
-  const [stats, setStats] = useState({
-    onlineOperators: 0,
-    activeDrillingOperators: 0,
-    currentCycle: 0,
-    earnedHASH: 0
-  });
-  const [error, setError] = useState(null);
+// Connection events
+socket.on('connect', () => console.log('Connected to WebSocket server'));
+socket.on('disconnect', () => console.log('Disconnected from WebSocket server'));
 
-  useEffect(() => {
-    if (!token) return;
+// Request current drilling status
+socket.emit('get-drilling-status');
 
-    // Initialize socket with JWT auth
-    const newSocket = io(process.env.REACT_APP_API_URL, {
-      extraHeaders: {
-        Authorization: `Bearer ${token}`
-      }
-    });
+// Listen for drilling status response
+socket.on('drilling-status', (data) => {
+  console.log('Current drilling status:', data.status);
+  if (data.status !== 'inactive') {
+    console.log('Earned HASH:', data.earnedHASH);
+    console.log('Current cycle:', data.currentCycleNumber);
+  }
+});
 
-    // Connection events
-    newSocket.on('connect', () => setConnected(true));
-    newSocket.on('disconnect', () => {
-      setConnected(false);
-      setDrillingStatus('inactive');
-    });
+// Start drilling
+socket.emit('start-drilling');
 
-    // Drilling events
-    newSocket.on('drilling-started', (data) => {
-      setDrillingStatus('waiting');
-      console.log('Drilling started in waiting status');
-    });
-    
-    newSocket.on('drilling-activated', (data) => {
-      setDrillingStatus('active');
-      setStats(prev => ({
-        ...prev,
-        currentCycle: data.cycleNumber
-      }));
-      console.log(`Drilling activated in cycle #${data.cycleNumber}`);
-    });
-    
-    newSocket.on('drilling-stopping', (data) => {
-      setDrillingStatus('stopping');
-      console.log('Drilling stopping initiated');
-    });
-    
-    newSocket.on('drilling-completed', (data) => {
-      setDrillingStatus('completed');
-      setStats(prev => ({
-        ...prev,
-        earnedHASH: data.earnedHASH
-      }));
-      console.log(`Drilling completed with ${data.earnedHASH} HASH earned`);
-      
-      // Reset status after a delay
-      setTimeout(() => setDrillingStatus('inactive'), 5000);
-    });
-    
-    newSocket.on('drilling-stopped', (data) => {
-      setDrillingStatus('inactive');
-      console.log(`Drilling stopped: ${data.reason}`);
-    });
-    
-    newSocket.on('drilling-error', (data) => setError(data.message));
-    
-    newSocket.on('drilling-info', (data) => {
-      console.log(`Drilling info: ${data.message}`);
-    });
+// Listen for drilling events
+socket.on('drilling-started', (data) => console.log('Drilling started:', data));
+socket.on('drilling-activated', (data) => console.log('Drilling activated:', data));
+socket.on('drilling-stopping', (data) => console.log('Drilling stopping:', data));
+socket.on('drilling-completed', (data) => console.log('Drilling completed:', data));
+socket.on('drilling-stopped', (data) => console.log('Drilling stopped:', data));
+socket.on('drilling-error', (data) => console.error('Drilling error:', data.message));
 
-    // Stats updates
-    newSocket.on('online-operator-update', (data) => setStats(prev => ({
-      ...prev,
-      onlineOperators: data.onlineOperatorCount,
-      activeDrillingOperators: data.activeDrillingOperatorCount
-    })));
-    
-    newSocket.on('drilling-update', (data) => setStats(prev => ({
-      ...prev,
-      currentCycle: data.currentCycleNumber,
-      issuedHASH: data.issuedHASH
-    })));
-
-    setSocket(newSocket);
-
-    return () => {
-      newSocket.disconnect();
-    };
-  }, [token]);
-
-  // Control functions
-  const startDrilling = () => {
-    if (socket && connected && drillingStatus === 'inactive') {
-      socket.emit('start-drilling');
-    }
-  };
-
-  const stopDrilling = () => {
-    if (socket && connected && (drillingStatus === 'waiting' || drillingStatus === 'active')) {
-      socket.emit('stop-drilling');
-    }
-  };
-
-  return {
-    connected,
-    drillingStatus,
-    stats,
-    error,
-    startDrilling,
-    stopDrilling
-  };
-};
-
-// Usage example
-const DrillingComponent = ({ token }) => {
-  const { 
-    connected, 
-    drillingStatus, 
-    stats, 
-    error, 
-    startDrilling, 
-    stopDrilling 
-  } = useDrillingSocket(token);
-
-  return (
-    <div>
-      <div>Connection status: {connected ? 'Connected' : 'Disconnected'}</div>
-      <div>Drilling status: {drillingStatus}</div>
-      <div>Current cycle: {stats.currentCycle}</div>
-      <div>Online operators: {stats.onlineOperators}</div>
-      <div>Active drilling: {stats.activeDrillingOperators}</div>
-      {drillingStatus === 'completed' && (
-        <div className="success">Earned HASH: {stats.earnedHASH}</div>
-      )}
-      {error && <div className="error">Error: {error}</div>}
-      
-      <button 
-        onClick={startDrilling} 
-        disabled={!connected || drillingStatus !== 'inactive'}>
-        Start Drilling
-      </button>
-      
-      <button 
-        onClick={stopDrilling} 
-        disabled={!connected || (drillingStatus !== 'waiting' && drillingStatus !== 'active')}>
-        Stop Drilling
-      </button>
-    </div>
-  );
-};
+// Stop drilling
+socket.emit('stop-drilling');
 ```
 
 ## Key Features
