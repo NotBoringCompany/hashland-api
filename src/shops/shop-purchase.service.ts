@@ -86,6 +86,12 @@ export class ShopPurchaseService {
         blockchainData,
       });
 
+      // Grant the effects of the shop item to the operator
+      this.grantShopItemEffect(
+        operatorId,
+        purchaseAllowedResponse.data.shopItemEffects,
+      );
+
       return new ApiResponse<{ shopPurchaseId: string }>(
         200,
         `(purchaseItem) Item purchased successfully.`,
@@ -110,10 +116,11 @@ export class ShopPurchaseService {
     shopItemEffects: ShopItemEffects,
   ): Promise<void> {
     try {
-      // If drill data is included, grant the operator a new drill and update the cumulativeEff
+      const bulkOperations: any[] = [];
+
+      // ✅ Step 1: Grant a new drill if applicable
       if (shopItemEffects.drillData) {
-        // Create a new drill for the operator
-        await this.drillModel.create({
+        const newDrill = new this.drillModel({
           operatorId,
           version: shopItemEffects.drillData.version,
           config: shopItemEffects.drillData.config,
@@ -122,21 +129,77 @@ export class ShopPurchaseService {
           actualEff: shopItemEffects.drillData.baseEff,
         });
 
-        // Update the operator's cumulativeEff (increment by this drill's baseEff)
-        await this.operatorModel.findOneAndUpdate(
-          { _id: operatorId },
-          {
-            $inc: {
-              cumulativeEff: shopItemEffects.drillData.baseEff,
+        await newDrill.save();
+
+        // ✅ Prepare cumulativeEff update
+        bulkOperations.push({
+          updateOne: {
+            filter: { _id: operatorId },
+            update: {
+              $inc: { cumulativeEff: shopItemEffects.drillData.baseEff },
             },
           },
-        );
+        });
       }
 
-      // Add more effects here later
+      // ✅ Step 2: Increase maxFuel if applicable
+      if (
+        shopItemEffects.maxFuelIncrease &&
+        shopItemEffects.maxFuelIncrease > 0
+      ) {
+        bulkOperations.push({
+          updateOne: {
+            filter: { _id: operatorId },
+            update: { $inc: { maxFuel: shopItemEffects.maxFuelIncrease } },
+          },
+        });
+      }
+
+      // ✅ Step 3: Replenish fuel (without exceeding maxFuel)
+      if (
+        shopItemEffects.replenishFuelRatio &&
+        shopItemEffects.replenishFuelRatio > 0
+      ) {
+        bulkOperations.push({
+          updateOne: {
+            filter: { _id: operatorId },
+            update: [
+              {
+                $set: {
+                  currentFuel: {
+                    $min: [
+                      {
+                        $add: [
+                          '$currentFuel',
+                          {
+                            $multiply: [
+                              '$maxFuel',
+                              shopItemEffects.replenishFuelRatio,
+                            ],
+                          },
+                        ],
+                      },
+                      '$maxFuel',
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        });
+      }
+
+      // ✅ Step 4: Execute bulk updates if there are operations to perform
+      if (bulkOperations.length > 0) {
+        await this.operatorModel.bulkWrite(bulkOperations);
+      }
+
+      this.logger.log(
+        `✅ (grantShopItemEffect) Successfully granted shop item effect to operator ${operatorId}.`,
+      );
     } catch (err: any) {
       this.logger.error(
-        `(grantShopItemEffect) Error granting shop item effect to user ${operatorId}: ${err.message}`,
+        `❌ (grantShopItemEffect) Error granting shop item effect to operator ${operatorId}: ${err.message}`,
       );
     }
   }
