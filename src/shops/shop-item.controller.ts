@@ -3,7 +3,7 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { ShopItemService } from './shop-item.service';
 import { ShopItem } from './schemas/shop-item.schema';
 
-@Controller('shop-items') // Base route: `/shop-items`
+@Controller('shop-item') // Base route: `/shop-item`
 export class ShopItemController {
   constructor(private readonly shopItemService: ShopItemService) {}
 

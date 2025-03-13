@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ShopItemType } from 'src/common/enums/shop.enum';
-import { ShopItemEffect } from 'src/common/schemas/shop-item-effect.schema';
+import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
 
 /**
  * `ShopItem` represents an item that can be purchased from the shop.
@@ -24,10 +24,10 @@ export class ShopItem extends Document {
   item: ShopItemType;
 
   /**
-   * The shop item's effect.
+   * The shop item's effects.
    */
   @Prop({ type: Object, required: true })
-  itemEffect: ShopItemEffect;
+  itemEffects: ShopItemEffects;
 
   /**
    * The shop item's description.

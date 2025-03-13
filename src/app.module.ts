@@ -12,6 +12,7 @@ import { OperatorWalletModule } from './operators/operator-wallet.module';
 import { DrillingGatewayModule } from './gateway/drilling.gateway.module';
 import { DrillingCycleModule } from './drills/drilling-cycle.module';
 import { ShopItemModule } from './shops/shop-item.module';
+import { ShopPurchaseModule } from './shops/shop-purchase.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ShopItemModule } from './shops/shop-item.module';
     DrillingGatewayModule,
     DrillingCycleModule,
     ShopItemModule,
+    ShopPurchaseModule,
   ],
   controllers: [AppController],
   providers: [AppService],

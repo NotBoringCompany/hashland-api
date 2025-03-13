@@ -4,7 +4,7 @@ import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { ShopItemService } from 'src/shops/shop-item.service';
 import { ShopItemType } from 'src/common/enums/shop.enum';
 
-export async function runShopDrills() {
+export async function runShopItems() {
   const app = await NestFactory.createApplicationContext(AppModule); // Create NestJS app context
   const shopItemService = app.get(ShopItemService); // Get service instance
 
@@ -21,11 +21,11 @@ export async function runShopDrills() {
     'The ultimate drilling machine providing top-tier EFF, offering maximum durability and power.',
     635,
   );
-  console.log('✅ createShopDrill result:', result);
+  console.log('✅ addShopItem result:', result);
 
   await app.close(); // Close the app to prevent memory leaks
 }
 
-runShopDrills().catch((err) => {
+runShopItems().catch((err) => {
   console.error('❌ Error running function:', err);
 });

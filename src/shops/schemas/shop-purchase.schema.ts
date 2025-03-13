@@ -54,13 +54,13 @@ export class ShopPurchase extends Document {
   /**
    * If the operator purchased the item using Telegram Stars, this will contain the data received from the Telegram payment provider.
    */
-  @Prop({ type: TGStarsData, required: false })
+  @Prop({ type: TGStarsData, required: false, default: null })
   tgStarsData?: TGStarsData;
 
   /**
    * If the operator purchased the item using crypto, this will contain the data received from the blockchain.
    */
-  @Prop({ type: BlockchainData, required: false })
+  @Prop({ type: BlockchainData, required: false, default: null })
   blockchainData?: BlockchainData;
 }
 
