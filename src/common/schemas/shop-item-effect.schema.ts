@@ -2,6 +2,23 @@ import { Prop } from '@nestjs/mongoose';
 import { DrillConfig, DrillVersion } from '../enums/drill.enum';
 
 /**
+ * `ShopItemEffectDrillData` defines the data structure for a shop drill's data.
+ */
+export class ShopItemEffectDrillData {
+  @Prop({ type: String, required: true, enum: DrillVersion })
+  version: DrillVersion;
+
+  @Prop({ type: String, required: true, enum: DrillConfig })
+  config: DrillConfig;
+
+  @Prop({ required: true, default: 0 })
+  baseEff: number;
+
+  @Prop({ required: true, default: 0 })
+  maxLevel: number;
+}
+
+/**
  * `ShopItemEffect` defines what purchasing this specific shop item will do to the operator.
  *
  * For instance, if purchasing a drill, then `drillData` is provided, granting the operator a drill with those specifications.
@@ -10,32 +27,7 @@ export class ShopItemEffect {
   /**
    * If the shop item is a drill, then this field will be populated with the drill's data.
    */
-  @Prop({ required: false, default: null })
-  drillData?: {
-    /**
-     * The version of the drill.
-     */
-    version: DrillVersion;
-
-    /**
-     * The drill configuration.
-     */
-    config: DrillConfig;
-
-    /**
-     * The purchase cost of the drill (in TON).
-     */
-    purchaseCost: number;
-
-    /**
-     * The base EFF rating of the drill.
-     */
-    baseEff: number;
-
-    /**
-     * The maximum level the drill can be upgraded to.
-     */
-    maxLevel: number;
-  };
+  @Prop({ type: Object, required: false, default: null })
+  drillData?: ShopItemEffectDrillData;
   // TO BE ADDED: Upgrading max fuel capacity, restoring fuel, etc.
 }

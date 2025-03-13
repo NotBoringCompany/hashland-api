@@ -6,7 +6,6 @@ import { ConfigModule } from '@nestjs/config';
 import { PoolModule } from './pools/pool.module';
 import { BullQueueModule } from './common/bull-queue.module';
 import { RedisModule } from './common/redis.module';
-import { ShopDrillModule } from './shops/shop-drill.module';
 import { OperatorModule } from './operators/operator.module';
 import { AuthModule } from './auth/auth.module';
 import { OperatorWalletModule } from './operators/operator-wallet.module';
@@ -24,7 +23,6 @@ import { ShopItemModule } from './shops/shop-item.module';
     RedisModule,
     BullQueueModule,
     PoolModule,
-    ShopDrillModule,
     OperatorModule,
     OperatorWalletModule,
     AuthModule,
