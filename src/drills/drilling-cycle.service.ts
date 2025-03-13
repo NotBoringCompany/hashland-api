@@ -233,14 +233,6 @@ export class DrillingCycleService {
         cycleNumber,
       );
 
-    this.logger.log(
-      `✅ Completed ${completionResult.count} stopping drilling sessions at end of cycle #${cycleNumber}`,
-    );
-
-    this.logger.log(
-      `🔄 Completed sessions for operators: ${completionResult.operatorIds.map((id) => id.toString()).join(', ')}`,
-    );
-
     // Notify operators that their sessions were completed
     if (completionResult.operatorIds.length > 0) {
       this.drillingGatewayService.notifySessionsCompleted(
