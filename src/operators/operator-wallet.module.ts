@@ -9,6 +9,7 @@ import { OperatorWalletService } from './operator-wallet.service';
 import { RedisModule } from 'src/common/redis.module';
 import { ConfigModule } from '@nestjs/config';
 import { Operator, OperatorSchema } from './schemas/operator.schema';
+import { DrillModule } from 'src/drills/drill.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { Operator, OperatorSchema } from './schemas/operator.schema';
       { name: OperatorWallet.name, schema: OperatorWalletSchema },
     ]),
     RedisModule,
+    DrillModule,
   ],
   controllers: [OperatorWalletController], // Expose API endpoints
   providers: [OperatorWalletService], // Business logic for Operators

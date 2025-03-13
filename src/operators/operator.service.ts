@@ -5,12 +5,9 @@ import { Operator } from './schemas/operator.schema';
 import { PoolOperatorService } from 'src/pools/pool-operator.service';
 import { PoolService } from 'src/pools/pool.service';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
-import { OperatorWalletService } from './operator-wallet.service';
-import { DrillService } from 'src/drills/drill.service';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Drill } from 'src/drills/schemas/drill.schema';
-import { OperatorWallet } from './schemas/operator-wallet.schema';
-import { AllowedChain } from 'src/common/enums/chain.enum';
+import { DrillService } from 'src/drills/drill.service';
 
 @Injectable()
 export class OperatorService {
@@ -18,12 +15,9 @@ export class OperatorService {
 
   constructor(
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
-    @InjectModel(OperatorWallet.name)
-    private operatorWalletModel: Model<OperatorWallet>,
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
-    private readonly operatorWalletService: OperatorWalletService,
     private readonly drillService: DrillService,
   ) {}
 
@@ -76,91 +70,6 @@ export class OperatorService {
     this.logger.log(
       `✅ (updateCumulativeEff) Updated cumulativeEff for ${operatorEffData.length} operators in ${(endTime - startTime).toFixed(2)}ms.`,
     );
-  }
-
-  /**
-   * Updates asset equity, effMultiplier (in Operator), actualEff for basic drills,
-   * and adjusts cumulativeEff in the Operator schema.
-   */
-  async updateAssetEquityForOperator(
-    operatorId: Types.ObjectId,
-  ): Promise<void> {
-    try {
-      this.logger.log(
-        `🔄 (updateAssetEquityForOperator) Updating asset equity for operator ${operatorId}...`,
-      );
-
-      // ✅ Step 1: Fetch the operator's wallets **including chains**
-      const walletDocuments = await this.operatorWalletModel
-        .find({ operatorId }, { address: 1, chain: 1 }) // Include chain
-        .lean();
-
-      if (walletDocuments.length === 0) {
-        this.logger.log(
-          `⚠️ (updateAssetEquityForOperator) Operator ${operatorId} has no wallets.`,
-        );
-        return;
-      }
-
-      // ✅ Step 2: Fetch total balance in USD (handles multiple chains)
-      const newEquity =
-        await this.operatorWalletService.fetchTotalBalanceForWallets(
-          walletDocuments.map((wallet) => ({
-            address: wallet.address,
-            chain: wallet.chain as AllowedChain, // Explicitly cast to AllowedChain
-          })),
-        );
-
-      // ✅ Step 3: Fetch operator document
-      const operator = await this.operatorModel
-        .findById(operatorId, { assetEquity: 1, cumulativeEff: 1 })
-        .lean();
-      if (!operator) return;
-
-      // ✅ Step 4: Compute `effMultiplier`
-      const newEffMultiplier = this.equityToEffMultiplier(newEquity);
-
-      // ✅ Step 5: Update `actualEff` of **Basic Drill** & Compute `cumulativeEff`
-      const newActualEff = this.drillService.equityToActualEff(newEquity);
-
-      const updatedDrill = await this.drillModel.findOneAndUpdate(
-        { operatorId, version: DrillVersion.BASIC },
-        { $set: { actualEff: newActualEff } },
-        { new: true, projection: { actualEff: 1 } }, // Return the updated `actualEff`
-      );
-
-      // ✅ Step 6: Compute `cumulativeEff`
-      const oldActualEff = updatedDrill ? updatedDrill.actualEff : 0;
-      const effDifference = newActualEff - oldActualEff;
-      const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
-
-      // ✅ Step 7: Update `assetEquity`, `effMultiplier` & `cumulativeEff` in Operator document
-      await this.operatorModel.updateOne(
-        { _id: operatorId },
-        {
-          $set: {
-            assetEquity: newEquity,
-            effMultiplier: newEffMultiplier,
-            cumulativeEff: newCumulativeEff,
-          },
-        },
-      );
-
-      this.logger.log(
-        `✅ (updateAssetEquityForOperator) Updated asset equity & effMultiplier for operator ${operatorId}.`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `❌ (updateAssetEquityForOperator) Error: ${error.message}`,
-      );
-    }
-  }
-
-  /**
-   * Converts an operator's equity to their effMultiplier value.
-   */
-  private equityToEffMultiplier(equity: number): number {
-    return 1 + Math.log(1 + 0.0000596 * equity);
   }
 
   /**
