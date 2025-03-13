@@ -17,6 +17,7 @@ import {
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from 'src/operators/operator.service';
 import { AuthenticatedResponse } from '../common/dto/auth.dto';
+import { OperatorWalletService } from 'src/operators/operator-wallet.service';
 
 /**
  * Service handling Telegram authentication and operator management
@@ -29,6 +30,7 @@ export class TelegramAuthService {
     private configService: ConfigService,
     private jwtService: JwtService,
     private operatorService: OperatorService,
+    private operatorWalletService: OperatorWalletService,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
   ) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -77,7 +79,9 @@ export class TelegramAuthService {
       }
 
       // ✅ Update asset equity when the operator logs in
-      await this.operatorService.updateAssetEquityForOperator(operator._id);
+      await this.operatorWalletService.updateAssetEquityForOperator(
+        operator._id,
+      );
 
       const accessToken = this.generateToken({ _id: operator._id });
 
