@@ -2,9 +2,9 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { ShopItemEffect } from 'src/common/schemas/shop-item-effect.schema';
 import { ShopItem } from './schemas/shop-item.schema';
 import { ShopItemType } from 'src/common/enums/shop.enum';
-import { ShopItemEffect } from 'src/common/schemas/shop-item-effect.schema';
 
 @Injectable()
 export class ShopItemService {
@@ -12,7 +12,7 @@ export class ShopItemService {
     @InjectModel(ShopItem.name) private shopItemModel: Model<ShopItem>,
   ) {}
 
-  async createShopItem(
+  async addShopItem(
     item: ShopItemType,
     itemEffect: ShopItemEffect,
     description: string,
@@ -27,7 +27,7 @@ export class ShopItemService {
       });
       return new ApiResponse<{ shopItemId: string }>(
         200,
-        `(createShopItem) Shop item created.`,
+        `(addShopItem) Shop item created.`,
         {
           shopItemId: String(shopItem._id),
         },
@@ -36,7 +36,7 @@ export class ShopItemService {
       throw new InternalServerErrorException(
         new ApiResponse<null>(
           500,
-          `(createShopItem) Error creating shop item: ${err.message}`,
+          `(addShopItem) Error creating shop item: ${err.message}`,
         ),
       );
     }
@@ -45,7 +45,7 @@ export class ShopItemService {
   /**
    * Fetch all shop items. Optional projection to filter out fields.
    */
-  async getAllShopItems(
+  async getShopItems(
     projection?: string | Record<string, 1 | 0>,
   ): Promise<ApiResponse<{ shopItems: ShopItem[] }>> {
     try {
@@ -55,14 +55,14 @@ export class ShopItemService {
         .lean();
       return new ApiResponse<{ shopItems: ShopItem[] }>(
         200,
-        `(getAllShopItems) Fetched ${shopItems.length} shop items.`,
+        `(getShopItems) Fetched ${shopItems.length} shop items.`,
         { shopItems },
       );
     } catch (err: any) {
       throw new InternalServerErrorException(
         new ApiResponse<null>(
           500,
-          `(getAllShopItems) Error fetching shop items: ${err.message}`,
+          `(getShopItems) Error fetching shop items: ${err.message}`,
         ),
       );
     }
