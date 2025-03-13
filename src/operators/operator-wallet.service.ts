@@ -16,6 +16,7 @@ import { ConnectWalletDto, TonProofDto } from '../common/dto/wallet.dto';
 import axios from 'axios';
 import { RedisService } from 'src/common/redis.service';
 import { AllowedChain } from 'src/common/enums/chain.enum';
+import { OperatorService } from './operator.service';
 
 @Injectable()
 export class OperatorWalletService {
@@ -32,6 +33,7 @@ export class OperatorWalletService {
     @InjectModel(OperatorWallet.name)
     private operatorWalletModel: Model<OperatorWallet>,
     private readonly redisService: RedisService,
+    private readonly operatorService: OperatorService,
   ) {
     // Initialize TON client
     const endpoint =
@@ -215,6 +217,16 @@ export class OperatorWalletService {
       });
 
       await newWallet.save();
+
+      // Update asset equity for operator now that a new wallet is connected
+      this.operatorService
+        .updateAssetEquityForOperator(operatorId)
+        .catch((err: any) => {
+          this.logger.error(
+            `(connectWallet) Error updating asset equity for operator: ${err.message}`,
+          );
+        });
+
       return newWallet;
     } catch (error) {
       this.logger.error(
