@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './jwt/jwt-auth.guard';
 import { ApiResponse as AppApiResponse } from 'src/common/dto/response.dto';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { OperatorService } from 'src/operators/operator.service';
+import { Types } from 'mongoose';
 
 /**
  * Controller for JWT authentication operations
@@ -39,7 +40,9 @@ export class JwtAuthController {
   @UseGuards(JwtAuthGuard)
   @Get('verify')
   async verifyToken(@Request() req): Promise<AppApiResponse<Operator>> {
-    const operator = await this.operatorService.findById(req.user.operatorId);
+    const operatorId = new Types.ObjectId(req.user.operatorId);
+
+    const operator = await this.operatorService.findById(operatorId);
 
     return new AppApiResponse<Operator>(
       200,
