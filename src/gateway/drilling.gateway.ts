@@ -565,14 +565,12 @@ export class DrillingGateway
    */
   private async authenticateClient(client: Socket): Promise<string | null> {
     try {
-      const authHeader = client.handshake.headers.authorization;
-
-      if (!authHeader) {
-        this.logger.warn(`Client ${client.id} has no authorization header`);
+      const token = client.handshake.auth.token;
+      if (!token) {
+        this.logger.warn(`Client ${client.id} has no token`);
         return null;
       }
 
-      const token = authHeader.split(' ')[1];
       const payload = this.jwtService.verify(token);
 
       if (!payload || !payload.operatorId) {
