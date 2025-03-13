@@ -1,6 +1,5 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
-import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { ShopItemService } from 'src/shops/shop-item.service';
 import { ShopItemType } from 'src/common/enums/shop.enum';
 
@@ -9,17 +8,12 @@ export async function runShopItems() {
   const shopItemService = app.get(ShopItemService); // Get service instance
 
   const result = await shopItemService.addShopItem(
-    ShopItemType.DREADNOUGHT_DRILL,
+    ShopItemType.REPLENISH_FUEL,
     {
-      drillData: {
-        version: DrillVersion.PREMIUM,
-        config: DrillConfig.DREADNOUGHT,
-        baseEff: 440000,
-        maxLevel: 20,
-      },
+      replenishFuelRatio: 1,
     },
-    'The ultimate drilling machine providing top-tier EFF, offering maximum durability and power.',
-    635,
+    'Replenishes fuel back to max capacity.',
+    0.95,
   );
   console.log('✅ addShopItem result:', result);
 

@@ -29,5 +29,16 @@ export class ShopItemEffects {
    */
   @Prop({ type: Object, required: false, default: null })
   drillData?: ShopItemEffectDrillData;
-  // TO BE ADDED: Upgrading max fuel capacity, restoring fuel, etc.
+  /**
+   * If the shop item upgrades the operator's `maxFuel`, then this field will show how much the operator's `maxFuel` will increase by.
+   */
+  @Prop({ required: false, default: 0 })
+  maxFuelIncrease?: number;
+  /**
+   * If the shop item replenishes the operator's fuel, then this field will show how much the operator's fuel will be replenished by.
+   *
+   * This is determined by a ratio of 0 to 1 multiplied by the operator's `maxFuel`.
+   */
+  @Prop({ required: false, default: 0 })
+  replenishFuelRatio?: number;
 }

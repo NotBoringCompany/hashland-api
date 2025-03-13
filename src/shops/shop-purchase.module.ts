@@ -5,12 +5,23 @@ import {
   ShopPurchaseSchema,
 } from './schemas/shop-purchase.schema';
 import { ShopPurchaseService } from './shop-purchase.service';
+import { TonModule } from 'src/ton/ton.module';
+import { ShopItem, ShopItemSchema } from './schemas/shop-item.schema';
+import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
+import {
+  Operator,
+  OperatorSchema,
+} from 'src/operators/schemas/operator.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: ShopPurchase.name, schema: ShopPurchaseSchema },
+      { name: ShopItem.name, schema: ShopItemSchema },
+      { name: Drill.name, schema: DrillSchema },
+      { name: Operator.name, schema: OperatorSchema },
     ]), // Register ShopPurchase schema
+    TonModule,
   ],
   controllers: [], // Expose API endpoints
   providers: [ShopPurchaseService], // Business logic for ShopService

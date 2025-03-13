@@ -127,19 +127,13 @@ export const GAME_CONSTANTS = {
   },
 
   /**
-   * Operator constants.
+   * Fuel constants.
    */
-  OPERATOR: {
+  FUEL: {
     /**
      * How much starting fuel the operator gets when registering.
      */
     OPERATOR_STARTING_FUEL: 15000,
-  },
-
-  /**
-   * Fuel constants.
-   */
-  FUEL: {
     /**
      * How much fuel is depleted per cycle for active operators.
      */

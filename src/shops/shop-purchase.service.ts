@@ -10,9 +10,9 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { ShopItem } from './schemas/shop-item.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { Drill } from 'src/drills/schemas/drill.schema';
-import { verifyTONTransaction } from 'src/common/utils/ton-utils';
 import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
+import { TonService } from 'src/ton/ton.service';
 
 @Injectable()
 export class ShopPurchaseService {
@@ -27,6 +27,7 @@ export class ShopPurchaseService {
     private readonly drillModel: Model<Drill>,
     @InjectModel(Operator.name)
     private readonly operatorModel: Model<Operator>,
+    private readonly tonService: TonService,
   ) {}
 
   /**
@@ -62,7 +63,7 @@ export class ShopPurchaseService {
       }
 
       // Check if the payment is valid
-      const blockchainData = await verifyTONTransaction(
+      const blockchainData = await this.tonService.verifyTONTransaction(
         operatorId,
         address,
         boc,

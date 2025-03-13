@@ -301,8 +301,8 @@ export class OperatorService {
       assetEquity: 0,
       cumulativeEff: 0,
       effMultiplier: 1,
-      maxFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
-      currentFuel: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
+      maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
+      currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       totalEarnedHASH: 0,
       tgProfile: {
         tgId: authData.id,

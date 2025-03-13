@@ -52,7 +52,7 @@ export class Operator extends Document {
    */
   @Prop({
     required: true,
-    default: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
+    default: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
   })
   maxFuel: number;
 
@@ -61,7 +61,7 @@ export class Operator extends Document {
    */
   @Prop({
     required: true,
-    default: GAME_CONSTANTS.OPERATOR.OPERATOR_STARTING_FUEL,
+    default: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
   })
   currentFuel: number;
 

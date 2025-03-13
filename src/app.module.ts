@@ -13,6 +13,7 @@ import { DrillingGatewayModule } from './gateway/drilling.gateway.module';
 import { DrillingCycleModule } from './drills/drilling-cycle.module';
 import { ShopItemModule } from './shops/shop-item.module';
 import { ShopPurchaseModule } from './shops/shop-purchase.module';
+import { TonModule } from './ton/ton.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ShopPurchaseModule } from './shops/shop-purchase.module';
     DrillingCycleModule,
     ShopItemModule,
     ShopPurchaseModule,
+    TonModule,
   ],
   controllers: [AppController],
   providers: [AppService],
