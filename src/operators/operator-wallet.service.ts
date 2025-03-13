@@ -16,9 +16,12 @@ import { ConnectWalletDto, TonProofDto } from '../common/dto/wallet.dto';
 import axios from 'axios';
 import { RedisService } from 'src/common/redis.service';
 import { AllowedChain } from 'src/common/enums/chain.enum';
-import { DrillService } from 'src/drills/drill.service';
 import { Drill } from 'src/drills/schemas/drill.schema';
 import { DrillVersion } from 'src/common/enums/drill.enum';
+import {
+  equityToActualEff,
+  equityToEffMultiplier,
+} from 'src/common/utils/equity';
 
 @Injectable()
 export class OperatorWalletService {
@@ -36,7 +39,6 @@ export class OperatorWalletService {
     private operatorWalletModel: Model<OperatorWallet>,
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly redisService: RedisService,
-    private readonly drillService: DrillService,
   ) {
     // Initialize TON client
     const endpoint =
@@ -88,10 +90,10 @@ export class OperatorWalletService {
       if (!operator) return;
 
       // ✅ Step 4: Compute `effMultiplier`
-      const newEffMultiplier = this.equityToEffMultiplier(newEquity);
+      const newEffMultiplier = equityToEffMultiplier(newEquity);
 
       // ✅ Step 5: Update `actualEff` of **Basic Drill** & Compute `cumulativeEff`
-      const newActualEff = this.drillService.equityToActualEff(newEquity);
+      const newActualEff = equityToActualEff(newEquity);
 
       const updatedDrill = await this.drillModel.findOneAndUpdate(
         { operatorId, version: DrillVersion.BASIC },
@@ -124,13 +126,6 @@ export class OperatorWalletService {
         `❌ (updateAssetEquityForOperator) Error: ${error.message}`,
       );
     }
-  }
-
-  /**
-   * Converts an operator's equity to their effMultiplier value.
-   */
-  private equityToEffMultiplier(equity: number): number {
-    return 1 + Math.log(1 + 0.0000596 * equity);
   }
 
   /**

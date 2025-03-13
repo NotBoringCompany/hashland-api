@@ -6,6 +6,7 @@ import { RedisService } from 'src/common/redis.service';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from 'src/operators/operator.service';
 import { RedisDrillingSession } from 'src/gateway/drilling.gateway.types';
+import { OperatorWalletService } from 'src/operators/operator-wallet.service';
 
 // Define session status enum
 export enum DrillingSessionStatus {
@@ -28,6 +29,7 @@ export class DrillingSessionService {
     private drillingSessionModel: Model<DrillingSession>,
     private readonly redisService: RedisService,
     private readonly operatorService: OperatorService,
+    private readonly operatorWalletService: OperatorWalletService,
   ) {}
 
   /**
@@ -52,7 +54,7 @@ export class DrillingSessionService {
       const sessionKey = this.getSessionKey(operatorIdStr);
 
       // ✅ Ensure latest asset equity is fetched **before starting**
-      await this.operatorService
+      await this.operatorWalletService
         .updateAssetEquityForOperator(operatorId)
         .catch((err) => {
           this.logger.error(
