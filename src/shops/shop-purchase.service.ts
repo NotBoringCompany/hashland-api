@@ -13,6 +13,7 @@ import { Drill } from 'src/drills/schemas/drill.schema';
 import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { TonService } from 'src/ton/ton.service';
+import { DrillConfig } from 'src/common/enums/drill.enum';
 
 @Injectable()
 export class ShopPurchaseService {
@@ -214,61 +215,144 @@ export class ShopPurchaseService {
    */
   async checkPurchaseAllowed(
     operatorId: Types.ObjectId,
-    /** If the shop item's `itemEffects` should be returned. By default, this will be false to reduce data return size. */
     showShopItemEffects: boolean = false,
     shopItemId?: Types.ObjectId,
     shopItemName?: string,
   ): Promise<
     ApiResponse<{
       purchaseAllowed: boolean;
+      reason?: string;
       shopItemEffects?: ShopItemEffects;
     } | null>
   > {
     try {
-      // ✅ Construct query conditions dynamically to avoid unnecessary queries
-      const query: any = {};
-      if (shopItemId) query._id = shopItemId;
-      else if (shopItemName) query.item = shopItemName;
-      else {
-        return new ApiResponse<{ purchaseAllowed: boolean }>(
+      if (!shopItemId && !shopItemName) {
+        return new ApiResponse<{ purchaseAllowed: boolean; reason: string }>(
           400,
           `(checkPurchaseAllowed) Invalid request. Either shopItemId or shopItemName must be provided.`,
-          { purchaseAllowed: false },
+          { purchaseAllowed: false, reason: 'Missing shop item identifier.' },
         );
       }
+
+      const query: any = shopItemId
+        ? { _id: shopItemId }
+        : { item: shopItemName };
 
       // ✅ Fetch Shop Item
       const shopItem = await this.shopItemModel
         .findOne(query, {
           item: 1,
-          ...(showShopItemEffects && { itemEffect: 1 }), // ✅ Fetch itemEffect only if required
+          ...(showShopItemEffects && { itemEffect: 1 }),
         })
         .lean();
 
       if (!shopItem) {
-        return new ApiResponse<{ purchaseAllowed: boolean }>(
+        return new ApiResponse<{ purchaseAllowed: boolean; reason: string }>(
           404,
           `(checkPurchaseAllowed) Shop item not found.`,
-          { purchaseAllowed: false },
+          { purchaseAllowed: false, reason: 'Shop item does not exist.' },
         );
       }
 
-      // ✅ Drill purchase limit check
-      if (shopItem.item.toLowerCase().includes('drill')) {
+      const itemName = shopItem.item.toLowerCase();
+
+      // ✅ Drill purchase limit and other prerequisites check
+      if (itemName.includes('drill')) {
         const maxDrillsAllowed =
-          GAME_CONSTANTS.DRILLS.BASE_PREMIUM_DRILLS_ALLOWED;
+          GAME_CONSTANTS.DRILLS.BASE_PREMIUM_DRILLS_ALLOWED +
+          GAME_CONSTANTS.DRILLS.BASE_BASIC_DRILLS_ALLOWED;
 
-        // Count the number of drills the operator owns
-        const operatorDrillCount = await this.drillModel.countDocuments({
-          operatorId,
-        });
+        // Fetch all drills and operator data in parallel
+        const [operatorDrills, operator] = await Promise.all([
+          this.drillModel.find({ operatorId }, { config: 1 }),
+          this.operatorModel.findById(operatorId, { maxFuel: 1 }),
+        ]);
 
-        if (operatorDrillCount >= maxDrillsAllowed) {
-          return new ApiResponse<{ purchaseAllowed: boolean }>(
+        if (operatorDrills.length >= maxDrillsAllowed) {
+          return new ApiResponse<{ purchaseAllowed: boolean; reason: string }>(
             403,
             `(checkPurchaseAllowed) Operator has reached the maximum number of drills allowed.`,
-            { purchaseAllowed: false },
+            {
+              purchaseAllowed: false,
+              reason: `Max drills reached (${maxDrillsAllowed}).`,
+            },
           );
+        }
+
+        // ✅ Count drill types in one iteration
+        const drillCounts = operatorDrills.reduce(
+          (counts, drill) => {
+            counts[drill.config] = (counts[drill.config] || 0) + 1;
+            return counts;
+          },
+          {} as Record<DrillConfig, number>,
+        );
+
+        // ✅ Define prerequisite checks dynamically
+        const prerequisites = {
+          bulwark: {
+            requiredType: DrillConfig.IRONBORE,
+            requiredCount:
+              GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
+                .ironboreDrillsRequired,
+            maxFuel:
+              GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
+                .maxFuelRequired,
+          },
+          titan: {
+            requiredType: DrillConfig.BULWARK,
+            requiredCount:
+              GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
+                .bulwarkDrillsRequired,
+            maxFuel:
+              GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
+                .maxFuelRequired,
+          },
+          dreadnought: {
+            requiredType: DrillConfig.TITAN,
+            requiredCount:
+              GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
+                .titanDrillsRequired,
+            maxFuel:
+              GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
+                .maxFuelRequired,
+          },
+        } as const;
+
+        for (const [
+          key,
+          { requiredType, requiredCount, maxFuel },
+        ] of Object.entries(prerequisites)) {
+          if (itemName.includes(key)) {
+            const ownedCount = drillCounts[requiredType] ?? 0;
+
+            if (ownedCount < requiredCount) {
+              return new ApiResponse<{
+                purchaseAllowed: boolean;
+                reason: string;
+              }>(
+                403,
+                `(checkPurchaseAllowed) Operator does not meet drill prerequisites.`,
+                {
+                  purchaseAllowed: false,
+                  reason: `Requires at least ${requiredCount} ${requiredType} drills, but only ${ownedCount} found.`,
+                },
+              );
+            }
+            if (operator.maxFuel < maxFuel) {
+              return new ApiResponse<{
+                purchaseAllowed: boolean;
+                reason: string;
+              }>(
+                403,
+                `(checkPurchaseAllowed) Operator does not have enough maxFuel.`,
+                {
+                  purchaseAllowed: false,
+                  reason: `Requires ${maxFuel} max fuel, but only ${operator.maxFuel} available.`,
+                },
+              );
+            }
+          }
         }
       }
 

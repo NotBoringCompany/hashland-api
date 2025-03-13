@@ -34,6 +34,45 @@ export const GAME_CONSTANTS = {
      * The starting `actualEff` of a basic drill given to an operator upon registering.
      */
     BASIC_DRILL_STARTING_ACTUAL_EFF: 500,
+    /**
+     * The prerequisites for purchasing a Bulwark drill from the shop.
+     */
+    BULWARK_DRILL_PURCHASE_PREREQUISITES: {
+      /**
+       * Minimum amount of Ironbore drills required to purchase a Bulwark drill.
+       */
+      ironboreDrillsRequired: 1,
+      /**
+       * The minimum `maxFuel` required to purchase a Bulwark drill.
+       */
+      maxFuelRequired: 130000,
+    },
+    /**
+     * The prerequisites for purchasing a Titan drill from the shop.
+     */
+    TITAN_DRILL_PURCHASE_PREREQUISITES: {
+      /**
+       * Minimum amount of Bulwark drills required to purchase a Titan drill.
+       */
+      bulwarkDrillsRequired: 1,
+      /**
+       * The minimum `maxFuel` required to purchase a Titan drill.
+       */
+      maxFuelRequired: 450000,
+    },
+    /**
+     * The prerequisites for purchasing a Dreadnought drill from the shop.
+     */
+    DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES: {
+      /**
+       * Minimum amount of Titan drills required to purchase a Dreadnought drill.
+       */
+      titanDrillsRequired: 1,
+      /**
+       * The minimum `maxFuel` required to purchase a Dreadnought drill.
+       */
+      maxFuelRequired: 950000,
+    },
   },
 
   /**
