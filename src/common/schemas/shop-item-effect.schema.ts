@@ -10,7 +10,26 @@ export class ShopItemEffect {
   /**
    * If the shop item is a drill, then this field will be populated with the drill's data.
    */
-  @Prop({ required: false, default: null })
+  @Prop({
+    type: {
+      version: {
+        type: String,
+        enum: Object.values(DrillVersion),
+        required: true,
+      },
+      config: {
+        type: String,
+        enum: Object.values(DrillConfig),
+        required: true,
+      },
+      purchaseCost: { type: Number, required: true },
+      baseEff: { type: Number, required: true },
+      maxLevel: { type: Number, required: true },
+    },
+    required: false,
+    default: null,
+    _id: false,
+  })
   drillData?: {
     /**
      * The version of the drill.
