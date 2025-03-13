@@ -227,6 +227,29 @@ export class DrillingCycleService {
       { extractorId: extractorData?.drillId || null }, // ✅ Store null if no extractor is chosen
     );
 
+    // ✅ Step 6: Complete any stopping sessions
+    const completionResult =
+      await this.drillingSessionService.completeStoppingSessionsForEndCycle(
+        cycleNumber,
+      );
+
+    this.logger.log(
+      `✅ Completed ${completionResult.count} stopping drilling sessions at end of cycle #${cycleNumber}`,
+    );
+
+    this.logger.log(
+      `🔄 Completed sessions for operators: ${completionResult.operatorIds.map((id) => id.toString()).join(', ')}`,
+    );
+
+    // Notify operators that their sessions were completed
+    if (completionResult.operatorIds.length > 0) {
+      this.drillingGatewayService.notifySessionsCompleted(
+        completionResult.operatorIds,
+        cycleNumber,
+        completionResult.earnedHASH,
+      );
+    }
+
     const endTime = performance.now();
     this.logger.log(
       `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${(endTime - startTime).toFixed(2)}ms.`,
@@ -307,7 +330,7 @@ export class DrillingCycleService {
         issuedHash *
         GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.allActiveOperators;
 
-      // ✅ Compute Each Operator’s Reward Share Based on Weighted Eff
+      // ✅ Compute Each Operator's Reward Share Based on Weighted Eff
       // This includes the supposed extractor as well even if they didn't get selected due to validation issues.
       const weightedRewards = operatorsWithLuck.map((operator) => ({
         operatorId: operator.operatorId,
@@ -337,7 +360,7 @@ export class DrillingCycleService {
           issuedHash *
           GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.allActiveOperators;
 
-        // ✅ Compute Each Operator’s Reward Share Based on Weighted Eff
+        // ✅ Compute Each Operator's Reward Share Based on Weighted Eff
         const weightedRewards = operatorsWithLuck.map((operator) => ({
           operatorId: operator.operatorId,
           amount:

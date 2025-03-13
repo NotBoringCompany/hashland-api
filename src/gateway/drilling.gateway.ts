@@ -417,10 +417,6 @@ export class DrillingGateway
         );
 
       if (response.status === 200) {
-        // Remove from active drilling operators
-        this.activeDrillingOperators.delete(operatorId);
-        await this.saveActiveDrillingOperatorsToRedis();
-
         client.emit('drilling-stopping', {
           message:
             'Drilling session stopping initiated. Will complete at end of cycle.',
