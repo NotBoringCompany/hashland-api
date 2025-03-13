@@ -1,11 +1,11 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiResponse } from 'src/common/dto/response.dto';
-import { ShopDrillsService } from './shop-drill.service';
+import { ShopDrillService } from './shop-drill.service';
 import { ShopDrill } from './schemas/shop-drill.schema';
 
 @Controller('shop-drills') // Base route: `/pools`
 export class ShopDrillsController {
-  constructor(private readonly shopDrillsService: ShopDrillsService) {}
+  constructor(private readonly shopDrillService: ShopDrillService) {}
 
   /**
    * GET `/shop-drills`
@@ -23,6 +23,6 @@ export class ShopDrillsController {
           .reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
       : undefined;
 
-    return this.shopDrillsService.getAllShopDrills(projectionObj);
+    return this.shopDrillService.getAllShopDrills(projectionObj);
   }
 }
