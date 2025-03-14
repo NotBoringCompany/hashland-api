@@ -17,50 +17,57 @@ export class DrillService {
   ) {}
 
   /**
-   * Calculates the total cumulative EFF from all drills
-   * and computes an arbitrary difficulty value for each operator.
+   * Calculates the total weighted cumulative EFF from all operators
+   * and computes an arbitrary drilling difficulty value for each operator.
    *
    * Returns:
-   * - `totalEff`: The total cumulative EFF from all drills.
-   * - `operatorMap`: A map of operatorId -> their drilling difficulty.
+   * - `totalWeightedEff`: The total sum of `cumulativeEff * effMultiplier` across all operators.
+   * - `operatorMap`: A map of `operatorId` -> `{ drillingDifficulty, effMultiplier }`
    */
   async batchCalculateTotalEffAndDrillingDifficulty(): Promise<{
-    totalEff: number;
-    operatorMap: Map<Types.ObjectId, { drillingDifficulty: number }>;
+    totalWeightedEff: number;
+    operatorMap: Map<
+      Types.ObjectId,
+      { drillingDifficulty: number; effMultiplier: number }
+    >;
   }> {
-    // ✅ Step 1: Fetch total cumulative EFF from all drills
-    const totalCumulativeEffResult = await this.drillModel.aggregate([
-      { $group: { _id: null, totalEff: { $sum: '$actualEff' } } },
-    ]);
+    // ✅ Step 1: Fetch all operators with their cumulativeEff and effMultiplier in ONE query
+    const operators = await this.operatorModel
+      .find({}, { _id: 1, cumulativeEff: 1, effMultiplier: 1 })
+      .lean();
 
-    const totalEff = totalCumulativeEffResult.length
-      ? totalCumulativeEffResult[0].totalEff
-      : 0;
-
-    if (totalEff === 0) {
-      return { totalEff: 0, operatorMap: new Map() }; // No valid drills
+    if (operators.length === 0) {
+      return { totalWeightedEff: 0, operatorMap: new Map() }; // No valid operators
     }
 
-    // ✅ Step 2: Fetch total EFF of drills grouped by each operator
-    const operatorEffList = await this.drillModel.aggregate([
-      { $group: { _id: '$operatorId', operatorEff: { $sum: '$actualEff' } } },
-    ]);
+    // ✅ Step 2: Compute the total weighted cumulativeEff
+    const totalWeightedEff = operators.reduce(
+      (sum, operator) => sum + operator.cumulativeEff * operator.effMultiplier,
+      0,
+    );
 
-    // ✅ Step 3: Compute drilling difficulty per operator
+    if (totalWeightedEff === 0) {
+      return { totalWeightedEff: 0, operatorMap: new Map() }; // No valid operators with EFF
+    }
+
+    // ✅ Step 3: Compute drilling difficulty per operator efficiently
     const operatorMap = new Map<
       Types.ObjectId,
-      { drillingDifficulty: number }
+      { drillingDifficulty: number; effMultiplier: number }
     >();
 
-    for (const entry of operatorEffList) {
-      const operatorId = entry._id;
-      const operatorEff = entry.operatorEff;
-      const drillingDifficulty = totalEff / operatorEff;
+    for (const operator of operators) {
+      const operatorWeightedEff =
+        operator.cumulativeEff * operator.effMultiplier;
+      const drillingDifficulty = totalWeightedEff / operatorWeightedEff;
 
-      operatorMap.set(operatorId, { drillingDifficulty });
+      operatorMap.set(operator._id, {
+        drillingDifficulty,
+        effMultiplier: operator.effMultiplier,
+      });
     }
 
-    return { totalEff, operatorMap };
+    return { totalWeightedEff, operatorMap };
   }
 
   /**
