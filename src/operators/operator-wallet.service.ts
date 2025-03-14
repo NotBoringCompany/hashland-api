@@ -149,8 +149,8 @@ export class OperatorWalletService {
         chainWalletsMap[wallet.chain]!.push(wallet.address);
       }
 
-      // ✅ Batch fetch TON balances
       if (chainWalletsMap[AllowedChain.TON]?.length) {
+        // ✅ Batch fetch TON balances
         const tonApiKey = process.env.TON_API_KEY || '';
         const apiUrl =
           `https://toncenter.com/api/v3/accountStates?include_boc=false&api_key=${tonApiKey}&` +
@@ -172,6 +172,53 @@ export class OperatorWalletService {
 
           // Compute total USD balance for TON wallets
           totalUsdBalance += totalTonBalance * tonUsdRate;
+
+          // Then, fetch all jetton balances of the wallets and filter out USDT and USDC.
+          const tonXApiKey = process.env.TON_X_API_KEY || '';
+          const tonXApiUrl = `https://mainnet-rpc.tonxapi.com/v2/json-rpc/${tonXApiKey}`;
+
+          // Create a body for each TON wallet
+          const requests = chainWalletsMap[AllowedChain.TON]!.map(
+            (addr, index) => {
+              return {
+                id: index + 1,
+                jsonrpc: '2.0',
+                method: 'getAccountJettonsBalances',
+                params: { account_id: addr },
+              };
+            },
+          );
+
+          // Create a batch POST request
+          const batchJettonResponses = await axios.all(
+            requests.map((body) =>
+              axios.post(tonXApiUrl, body, {
+                headers: { 'Content-Type': 'application/json' },
+              }),
+            ),
+          );
+
+          // Define whitelisted jetton contract addresses
+          const allowedJettonAddresses = new Set([
+            '0:b113a994b5024a16719f69139328eb759596c38a25f59028b146fecdc3621dfe', // USDT
+            '0:7e30fc2b7751ba58a3642f3fd59d5e96a810ddd78d8a310bfe8353bef10500df', // USDC
+          ]);
+
+          for (const response of batchJettonResponses) {
+            if (response.data?.result?.balances) {
+              for (const balanceData of response.data.result.balances) {
+                const jettonAddr = balanceData.jetton?.address; // Get jetton contract address
+
+                if (allowedJettonAddresses.has(jettonAddr)) {
+                  const jettonBalance =
+                    parseFloat(balanceData.balance) /
+                    Math.pow(10, balanceData.jetton.decimals || 9); // Convert to correct decimal format
+
+                  totalUsdBalance += jettonBalance; // 1 USDT/USDC = 1 USD. No need for conversion.
+                }
+              }
+            }
+          }
         } else {
           this.logger.warn(
             `⚠️ (fetchTotalBalanceForWallets) Unexpected response from Toncenter.`,
@@ -249,7 +296,19 @@ export class OperatorWalletService {
       // Check if operator exists
       const operator = await this.operatorModel.findById(operatorId);
       if (!operator) {
-        throw new NotFoundException('Operator not found');
+        throw new NotFoundException('(connectWallet) Operator not found');
+      }
+
+      // Check if operator already has a connected wallet in the same chain
+      const existingWalletInChain = await this.operatorWalletModel.exists({
+        operatorId,
+        chain: walletData.chain,
+      });
+
+      if (!!existingWalletInChain) {
+        throw new UnauthorizedException(
+          '(connectWallet) Operator already has a connected wallet in this chain',
+        );
       }
 
       // Check if wallet is already connected to this operator
@@ -286,7 +345,9 @@ export class OperatorWalletService {
       }
 
       if (!isValid) {
-        throw new UnauthorizedException('Invalid wallet signature or proof');
+        throw new UnauthorizedException(
+          '(connectWallet) Invalid wallet signature or proof.',
+        );
       }
 
       // Create new wallet
@@ -310,7 +371,7 @@ export class OperatorWalletService {
       return newWallet;
     } catch (error) {
       this.logger.error(
-        `Error connecting wallet: ${error.message}`,
+        `(connectWallet) Error connecting wallet: ${error.message}`,
         error.stack,
       );
       throw error;
