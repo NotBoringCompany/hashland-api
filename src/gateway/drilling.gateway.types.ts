@@ -157,6 +157,23 @@ export interface FuelStatusResponse {
   fuelPercentage: number;
 }
 
+/**
+ * Response for cycle-rewards event
+ */
+export interface CycleRewardsResponse {
+  cycleNumber: number;
+  extractor: {
+    id: string | null;
+    name: string | null;
+  };
+  totalReward: number;
+  shares: {
+    operatorId: string;
+    operatorName: string;
+    amount: number;
+  }[];
+}
+
 // ==========================================
 // Internal Types
 // ==========================================

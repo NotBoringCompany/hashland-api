@@ -85,6 +85,17 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
    - `maxFuel`: Maximum fuel capacity
    - `fuelPercentage`: Percentage of fuel remaining (0-100)
 
+12. **cycle-rewards**: Sent when rewards are distributed at the end of a drilling cycle
+   - `cycleNumber`: The cycle number
+   - `extractor`: Object containing extractor information
+     - `id`: The ID of the extractor operator (null if no extractor)
+     - `name`: The username of the extractor operator (null if no extractor)
+   - `totalReward`: Total HASH reward for the cycle
+   - `shares`: Array of reward shares for all operators
+     - `operatorId`: The ID of the operator
+     - `operatorName`: The username of the operator
+     - `amount`: The amount of HASH rewarded to this operator
+
 ## Usage Example
 
 ```javascript
@@ -132,6 +143,29 @@ socket.on('drilling-completed', (data) => console.log('Drilling completed:', dat
 socket.on('drilling-stopped', (data) => console.log('Drilling stopped:', data));
 socket.on('drilling-error', (data) => console.error('Drilling error:', data.message));
 socket.on('fuel-update', (data) => console.log('Fuel update:', data));
+
+// Listen for cycle rewards
+socket.on('cycle-rewards', (data) => {
+  console.log('Cycle rewards for cycle #' + data.cycleNumber);
+  console.log('Extractor:', data.extractor.name || 'No extractor');
+  console.log('Total reward:', data.totalReward + ' HASH');
+  
+  // Find my reward share
+  const myOperatorId = 'your-operator-id';
+  const myShare = data.shares.find(share => share.operatorId === myOperatorId);
+  if (myShare) {
+    console.log('My reward:', myShare.amount + ' HASH');
+  }
+  
+  // Display top earners
+  const topEarners = [...data.shares]
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 3);
+  console.log('Top earners:');
+  topEarners.forEach((share, index) => {
+    console.log(`${index + 1}. ${share.operatorName}: ${share.amount} HASH`);
+  });
+});
 
 // Stop drilling
 socket.emit('stop-drilling');

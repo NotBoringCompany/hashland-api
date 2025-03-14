@@ -257,6 +257,8 @@ export class DrillingCycleService {
   ) {
     const now = performance.now();
     const rewardData: { operatorId: Types.ObjectId; amount: number }[] = [];
+    let extractorName: string | null = null;
+    const currentCycleNumber = await this.redisService.get(this.redisCycleKey);
 
     // ✅ Step 1: Fetch All Active Operators' IDs
     const allActiveOperatorIds =
@@ -272,7 +274,7 @@ export class DrillingCycleService {
     const activeOperators = await this.operatorModel
       .find(
         { _id: { $in: allActiveOperatorIds } },
-        { _id: 1, cumulativeEff: 1, effMultiplier: 1 },
+        { _id: 1, cumulativeEff: 1, effMultiplier: 1, username: 1 },
       )
       .lean();
 
@@ -281,6 +283,26 @@ export class DrillingCycleService {
         `⚠️ (distributeCycleRewards) No valid active operators.`,
       );
       return;
+    }
+
+    // Create a map of operator IDs to names for quick lookup
+    const operatorNameMap = new Map(
+      activeOperators.map((op) => [
+        op._id.toString(),
+        op.username || 'Unknown Operator',
+      ]),
+    );
+
+    // If we have an extractor, fetch its name
+    if (extractorOperatorId) {
+      const extractorOperator = await this.operatorModel
+        .findById(extractorOperatorId)
+        .select('username')
+        .lean();
+
+      if (extractorOperator) {
+        extractorName = extractorOperator.username || 'Unknown Extractor';
+      }
     }
 
     // ✅ Step 3: Apply Luck Factor & Compute Weighted Eff
@@ -437,6 +459,23 @@ export class DrillingCycleService {
 
     // ✅ Step 8: Batch Issue Rewards
     await this.batchIssueHashRewards(rewardData);
+
+    // ✅ Step 9: Prepare and send WebSocket notification
+    const rewardSharesWithNames = rewardData.map((reward) => ({
+      operatorId: reward.operatorId,
+      operatorName:
+        operatorNameMap.get(reward.operatorId.toString()) || 'Unknown Operator',
+      amount: reward.amount,
+    }));
+
+    // Send WebSocket notification
+    await this.drillingGatewayService.notifyCycleRewards(
+      parseInt(currentCycleNumber, 10),
+      extractorOperatorId,
+      extractorName,
+      issuedHash,
+      rewardSharesWithNames,
+    );
 
     const end = performance.now();
     this.logger.log(
