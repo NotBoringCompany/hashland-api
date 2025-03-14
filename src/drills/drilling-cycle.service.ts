@@ -599,15 +599,33 @@ export class DrillingCycleService {
       );
 
       // Process fuel updates in parallel
-      const [, , depletedOperatorIds] = await Promise.all([
-        // Deplete fuel for active operators
-        this.operatorService.depleteFuel(activeOperatorIds, fuelUsed),
+      const [depletedOperators, replenishedOperators, depletedOperatorIds] =
+        await Promise.all([
+          // Deplete fuel for active operators
+          this.operatorService.depleteFuel(activeOperatorIds, fuelUsed),
 
-        // Replenish fuel for inactive operators
-        this.operatorService.replenishFuel(activeOperatorIds, fuelGained),
+          // Replenish fuel for inactive operators
+          this.operatorService.replenishFuel(activeOperatorIds, fuelGained),
 
-        // Find operators whose fuel dropped below threshold
-        this.operatorService.fetchDepletedOperatorIds(activeOperatorIds),
+          // Find operators whose fuel dropped below threshold
+          this.operatorService.fetchDepletedOperatorIds(activeOperatorIds),
+        ]);
+
+      // Notify operators about fuel updates
+      await Promise.all([
+        // Notify active operators about fuel depletion
+        this.drillingGatewayService.notifyFuelUpdates(
+          depletedOperators,
+          fuelUsed,
+          'depleted',
+        ),
+
+        // Notify inactive operators about fuel replenishment
+        this.drillingGatewayService.notifyFuelUpdates(
+          replenishedOperators,
+          fuelGained,
+          'replenished',
+        ),
       ]);
 
       // Handle depleted operators
@@ -635,6 +653,7 @@ export class DrillingCycleService {
          ⛏ Depleted ${fuelUsed} fuel for ${activeOperatorIds.size} active operators.
          🔋 Replenished ${fuelGained} fuel for inactive operators.
          🛑 Stopped drilling for ${depletedOperatorIds.length} operators below fuel threshold.
+         📢 Sent fuel update notifications to ${depletedOperators.length + replenishedOperators.length} operators.
          ⏱ Execution Time: ${executionTime}ms`,
       );
     } catch (error) {

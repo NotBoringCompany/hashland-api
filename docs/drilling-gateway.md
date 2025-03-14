@@ -70,6 +70,13 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
 9. **drilling-error**: Sent when an error occurs
    - `message`: Error message
 
+10. **fuel-update**: Sent when an operator's fuel is depleted or replenished
+   - `currentFuel`: Current fuel level
+   - `maxFuel`: Maximum fuel capacity
+   - `changeAmount`: Amount of fuel changed
+   - `changeType`: Type of change ('depleted' or 'replenished')
+   - `message`: Descriptive message about the fuel change
+
 ## Usage Example
 
 ```javascript
@@ -106,6 +113,7 @@ socket.on('drilling-stopping', (data) => console.log('Drilling stopping:', data)
 socket.on('drilling-completed', (data) => console.log('Drilling completed:', data));
 socket.on('drilling-stopped', (data) => console.log('Drilling stopped:', data));
 socket.on('drilling-error', (data) => console.error('Drilling error:', data.message));
+socket.on('fuel-update', (data) => console.log('Fuel update:', data));
 
 // Stop drilling
 socket.emit('stop-drilling');

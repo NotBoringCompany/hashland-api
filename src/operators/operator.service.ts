@@ -285,26 +285,48 @@ export class OperatorService {
    * Depletes fuel for active operators.
    * @param activeOperatorIds Set of operator IDs currently active
    * @param fuelUsed Amount of fuel to deplete
+   * @returns Array of affected operators with their updated fuel values
    */
   async depleteFuel(
     activeOperatorIds: Set<Types.ObjectId>,
     fuelUsed: number,
-  ): Promise<void> {
+  ): Promise<
+    { operatorId: Types.ObjectId; currentFuel: number; maxFuel: number }[]
+  > {
+    // First update the fuel values
     await this.operatorModel.updateMany(
       { _id: { $in: Array.from(activeOperatorIds) } },
       { $inc: { currentFuel: -fuelUsed } },
     );
+
+    // Then fetch the updated operators to return their new fuel values
+    const updatedOperators = await this.operatorModel
+      .find(
+        { _id: { $in: Array.from(activeOperatorIds) } },
+        { _id: 1, currentFuel: 1, maxFuel: 1 },
+      )
+      .lean();
+
+    return updatedOperators.map((op) => ({
+      operatorId: op._id,
+      currentFuel: op.currentFuel,
+      maxFuel: op.maxFuel,
+    }));
   }
 
   /**
    * Replenishes fuel for inactive operators up to their max fuel capacity.
    * @param activeOperatorIds Set of operator IDs currently active (to exclude)
    * @param fuelGained Amount of fuel to replenish
+   * @returns Array of affected operators with their updated fuel values
    */
   async replenishFuel(
     activeOperatorIds: Set<Types.ObjectId>,
     fuelGained: number,
-  ): Promise<void> {
+  ): Promise<
+    { operatorId: Types.ObjectId; currentFuel: number; maxFuel: number }[]
+  > {
+    // First update the fuel values
     await this.operatorModel.updateMany(
       {
         _id: { $nin: Array.from(activeOperatorIds) },
@@ -320,6 +342,23 @@ export class OperatorService {
         },
       ],
     );
+
+    // Then fetch the updated operators to return their new fuel values
+    const updatedOperators = await this.operatorModel
+      .find(
+        {
+          _id: { $nin: Array.from(activeOperatorIds) },
+          $expr: { $lt: ['$currentFuel', '$maxFuel'] }, // Same condition as the update
+        },
+        { _id: 1, currentFuel: 1, maxFuel: 1 },
+      )
+      .lean();
+
+    return updatedOperators.map((op) => ({
+      operatorId: op._id,
+      currentFuel: op.currentFuel,
+      maxFuel: op.maxFuel,
+    }));
   }
 
   /**

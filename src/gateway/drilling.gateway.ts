@@ -34,6 +34,7 @@ import {
  * - Emits real-time updates to all connected clients when an operator connects or disconnects.
  * - Handles starting and stopping drilling sessions.
  * - Automatically stops drilling when operators run out of fuel or disconnect.
+ * - Sends fuel updates to operators when their fuel is depleted or replenished.
  */
 @WebSocketGateway({
   cors: { origin: '*' }, // ✅ Allow WebSocket connections from any frontend

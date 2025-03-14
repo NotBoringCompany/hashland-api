@@ -112,4 +112,46 @@ export class DrillingGatewayService {
       }
     }
   }
+
+  /**
+   * Notifies operators about fuel updates (depletion or replenishment).
+   *
+   * @param operatorUpdates Array of operator updates with fuel information
+   * @param changeAmount Amount of fuel changed
+   * @param changeType Type of change ('depleted' or 'replenished')
+   */
+  async notifyFuelUpdates(
+    operatorUpdates: {
+      operatorId: Types.ObjectId;
+      currentFuel: number;
+      maxFuel: number;
+    }[],
+    changeAmount: number,
+    changeType: 'depleted' | 'replenished',
+  ) {
+    for (const update of operatorUpdates) {
+      const operatorIdStr = update.operatorId.toString();
+      const socketId =
+        this.drillingGateway.getSocketIdForOperator(operatorIdStr);
+
+      if (socketId) {
+        const message =
+          changeType === 'depleted'
+            ? `Your fuel has been depleted by ${changeAmount} units.`
+            : `Your fuel has been replenished by ${changeAmount} units.`;
+
+        this.drillingGateway.server.to(socketId).emit('fuel-update', {
+          currentFuel: update.currentFuel,
+          maxFuel: update.maxFuel,
+          changeAmount,
+          changeType,
+          message,
+        });
+
+        this.logger.log(
+          `⚡ Notified operator ${operatorIdStr} about fuel ${changeType}: ${changeAmount} units. Current: ${update.currentFuel}/${update.maxFuel}`,
+        );
+      }
+    }
+  }
 }

@@ -132,6 +132,17 @@ export interface DrillingUpdateResponse {
   difficulty?: number;
 }
 
+/**
+ * Response for fuel-update event
+ */
+export interface FuelUpdateResponse {
+  currentFuel: number;
+  maxFuel: number;
+  changeAmount: number;
+  changeType: 'depleted' | 'replenished';
+  message: string;
+}
+
 // ==========================================
 // Internal Types
 // ==========================================
