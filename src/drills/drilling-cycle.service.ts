@@ -468,6 +468,26 @@ export class DrillingCycleService {
       amount: reward.amount,
     }));
 
+    // Create the payload for WebSocket notification
+    const timestamp = new Date().toISOString();
+    const rewardPayload = {
+      cycleNumber: parseInt(currentCycleNumber, 10),
+      timestamp,
+      extractor: {
+        id: extractorOperatorId ? extractorOperatorId.toString() : null,
+        name: extractorName,
+      },
+      totalReward: issuedHash,
+      shares: rewardSharesWithNames.map((share) => ({
+        operatorId: share.operatorId.toString(),
+        operatorName: share.operatorName,
+        amount: share.amount,
+      })),
+    };
+
+    // Store the rewards in Redis for history
+    await this.drillingGateway.storeCycleRewardsInRedis(rewardPayload);
+
     // Send WebSocket notification
     await this.drillingGatewayService.notifyCycleRewards(
       parseInt(currentCycleNumber, 10),

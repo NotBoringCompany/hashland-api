@@ -29,6 +29,9 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
 4. **get-fuel-status**: Request the current fuel status of the operator
    - No parameters required
 
+5. **get-recent-rewards**: Request the latest 5 cycle rewards
+   - No parameters required
+
 ### Server-to-Client Events
 1. **online-operator-update**: Broadcasts when operators connect/disconnect
    - `onlineOperatorCount`: Number of online operators
@@ -87,6 +90,7 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
 
 12. **cycle-rewards**: Sent when rewards are distributed at the end of a drilling cycle
    - `cycleNumber`: The cycle number
+   - `timestamp`: ISO date string of when the rewards were distributed
    - `extractor`: Object containing extractor information
      - `id`: The ID of the extractor operator (null if no extractor)
      - `name`: The username of the extractor operator (null if no extractor)
@@ -95,6 +99,9 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
      - `operatorId`: The ID of the operator
      - `operatorName`: The username of the operator
      - `amount`: The amount of HASH rewarded to this operator
+
+13. **recent-rewards**: Sent in response to a get-recent-rewards request
+   - Array of the latest 5 cycle rewards, each with the same structure as the cycle-rewards event
 
 ## Usage Example
 
@@ -115,6 +122,9 @@ socket.emit('get-drilling-status');
 
 // Request current fuel status
 socket.emit('get-fuel-status');
+
+// Request recent cycle rewards
+socket.emit('get-recent-rewards');
 
 // Listen for drilling status response
 socket.on('drilling-status', (data) => {
@@ -164,6 +174,27 @@ socket.on('cycle-rewards', (data) => {
   console.log('Top earners:');
   topEarners.forEach((share, index) => {
     console.log(`${index + 1}. ${share.operatorName}: ${share.amount} HASH`);
+  });
+});
+
+// Listen for recent rewards history
+socket.on('recent-rewards', (rewards) => {
+  console.log('Recent cycle rewards:');
+  rewards.forEach((reward, index) => {
+    console.log(`Cycle #${reward.cycleNumber} (${new Date(reward.timestamp).toLocaleString()})`);
+    console.log(`Extractor: ${reward.extractor.name || 'No extractor'}`);
+    console.log(`Total reward: ${reward.totalReward} HASH`);
+    
+    // Find my reward share in each cycle
+    const myOperatorId = 'your-operator-id';
+    const myShare = reward.shares.find(share => share.operatorId === myOperatorId);
+    if (myShare) {
+      console.log(`My reward: ${myShare.amount} HASH`);
+    }
+    
+    if (index < rewards.length - 1) {
+      console.log('-------------------');
+    }
   });
 });
 

@@ -29,6 +29,11 @@ export type GetDrillingStatusRequest = void;
  */
 export type GetFuelStatusRequest = void;
 
+/**
+ * No payload required for get-recent-rewards event
+ */
+export type GetRecentRewardsRequest = void;
+
 // ==========================================
 // Server-to-Client Events (Responses)
 // ==========================================
@@ -162,6 +167,7 @@ export interface FuelStatusResponse {
  */
 export interface CycleRewardsResponse {
   cycleNumber: number;
+  timestamp: string; // ISO date string
   extractor: {
     id: string | null;
     name: string | null;

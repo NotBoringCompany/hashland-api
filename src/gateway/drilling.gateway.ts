@@ -25,6 +25,7 @@ import {
   OnlineOperatorUpdateResponse,
   BroadcastStopDrillingPayload,
   FuelStatusResponse,
+  CycleRewardsResponse,
 } from './drilling.gateway.types';
 
 /**
@@ -51,6 +52,7 @@ export class DrillingGateway
   private readonly redisOnlineOperatorsKey = 'drilling:onlineOperators';
   private readonly redisActiveDrillingOperatorsKey =
     'drilling:activeDrillingOperators';
+  private readonly redisRecentCycleRewardsKey = 'drilling:recent-cycle-rewards';
 
   /**
    * Keeps track of online operators.
@@ -629,6 +631,109 @@ export class DrillingGateway
     } catch (error) {
       this.logger.error(`Authentication failed: ${error.message}`);
       return null;
+    }
+  }
+
+  /**
+   * WebSocket event handler for requesting recent cycle rewards.
+   *
+   * @param client The WebSocket client.
+   */
+  @SubscribeMessage('get-recent-rewards')
+  async getRecentRewards(client: Socket) {
+    try {
+      const operatorId = client.data.operatorId;
+
+      if (!operatorId) {
+        client.emit('drilling-error', {
+          message: 'Authentication required',
+        } as DrillingErrorResponse);
+        return;
+      }
+
+      // Get recent rewards from Redis
+      const recentRewards = await this.getRecentCycleRewards();
+
+      // Send the rewards to the client
+      client.emit('recent-rewards', recentRewards);
+
+      this.logger.log(
+        `📊 Sent ${recentRewards.length} recent rewards to operator ${operatorId}`,
+      );
+    } catch (error) {
+      this.logger.error(`Error getting recent rewards: ${error.message}`);
+      client.emit('drilling-error', {
+        message: `Failed to get recent rewards: ${error.message}`,
+      } as DrillingErrorResponse);
+    }
+  }
+
+  /**
+   * Retrieves the latest 5 cycle rewards from Redis.
+   *
+   * @returns Array of the latest 5 cycle rewards
+   */
+  async getRecentCycleRewards(): Promise<CycleRewardsResponse[]> {
+    try {
+      const recentRewardsStr = await this.redisService.get(
+        this.redisRecentCycleRewardsKey,
+      );
+
+      if (!recentRewardsStr) {
+        return [];
+      }
+
+      return JSON.parse(recentRewardsStr);
+    } catch (error) {
+      this.logger.error(
+        `❌ Error retrieving recent cycle rewards from Redis: ${error.message}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Stores cycle rewards in Redis for later retrieval.
+   * Maintains a list of the latest 5 cycle rewards.
+   *
+   * @param cycleRewards The cycle rewards data to store
+   */
+  async storeCycleRewardsInRedis(
+    cycleRewards: CycleRewardsResponse,
+  ): Promise<void> {
+    try {
+      // Get existing rewards list
+      const existingRewardsStr = await this.redisService.get(
+        this.redisRecentCycleRewardsKey,
+      );
+      let recentRewards: CycleRewardsResponse[] = [];
+
+      if (existingRewardsStr) {
+        recentRewards = JSON.parse(existingRewardsStr);
+      }
+
+      // Add new rewards to the beginning of the array
+      recentRewards.unshift(cycleRewards);
+
+      // Keep only the latest 5 rewards
+      if (recentRewards.length > 5) {
+        recentRewards = recentRewards.slice(0, 5);
+      }
+
+      // Store back in Redis with 24-hour expiry
+      await this.redisService.set(
+        this.redisRecentCycleRewardsKey,
+        JSON.stringify(recentRewards),
+        24 * 60 * 60, // 24 hours in seconds
+      );
+
+      this.logger.log(
+        `💾 Stored cycle rewards for cycle #${cycleRewards.cycleNumber} in Redis`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Error storing cycle rewards in Redis: ${error.message}`,
+      );
     }
   }
 }

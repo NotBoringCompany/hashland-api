@@ -177,8 +177,10 @@ export class DrillingGatewayService {
     }[],
   ) {
     // Convert the data to the format expected by the frontend
+    const timestamp = new Date().toISOString();
     const payload: CycleRewardsResponse = {
       cycleNumber,
+      timestamp,
       extractor: {
         id: extractorId ? extractorId.toString() : null,
         name: extractorName,
