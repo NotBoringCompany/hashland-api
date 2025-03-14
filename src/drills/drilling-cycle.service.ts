@@ -598,20 +598,20 @@ export class DrillingCycleService {
         GAME_CONSTANTS.FUEL.BASE_FUEL_REGENERATION_RATE.maxUnits,
       );
 
-      // Process fuel updates in parallel
+      // Process fuel updates in parallel - only operators that need notifications are returned
       const [depletedOperators, replenishedOperators, depletedOperatorIds] =
         await Promise.all([
-          // Deplete fuel for active operators
+          // Deplete fuel for active operators - returns all updated operators
           this.operatorService.depleteFuel(activeOperatorIds, fuelUsed),
 
-          // Replenish fuel for inactive operators
+          // Replenish fuel for inactive operators - returns all updated operators
           this.operatorService.replenishFuel(activeOperatorIds, fuelGained),
 
           // Find operators whose fuel dropped below threshold
           this.operatorService.fetchDepletedOperatorIds(activeOperatorIds),
         ]);
 
-      // Notify operators about fuel updates
+      // Notify operators about fuel updates - send to all operators for real-time updates
       await Promise.all([
         // Notify active operators about fuel depletion
         this.drillingGatewayService.notifyFuelUpdates(

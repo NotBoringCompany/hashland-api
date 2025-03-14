@@ -8,6 +8,7 @@ import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Drill } from 'src/drills/schemas/drill.schema';
 import { DrillService } from 'src/drills/drill.service';
+import { RedisService } from 'src/common/redis.service';
 
 @Injectable()
 export class OperatorService {
@@ -19,6 +20,7 @@ export class OperatorService {
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
     private readonly drillService: DrillService,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -91,23 +93,38 @@ export class OperatorService {
   }
 
   /**
-   * Checks if the operator currently has enough fuel to start/continue the drilling session.
+   * Checks if an operator has enough fuel to start/continue drilling.
+   * First checks Redis cache, then falls back to database if needed.
    */
   async hasEnoughFuel(operatorId: Types.ObjectId): Promise<boolean> {
     try {
-      // Fetch the operator's current fuel level
+      // Try to get cached fuel values first for better performance
+      const cachedFuel = await this.getCachedFuelValues(operatorId);
+
+      if (cachedFuel) {
+        // Use cached value if available
+        return (
+          cachedFuel.currentFuel >=
+          GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits
+        );
+      }
+
+      // Fall back to database if not cached
       const operator = await this.operatorModel.findOne(
-        {
-          _id: operatorId,
-        },
-        {
-          currentFuel: 1,
-        },
+        { _id: operatorId },
+        { currentFuel: 1 },
       );
 
       if (!operator) {
         throw new NotFoundException('(hasEnoughFuel) Operator not found');
       }
+
+      // Cache the result for future use
+      await this.cacheFuelValues(
+        operatorId,
+        operator.currentFuel,
+        operator.maxFuel,
+      );
 
       // Check if the operator has enough fuel
       return (
@@ -261,24 +278,109 @@ export class OperatorService {
 
   /**
    * Fetches IDs of operators whose fuel has dropped below the minimum threshold.
+   * Uses Redis cache when available for better performance.
    * @param activeOperatorIds Set of active operator IDs to check
    * @returns Array of ObjectIds for operators with depleted fuel
    */
   async fetchDepletedOperatorIds(
     activeOperatorIds: Set<Types.ObjectId>,
   ): Promise<Types.ObjectId[]> {
-    return this.operatorModel
-      .find(
-        {
-          _id: { $in: Array.from(activeOperatorIds) },
-          currentFuel: {
-            $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
+    if (activeOperatorIds.size === 0) {
+      return [];
+    }
+
+    const depletedOperatorIds: Types.ObjectId[] = [];
+    const operatorsToCheckInDB: Types.ObjectId[] = [];
+
+    // First check Redis cache for each operator
+    for (const operatorId of activeOperatorIds) {
+      const cachedFuel = await this.getCachedFuelValues(operatorId);
+
+      if (cachedFuel) {
+        // If cached, check fuel level
+        if (
+          cachedFuel.currentFuel <
+          GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits
+        ) {
+          depletedOperatorIds.push(operatorId);
+        }
+      } else {
+        // If not cached, add to list to check in DB
+        operatorsToCheckInDB.push(operatorId);
+      }
+    }
+
+    // If there are operators not in cache, check them in the database
+    if (operatorsToCheckInDB.length > 0) {
+      const depletedOperatorsFromDB = await this.operatorModel
+        .find(
+          {
+            _id: { $in: operatorsToCheckInDB },
+            currentFuel: {
+              $lt: GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
+            },
           },
-        },
-        { _id: 1 },
-      )
-      .lean()
-      .then((operators) => operators.map((op) => op._id));
+          { _id: 1 },
+        )
+        .lean();
+
+      // Add database results to the depleted list
+      depletedOperatorIds.push(...depletedOperatorsFromDB.map((op) => op._id));
+    }
+
+    return depletedOperatorIds;
+  }
+
+  /**
+   * Gets the Redis key for operator fuel cache
+   * @param operatorId Operator ID
+   * @returns Redis key for fuel cache
+   */
+  private getOperatorFuelCacheKey(operatorId: Types.ObjectId | string): string {
+    const operatorIdStr = operatorId.toString();
+    return `operator:${operatorIdStr}:fuel`;
+  }
+
+  /**
+   * Caches operator fuel values in Redis
+   * @param operatorId Operator ID
+   * @param currentFuel Current fuel value
+   * @param maxFuel Maximum fuel value
+   */
+  private async cacheFuelValues(
+    operatorId: Types.ObjectId,
+    currentFuel: number,
+    maxFuel: number,
+  ): Promise<void> {
+    const key = this.getOperatorFuelCacheKey(operatorId);
+    await this.redisService.set(
+      key,
+      JSON.stringify({ currentFuel, maxFuel }),
+      3600, // 1 hour expiry
+    );
+  }
+
+  /**
+   * Gets cached fuel values from Redis
+   * @param operatorId Operator ID
+   * @returns Cached fuel values or null if not found
+   */
+  private async getCachedFuelValues(
+    operatorId: Types.ObjectId,
+  ): Promise<{ currentFuel: number; maxFuel: number } | null> {
+    const key = this.getOperatorFuelCacheKey(operatorId);
+    const cachedData = await this.redisService.get(key);
+
+    if (!cachedData) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(cachedData);
+    } catch (error) {
+      this.logger.error(`Error parsing cached fuel data: ${error.message}`);
+      return null;
+    }
   }
 
   /**
@@ -293,25 +395,81 @@ export class OperatorService {
   ): Promise<
     { operatorId: Types.ObjectId; currentFuel: number; maxFuel: number }[]
   > {
-    // First update the fuel values
-    await this.operatorModel.updateMany(
-      { _id: { $in: Array.from(activeOperatorIds) } },
-      { $inc: { currentFuel: -fuelUsed } },
-    );
+    if (activeOperatorIds.size === 0) {
+      return [];
+    }
 
-    // Then fetch the updated operators to return their new fuel values
-    const updatedOperators = await this.operatorModel
-      .find(
-        { _id: { $in: Array.from(activeOperatorIds) } },
-        { _id: 1, currentFuel: 1, maxFuel: 1 },
-      )
-      .lean();
+    const updatedOperators: {
+      operatorId: Types.ObjectId;
+      currentFuel: number;
+      maxFuel: number;
+    }[] = [];
+    const bulkWriteOperations = [];
+    const operatorFuelData: {
+      operatorId: Types.ObjectId;
+      currentFuel: number;
+      maxFuel: number;
+    }[] = [];
 
-    return updatedOperators.map((op) => ({
-      operatorId: op._id,
-      currentFuel: op.currentFuel,
-      maxFuel: op.maxFuel,
-    }));
+    // Process each operator
+    for (const operatorId of activeOperatorIds) {
+      // Try to get cached fuel values first
+      let cachedFuel = await this.getCachedFuelValues(operatorId);
+
+      if (!cachedFuel) {
+        // If not cached, fetch from database
+        const operator = await this.operatorModel
+          .findById(operatorId, { currentFuel: 1, maxFuel: 1 })
+          .lean();
+
+        if (!operator) {
+          continue; // Skip if operator not found
+        }
+
+        cachedFuel = {
+          currentFuel: operator.currentFuel,
+          maxFuel: operator.maxFuel,
+        };
+      }
+
+      // Calculate new fuel value
+      const newFuel = Math.max(0, cachedFuel.currentFuel - fuelUsed);
+
+      // Add to fuel data for batch caching
+      operatorFuelData.push({
+        operatorId,
+        currentFuel: newFuel,
+        maxFuel: cachedFuel.maxFuel,
+      });
+
+      // Add to bulk write operations
+      bulkWriteOperations.push({
+        updateOne: {
+          filter: { _id: operatorId },
+          update: { $set: { currentFuel: newFuel } },
+        },
+      });
+
+      // Add to notification list - all operators get notified for real-time updates
+      updatedOperators.push({
+        operatorId,
+        currentFuel: newFuel,
+        maxFuel: cachedFuel.maxFuel,
+      });
+    }
+
+    // Execute operations in parallel
+    await Promise.all([
+      // Batch cache fuel values in Redis
+      this.batchCacheFuelValues(operatorFuelData),
+
+      // Execute bulk write if there are operations
+      bulkWriteOperations.length > 0
+        ? this.operatorModel.bulkWrite(bulkWriteOperations)
+        : Promise.resolve(),
+    ]);
+
+    return updatedOperators;
   }
 
   /**
@@ -326,39 +484,86 @@ export class OperatorService {
   ): Promise<
     { operatorId: Types.ObjectId; currentFuel: number; maxFuel: number }[]
   > {
-    // First update the fuel values
-    await this.operatorModel.updateMany(
-      {
-        _id: { $nin: Array.from(activeOperatorIds) },
-        $expr: { $lt: ['$currentFuel', '$maxFuel'] }, // Only operators with fuel < maxFuel
-      },
-      [
-        {
-          $set: {
-            currentFuel: {
-              $min: ['$maxFuel', { $add: ['$currentFuel', fuelGained] }],
-            },
-          },
-        },
-      ],
-    );
-
-    // Then fetch the updated operators to return their new fuel values
-    const updatedOperators = await this.operatorModel
+    // First, find all inactive operators that need fuel replenishment
+    const inactiveOperators = await this.operatorModel
       .find(
         {
           _id: { $nin: Array.from(activeOperatorIds) },
-          $expr: { $lt: ['$currentFuel', '$maxFuel'] }, // Same condition as the update
+          $expr: { $lt: ['$currentFuel', '$maxFuel'] },
         },
         { _id: 1, currentFuel: 1, maxFuel: 1 },
       )
       .lean();
 
-    return updatedOperators.map((op) => ({
-      operatorId: op._id,
-      currentFuel: op.currentFuel,
-      maxFuel: op.maxFuel,
-    }));
+    if (inactiveOperators.length === 0) {
+      return [];
+    }
+
+    const updatedOperators: {
+      operatorId: Types.ObjectId;
+      currentFuel: number;
+      maxFuel: number;
+    }[] = [];
+    const bulkWriteOperations = [];
+    const operatorFuelData: {
+      operatorId: Types.ObjectId;
+      currentFuel: number;
+      maxFuel: number;
+    }[] = [];
+
+    // Process each inactive operator
+    for (const operator of inactiveOperators) {
+      // Try to get cached fuel values first
+      let cachedFuel = await this.getCachedFuelValues(operator._id);
+
+      if (!cachedFuel) {
+        cachedFuel = {
+          currentFuel: operator.currentFuel,
+          maxFuel: operator.maxFuel,
+        };
+      }
+
+      // Calculate new fuel value (capped at max fuel)
+      const newFuel = Math.min(
+        cachedFuel.maxFuel,
+        cachedFuel.currentFuel + fuelGained,
+      );
+
+      // Add to fuel data for batch caching
+      operatorFuelData.push({
+        operatorId: operator._id,
+        currentFuel: newFuel,
+        maxFuel: cachedFuel.maxFuel,
+      });
+
+      // Add to bulk write operations
+      bulkWriteOperations.push({
+        updateOne: {
+          filter: { _id: operator._id },
+          update: { $set: { currentFuel: newFuel } },
+        },
+      });
+
+      // Add to notification list - all operators get notified for real-time updates
+      updatedOperators.push({
+        operatorId: operator._id,
+        currentFuel: newFuel,
+        maxFuel: cachedFuel.maxFuel,
+      });
+    }
+
+    // Execute operations in parallel
+    await Promise.all([
+      // Batch cache fuel values in Redis
+      this.batchCacheFuelValues(operatorFuelData),
+
+      // Execute bulk write if there are operations
+      bulkWriteOperations.length > 0
+        ? this.operatorModel.bulkWrite(bulkWriteOperations)
+        : Promise.resolve(),
+    ]);
+
+    return updatedOperators;
   }
 
   /**
@@ -366,5 +571,38 @@ export class OperatorService {
    */
   getRandomFuelValue(min: number, max: number): number {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  /**
+   * Batch caches multiple operators' fuel values in Redis
+   * @param operatorFuelData Array of operator fuel data
+   */
+  private async batchCacheFuelValues(
+    operatorFuelData: {
+      operatorId: Types.ObjectId;
+      currentFuel: number;
+      maxFuel: number;
+    }[],
+  ): Promise<void> {
+    if (operatorFuelData.length === 0) return;
+
+    const keyValuePairs: Record<string, string> = {};
+
+    // Prepare key-value pairs for batch update
+    for (const data of operatorFuelData) {
+      const key = this.getOperatorFuelCacheKey(data.operatorId);
+      keyValuePairs[key] = JSON.stringify({
+        currentFuel: data.currentFuel,
+        maxFuel: data.maxFuel,
+      });
+    }
+
+    // Batch update Redis
+    await this.redisService.mset(keyValuePairs);
+
+    // Set expiration for each key (unfortunately Redis doesn't support batch expiry)
+    for (const key of Object.keys(keyValuePairs)) {
+      await this.redisService.set(key, keyValuePairs[key], 3600); // 1 hour expiry
+    }
   }
 }
