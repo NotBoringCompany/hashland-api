@@ -24,6 +24,11 @@ export type StopDrillingRequest = void;
  */
 export type GetDrillingStatusRequest = void;
 
+/**
+ * No payload required for get-fuel-status event
+ */
+export type GetFuelStatusRequest = void;
+
 // ==========================================
 // Server-to-Client Events (Responses)
 // ==========================================
@@ -141,6 +146,15 @@ export interface FuelUpdateResponse {
   changeAmount: number;
   changeType: 'depleted' | 'replenished';
   message: string;
+}
+
+/**
+ * Response for fuel-status event
+ */
+export interface FuelStatusResponse {
+  currentFuel: number;
+  maxFuel: number;
+  fuelPercentage: number;
 }
 
 // ==========================================

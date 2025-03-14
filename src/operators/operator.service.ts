@@ -605,4 +605,51 @@ export class OperatorService {
       await this.redisService.set(key, keyValuePairs[key], 3600); // 1 hour expiry
     }
   }
+
+  /**
+   * Gets an operator's current fuel status.
+   * First checks Redis cache, then falls back to database if needed.
+   * @param operatorId Operator ID
+   * @returns Object containing currentFuel and maxFuel, or null if operator not found
+   */
+  async getOperatorFuelStatus(
+    operatorId: Types.ObjectId,
+  ): Promise<{ currentFuel: number; maxFuel: number } | null> {
+    try {
+      // Try to get cached fuel values first for better performance
+      const cachedFuel = await this.getCachedFuelValues(operatorId);
+
+      if (cachedFuel) {
+        // Use cached value if available
+        return cachedFuel;
+      }
+
+      // Fall back to database if not cached
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { currentFuel: 1, maxFuel: 1 })
+        .lean();
+
+      if (!operator) {
+        this.logger.warn(
+          `(getOperatorFuelStatus) Operator not found: ${operatorId}`,
+        );
+        return null;
+      }
+
+      // Cache the result for future use
+      await this.cacheFuelValues(
+        operatorId,
+        operator.currentFuel,
+        operator.maxFuel,
+      );
+
+      return {
+        currentFuel: operator.currentFuel,
+        maxFuel: operator.maxFuel,
+      };
+    } catch (error) {
+      this.logger.error(`(getOperatorFuelStatus) Error: ${error.message}`);
+      return null;
+    }
+  }
 }

@@ -26,6 +26,9 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
 3. **get-drilling-status**: Request the current status of the operator's drilling session
    - No parameters required
 
+4. **get-fuel-status**: Request the current fuel status of the operator
+   - No parameters required
+
 ### Server-to-Client Events
 1. **online-operator-update**: Broadcasts when operators connect/disconnect
    - `onlineOperatorCount`: Number of online operators
@@ -77,6 +80,11 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
    - `changeType`: Type of change ('depleted' or 'replenished')
    - `message`: Descriptive message about the fuel change
 
+11. **fuel-status**: Sent in response to a get-fuel-status request
+   - `currentFuel`: Current fuel level
+   - `maxFuel`: Maximum fuel capacity
+   - `fuelPercentage`: Percentage of fuel remaining (0-100)
+
 ## Usage Example
 
 ```javascript
@@ -94,6 +102,9 @@ socket.on('disconnect', () => console.log('Disconnected from WebSocket server'))
 // Request current drilling status
 socket.emit('get-drilling-status');
 
+// Request current fuel status
+socket.emit('get-fuel-status');
+
 // Listen for drilling status response
 socket.on('drilling-status', (data) => {
   console.log('Current drilling status:', data.status);
@@ -101,6 +112,13 @@ socket.on('drilling-status', (data) => {
     console.log('Earned HASH:', data.earnedHASH);
     console.log('Current cycle:', data.currentCycleNumber);
   }
+});
+
+// Listen for fuel status response
+socket.on('fuel-status', (data) => {
+  console.log('Current fuel:', data.currentFuel);
+  console.log('Max fuel:', data.maxFuel);
+  console.log('Fuel percentage:', data.fuelPercentage + '%');
 });
 
 // Start drilling

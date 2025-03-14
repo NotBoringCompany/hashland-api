@@ -24,6 +24,7 @@ import {
   DrillingStatusResponse,
   OnlineOperatorUpdateResponse,
   BroadcastStopDrillingPayload,
+  FuelStatusResponse,
 } from './drilling.gateway.types';
 
 /**
@@ -379,6 +380,55 @@ export class DrillingGateway
       this.logger.error(`Error getting drilling status: ${error.message}`);
       client.emit('drilling-error', {
         message: `Failed to get drilling status: ${error.message}`,
+      } as DrillingErrorResponse);
+    }
+  }
+
+  /**
+   * WebSocket event handler for requesting the current fuel status.
+   *
+   * @param client The WebSocket client.
+   * @returns Current fuel status.
+   */
+  @SubscribeMessage('get-fuel-status')
+  async getFuelStatus(client: Socket) {
+    try {
+      const operatorId = client.data.operatorId;
+
+      if (!operatorId) {
+        client.emit('drilling-error', {
+          message: 'Authentication required',
+        } as DrillingErrorResponse);
+        return;
+      }
+
+      // Convert string ID to MongoDB ObjectId
+      const objectId = new Types.ObjectId(operatorId);
+
+      // Get the operator's fuel status
+      const operator =
+        await this.operatorService.getOperatorFuelStatus(objectId);
+
+      if (operator) {
+        // Calculate fuel percentage
+        const fuelPercentage = (operator.currentFuel / operator.maxFuel) * 100;
+
+        client.emit('fuel-status', {
+          currentFuel: operator.currentFuel,
+          maxFuel: operator.maxFuel,
+          fuelPercentage: Math.round(fuelPercentage * 10) / 10, // Round to 1 decimal place
+        } as FuelStatusResponse);
+
+        this.logger.log(`⛽ Sent fuel status to operator ${operatorId}`);
+      } else {
+        client.emit('drilling-error', {
+          message: 'Failed to get fuel status',
+        } as DrillingErrorResponse);
+      }
+    } catch (error) {
+      this.logger.error(`Error getting fuel status: ${error.message}`);
+      client.emit('drilling-error', {
+        message: `Failed to get fuel status: ${error.message}`,
       } as DrillingErrorResponse);
     }
   }
