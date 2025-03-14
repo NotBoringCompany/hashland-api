@@ -139,94 +139,113 @@ export class OperatorWalletService {
     try {
       let totalUsdBalance = 0;
 
-      // ✅ Dynamically initialize the object
+      // ✅ Organize wallets by chain
       const chainWalletsMap: Partial<Record<AllowedChain, string[]>> = {};
-
       for (const wallet of wallets) {
         if (!chainWalletsMap[wallet.chain]) {
-          chainWalletsMap[wallet.chain] = []; // Initialize only if needed
+          chainWalletsMap[wallet.chain] = [];
         }
         chainWalletsMap[wallet.chain]!.push(wallet.address);
       }
 
+      // ✅ Step 1: Fetch TON/USD Price (Avoid multiple API calls)
+      let tonUsdRate = 10; // Default to 10 in case of failure
+      try {
+        tonUsdRate = await this.fetchTonToUsdRate();
+      } catch (err: any) {
+        this.logger.warn(
+          `⚠️ (fetchTotalBalanceForWallets) Failed to fetch TON/USD rate. Defaulting to 1. Error: ${err.message}`,
+        );
+      }
+
       if (chainWalletsMap[AllowedChain.TON]?.length) {
-        // ✅ Batch fetch TON balances
         const tonApiKey = process.env.TON_API_KEY || '';
-        const apiUrl =
+        const tonXApiKey = process.env.TON_X_API_KEY || '';
+        const tonXApiUrl = `https://mainnet-rpc.tonxapi.com/v2/json-rpc/${tonXApiKey}`;
+
+        // ✅ Step 2: Fetch Native TON Balances (Single API Call)
+        const tonBalanceApiUrl =
           `https://toncenter.com/api/v3/accountStates?include_boc=false&api_key=${tonApiKey}&` +
           chainWalletsMap[AllowedChain.TON]!.map(
             (addr) => `address=${addr}`,
           ).join('&');
 
-        const response = await axios.get(apiUrl);
-        if (response.data?.accounts) {
-          const totalTonBalance = response.data.accounts.reduce(
-            (sum: number, walletData: any) =>
-              sum +
-              (walletData.balance ? parseFloat(walletData.balance) / 1e9 : 0),
-            0,
-          );
-
-          // Fetch TON/USD price
-          const tonUsdRate = await this.fetchTonToUsdRate();
-
-          // Compute total USD balance for TON wallets
-          totalUsdBalance += totalTonBalance * tonUsdRate;
-
-          // Then, fetch all jetton balances of the wallets and filter out USDT and USDC.
-          const tonXApiKey = process.env.TON_X_API_KEY || '';
-          const tonXApiUrl = `https://mainnet-rpc.tonxapi.com/v2/json-rpc/${tonXApiKey}`;
-
-          // Create a body for each TON wallet
-          const requests = chainWalletsMap[AllowedChain.TON]!.map(
-            (addr, index) => {
-              return {
-                id: index + 1,
-                jsonrpc: '2.0',
-                method: 'getAccountJettonsBalances',
-                params: { account_id: addr },
-              };
-            },
-          );
-
-          // Create a batch POST request
-          const batchJettonResponses = await axios.all(
-            requests.map((body) =>
-              axios.post(tonXApiUrl, body, {
-                headers: { 'Content-Type': 'application/json' },
-              }),
-            ),
-          );
-
-          // Define whitelisted jetton contract addresses
-          const allowedJettonAddresses = new Set([
-            '0:b113a994b5024a16719f69139328eb759596c38a25f59028b146fecdc3621dfe', // USDT
-            '0:7e30fc2b7751ba58a3642f3fd59d5e96a810ddd78d8a310bfe8353bef10500df', // USDC
-          ]);
-
-          for (const response of batchJettonResponses) {
-            if (response.data?.result?.balances) {
-              for (const balanceData of response.data.result.balances) {
-                const jettonAddr = balanceData.jetton?.address; // Get jetton contract address
-
-                if (allowedJettonAddresses.has(jettonAddr)) {
-                  const jettonBalance =
-                    parseFloat(balanceData.balance) /
-                    Math.pow(10, balanceData.jetton.decimals || 9); // Convert to correct decimal format
-
-                  totalUsdBalance += jettonBalance; // 1 USDT/USDC = 1 USD. No need for conversion.
-                }
-              }
-            }
+        let totalTonBalance = 0;
+        try {
+          const tonResponse = await axios.get(tonBalanceApiUrl);
+          if (tonResponse.data?.accounts) {
+            totalTonBalance = tonResponse.data.accounts.reduce(
+              (sum: number, walletData: any) =>
+                sum +
+                (walletData.balance ? parseFloat(walletData.balance) / 1e9 : 0), // Convert from nanotons to TON
+              0,
+            );
           }
-        } else {
+        } catch (err: any) {
           this.logger.warn(
-            `⚠️ (fetchTotalBalanceForWallets) Unexpected response from Toncenter.`,
+            `⚠️ (fetchTotalBalanceForWallets) Failed to fetch TON balances. Error: ${err.message}`,
           );
         }
-      } else {
-        // Other chains are not yet supported.
+
+        totalUsdBalance += totalTonBalance * tonUsdRate;
+
+        // ✅ Step 3: Batch Fetch Jetton Balances (Optimized)
+        const requests = chainWalletsMap[AllowedChain.TON]!.map(
+          (addr, index) => ({
+            id: index + 1,
+            jsonrpc: '2.0',
+            method: 'getAccountJettonsBalances',
+            params: { account_id: addr },
+          }),
+        );
+
+        const allowedJettonAddresses = new Set([
+          '0:b113a994b5024a16719f69139328eb759596c38a25f59028b146fecdc3621dfe', // USDT
+          '0:7e30fc2b7751ba58a3642f3fd59d5e96a810ddd78d8a310bfe8353bef10500df', // USDC
+        ]);
+
+        // ✅ Step 4: Execute Batch Requests with Parallel Execution
+        const batchJettonResponses = await Promise.allSettled(
+          requests.map((body) =>
+            axios.post(tonXApiUrl, body, {
+              headers: { 'Content-Type': 'application/json' },
+            }),
+          ),
+        );
+
+        // ✅ Step 5: Process Jetton Balances More Efficiently
+        const totalJettonUsdBalance = batchJettonResponses.reduce(
+          (sum, response) => {
+            if (
+              response.status === 'fulfilled' &&
+              response.value?.data?.result?.balances
+            ) {
+              const balances = response.value.data.result.balances;
+              return (
+                sum +
+                balances.reduce((innerSum, balanceData) => {
+                  const jettonAddr = balanceData.jetton?.address; // Get jetton contract address
+                  if (allowedJettonAddresses.has(jettonAddr)) {
+                    return (
+                      innerSum +
+                      parseFloat(balanceData.balance) /
+                        Math.pow(10, balanceData.jetton.decimals || 9) // Convert to correct decimal format
+                    );
+                  }
+                  return innerSum;
+                }, 0)
+              );
+            }
+            return sum;
+          },
+          0,
+        );
+
+        // ✅ Step 6: Add Jetton Balance to Total USD Balance
+        totalUsdBalance += totalJettonUsdBalance; // USDT/USDC ≈ 1 USD
       }
+
+      // Add other chains here...
 
       return totalUsdBalance;
     } catch (error) {
