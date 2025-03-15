@@ -9,6 +9,9 @@ import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Drill } from 'src/drills/schemas/drill.schema';
 import { DrillService } from 'src/drills/drill.service';
 import { RedisService } from 'src/common/redis.service';
+import { OperatorWallet } from './schemas/operator-wallet.schema';
+import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
+import { ApiResponse } from 'src/common/dto/response.dto';
 
 @Injectable()
 export class OperatorService {
@@ -16,12 +19,81 @@ export class OperatorService {
 
   constructor(
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    @InjectModel(OperatorWallet.name)
+    private operatorWalletModel: Model<OperatorWallet>,
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
+    @InjectModel(PoolOperator.name)
+    private poolOperatorModel: Model<PoolOperator>,
     private readonly poolOperatorService: PoolOperatorService,
     private readonly poolService: PoolService,
     private readonly drillService: DrillService,
     private readonly redisService: RedisService,
   ) {}
+
+  /**
+   * Fetches an operator's data. Includes their base data, their wallet instances, their drills and also their pool ID if in a pool.
+   *
+   * Optional projection for operator data fields.
+   */
+  async fetchOperatorData(
+    operatorId: Types.ObjectId,
+    operatorDataProjection?: Record<string, number>,
+  ): Promise<
+    ApiResponse<{
+      operator: Operator;
+      wallets: OperatorWallet[];
+      drills: Drill[];
+      poolId?: Types.ObjectId;
+    }>
+  > {
+    try {
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, operatorDataProjection)
+        .lean();
+
+      if (!operator) {
+        throw new NotFoundException('(fetchOperatorData) Operator not found');
+      }
+
+      // Fetch operator's wallets
+      const wallets = await this.operatorWalletModel
+        .find(
+          { operatorId },
+          {
+            _id: 0,
+            address: 1,
+            chain: 1,
+          },
+        )
+        .lean();
+
+      // Fetch operator's drills
+      const drills = await this.drillModel
+        .find({ operatorId }, { _id: 0 })
+        .lean();
+
+      // Fetch operator's pool ID if in a pool
+      const poolId = await this.poolOperatorModel
+        .findOne({ operatorId }, { poolId: 1 })
+        .lean();
+
+      return new ApiResponse<{
+        operator: Operator;
+        wallets: OperatorWallet[];
+        drills: Drill[];
+        poolId?: Types.ObjectId;
+      }>(200, `(fetchOperatorData) Operator data fetched successfully`, {
+        operator,
+        wallets,
+        drills,
+        poolId: poolId?.poolId,
+      });
+    } catch (err: any) {
+      throw new Error(
+        `(fetchOperatorData) Error fetching operator data: ${err.message}`,
+      );
+    }
+  }
 
   /**
    * Updates cumulativeEff for all operators by summing their drills' actualEff values.

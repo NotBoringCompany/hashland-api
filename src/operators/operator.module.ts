@@ -4,12 +4,15 @@ import { Operator, OperatorSchema } from './schemas/operator.schema';
 import { OperatorService } from './operator.service';
 import { PoolModule } from 'src/pools/pool.module';
 import { PoolOperatorModule } from 'src/pools/pool-operator.module';
-import { OperatorWalletModule } from './operator-wallet.module';
 import { ConfigModule } from '@nestjs/config';
 import { DrillModule } from 'src/drills/drill.module';
 import { BullModule } from '@nestjs/bull';
 import { OperatorQueue } from './operator.queue';
 import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
+import {
+  OperatorWallet,
+  OperatorWalletSchema,
+} from './schemas/operator-wallet.schema';
 
 @Module({
   imports: [
@@ -17,11 +20,11 @@ import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
     MongooseModule.forFeature([
       { name: Operator.name, schema: OperatorSchema },
       { name: Drill.name, schema: DrillSchema },
+      { name: OperatorWallet.name, schema: OperatorWalletSchema },
     ]),
     BullModule.registerQueue({
       name: 'operator-queue',
     }),
-    OperatorWalletModule,
     PoolModule,
     PoolOperatorModule,
     DrillModule,
