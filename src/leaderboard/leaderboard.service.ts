@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Model } from 'mongoose';
+import { InjectModel } from '@nestjs/mongoose';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { Operator } from 'src/operators/schemas/operator.schema';
 
@@ -7,7 +8,9 @@ import { Operator } from 'src/operators/schemas/operator.schema';
 export class LeaderboardService {
   private readonly logger = new Logger(LeaderboardService.name);
 
-  constructor(private readonly operatorModel: Model<Operator>) {}
+  constructor(
+    @InjectModel(Operator.name) private readonly operatorModel: Model<Operator>,
+  ) {}
 
   /**
    * Fetches the leaderboard with pagination.
