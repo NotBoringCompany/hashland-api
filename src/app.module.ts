@@ -14,6 +14,7 @@ import { DrillingCycleModule } from './drills/drilling-cycle.module';
 import { ShopItemModule } from './shops/shop-item.module';
 import { ShopPurchaseModule } from './shops/shop-purchase.module';
 import { TonModule } from './ton/ton.module';
+import { LeaderboardModule } from './leaderboard/leaderboard.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { TonModule } from './ton/ton.module';
     ShopItemModule,
     ShopPurchaseModule,
     TonModule,
+    LeaderboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
