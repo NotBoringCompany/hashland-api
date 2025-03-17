@@ -140,6 +140,13 @@ export interface DrillingUpdateResponse {
   issuedHASH: number;
   activeDrillingOperatorCount: number;
   difficulty?: number;
+  operatorEffData: {
+    totalWeightedEff: number;
+    operatorMap: Map<
+      Types.ObjectId,
+      { drillingDifficulty: number; effMultiplier: number }
+    >;
+  };
 }
 
 /**
