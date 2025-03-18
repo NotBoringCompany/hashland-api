@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { PoolPrerequisites } from 'src/common/schemas/pool-prerequisites.schema';
+import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * `Pool` represents a group where operators can join to increase cumulative EFF ratings and have a higher chance to extract more $HASH per cycle.
@@ -10,6 +11,10 @@ export class Pool extends Document {
   /**
    * The database ID of the pool.
    */
+  @ApiProperty({
+    description: 'The database ID of the pool',
+    example: '507f1f77bcf86cd799439011',
+  })
   @Prop({
     type: Types.ObjectId,
     default: () => new Types.ObjectId(),
@@ -19,6 +24,12 @@ export class Pool extends Document {
   /**
    * The database ID of the leader, who is an operator responsible for managing the pool.
    */
+  @ApiProperty({
+    description:
+      'The database ID of the leader (operator) who manages the pool',
+    example: '507f1f77bcf86cd799439011',
+    required: false,
+  })
   @Prop({
     type: Types.ObjectId,
     ref: 'Operators',
@@ -30,14 +41,20 @@ export class Pool extends Document {
   /**
    * The name of the pool.
    */
+  @ApiProperty({
+    description: 'The name of the pool',
+    example: 'hashland-pool',
+    maxLength: 16,
+    pattern: '^[a-zA-Z0-9-_]+$',
+  })
   @Prop({
     type: String,
     required: true,
     unique: true,
     index: true,
-    maxlength: 16, // Ensures name is at most 16 characters
+    maxlength: 16,
     validate: {
-      validator: (v: string) => /^[a-zA-Z0-9-_]+$/.test(v), // Allows only letters, numbers, hyphens, and underscores
+      validator: (v: string) => /^[a-zA-Z0-9-_]+$/.test(v),
       message:
         'Pool name can only contain letters, numbers, hyphens (-), and underscores (_), and must be max 16 characters.',
     },
@@ -47,7 +64,12 @@ export class Pool extends Document {
   /**
    * The maximum number of operators allowed in the pool.
    */
-  @Prop({ type: Number, default: null }) // NULL if unlimited
+  @ApiProperty({
+    description: 'The maximum number of operators allowed in the pool',
+    example: 10,
+    required: false,
+  })
+  @Prop({ type: Number, default: null })
   maxOperators?: number | null;
 
   /**
@@ -55,6 +77,14 @@ export class Pool extends Document {
    *
    * Default format is in ratio.
    */
+  @ApiProperty({
+    description: 'The pool reward distribution system',
+    example: {
+      extractorOperator: 0.48,
+      leader: 0.04,
+      activePoolOperators: 0.48,
+    },
+  })
   @Prop({
     type: {
       extractorOperator: { type: Number, required: true, default: 0.48 },
@@ -73,12 +103,35 @@ export class Pool extends Document {
   /**
    * Optional prerequisites to join the pool. If not provided (i.e. null), anyone can join as long as `maxOperators` is not reached.
    */
+  @ApiProperty({
+    description: 'Prerequisites that must be met to join the pool',
+    required: false,
+    type: () => PoolPrerequisites,
+  })
   @Prop({
     required: false,
     default: null,
     _id: false,
   })
   joinPrerequisites?: PoolPrerequisites | null;
+
+  /**
+   * The timestamp when the pool was created
+   */
+  @ApiProperty({
+    description: 'The timestamp when the pool was created',
+    example: '2024-03-19T12:00:00.000Z',
+  })
+  createdAt: Date;
+
+  /**
+   * The timestamp when the pool was last updated
+   */
+  @ApiProperty({
+    description: 'The timestamp when the pool was last updated',
+    example: '2024-03-19T12:00:00.000Z',
+  })
+  updatedAt: Date;
 }
 
 export const PoolSchema = SchemaFactory.createForClass(Pool);
