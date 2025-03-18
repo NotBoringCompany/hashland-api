@@ -5,6 +5,8 @@ import { OperatorService } from './operator.service';
 import { Operator } from './schemas/operator.schema';
 import { Types } from 'mongoose';
 import { GetOperatorResponseDto } from 'src/common/dto/operator.dto';
+import { OperatorWallet } from './schemas/operator-wallet.schema';
+import { Drill } from 'src/drills/schemas/drill.schema';
 
 @ApiTags('Operators')
 @Controller('operator')
@@ -13,7 +15,8 @@ export class OperatorController {
 
   @ApiOperation({
     summary: 'Get operator data',
-    description: 'Fetches operator data with optional field projection',
+    description:
+      'Fetches operator data, wallets, drills and pool information with optional field projection',
   })
   @ApiQuery({
     name: 'operatorId',
@@ -24,7 +27,8 @@ export class OperatorController {
   })
   @ApiQuery({
     name: 'projection',
-    description: 'Comma-separated list of fields to include in the response',
+    description:
+      'Comma-separated list of fields to include in the response for the operator data',
     required: false,
     type: String,
     example: 'username,assetEquity,cumulativeEff',
@@ -42,7 +46,14 @@ export class OperatorController {
   async getOperatorData(
     @Query('operatorId') operatorId?: string,
     @Query('projection') projection?: string,
-  ): Promise<AppApiResponse<{ operator: Partial<Operator> }>> {
+  ): Promise<
+    AppApiResponse<{
+      operator: Partial<Operator>;
+      wallets: Partial<OperatorWallet[]>;
+      drills: Partial<Drill[]>;
+      poolId?: Types.ObjectId;
+    }>
+  > {
     // Convert query string to Mongoose projection object
     const projectionObj = projection
       ? projection
