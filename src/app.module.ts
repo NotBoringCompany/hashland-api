@@ -15,7 +15,6 @@ import { ShopItemModule } from './shops/shop-item.module';
 import { ShopPurchaseModule } from './shops/shop-purchase.module';
 import { TonModule } from './ton/ton.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
-import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -36,7 +35,6 @@ import { HealthModule } from './health/health.module';
     ShopPurchaseModule,
     TonModule,
     LeaderboardModule,
-    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
