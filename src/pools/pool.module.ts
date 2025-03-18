@@ -3,10 +3,17 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { PoolService } from './pool.service';
 import { Pool, PoolSchema } from './schemas/pool.schema';
 import { PoolController } from './pool.controller.';
+import {
+  PoolOperator,
+  PoolOperatorSchema,
+} from './schemas/pool-operator.schema';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Pool.name, schema: PoolSchema }]), // Register Pool schema
+    MongooseModule.forFeature([
+      { name: Pool.name, schema: PoolSchema },
+      { name: PoolOperator.name, schema: PoolOperatorSchema },
+    ]),
   ],
   controllers: [PoolController], // Expose API endpoints
   providers: [PoolService], // Business logic for pools

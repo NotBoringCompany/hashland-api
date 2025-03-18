@@ -7,10 +7,78 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { PoolOperator } from './schemas/pool-operator.schema';
 
 @Injectable()
 export class PoolService {
-  constructor(@InjectModel(Pool.name) private poolModel: Model<Pool>) {}
+  constructor(
+    @InjectModel(Pool.name) private poolModel: Model<Pool>,
+    @InjectModel(PoolOperator.name)
+    private poolOperatorModel: Model<PoolOperator>,
+  ) {}
+
+  /**
+   * Join a pool. Ensures:
+   * - An operator can only be in one pool.
+   * - The pool is not full.
+   */
+  async joinPool(
+    operatorId: Types.ObjectId,
+    poolId: Types.ObjectId,
+  ): Promise<ApiResponse<null>> {
+    try {
+      // ✅ Step 1: Fetch pool details + check if operator is already in a pool
+      const [operatorInPool, pool] = await Promise.all([
+        this.poolOperatorModel.exists({ operatorId }),
+        this.poolModel.findOne({ _id: poolId }, { maxOperators: 1 }).lean(),
+      ]);
+
+      if (operatorInPool) {
+        return new ApiResponse<null>(
+          400,
+          `(joinPool) Operator is already in a pool.`,
+        );
+      }
+
+      if (!pool) {
+        return new ApiResponse<null>(404, `(joinPool) Pool not found.`);
+      }
+
+      // ✅ Step 2: Check if the pool is full
+      const poolOperatorCount = await this.poolOperatorModel.countDocuments({
+        poolId,
+      });
+      if (poolOperatorCount >= pool.maxOperators) {
+        return new ApiResponse<null>(400, `(joinPool) Pool is full.`);
+      }
+
+      // ✅ Step 3: Insert operator into the pool **atomically** (prevent race conditions)
+      const result = await this.poolOperatorModel.updateOne(
+        { operatorId }, // Ensure operatorId is unique
+        { $setOnInsert: { operatorId, poolId } }, // Insert only if it doesn't exist
+        { upsert: true }, // Insert if not exists
+      );
+
+      if (result.upsertedCount === 0) {
+        return new ApiResponse<null>(
+          400,
+          `(joinPool) Operator already joined this pool.`,
+        );
+      }
+
+      return new ApiResponse<null>(
+        200,
+        `(joinPool) Operator successfully joined pool.`,
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(joinPool) Error joining pool: ${err.message}`,
+        ),
+      );
+    }
+  }
 
   /**
    * Creates a new pool. Bypasses prerequisites and costs. Admin only.
