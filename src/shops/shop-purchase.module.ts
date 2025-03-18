@@ -12,6 +12,7 @@ import {
   Operator,
   OperatorSchema,
 } from 'src/operators/schemas/operator.schema';
+import { ShopPurchaseController } from './shop-purchase.controller';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import {
     ]), // Register ShopPurchase schema
     TonModule,
   ],
-  controllers: [], // Expose API endpoints
+  controllers: [ShopPurchaseController], // Expose API endpoints
   providers: [ShopPurchaseService], // Business logic for ShopService
   exports: [MongooseModule, ShopPurchaseService], // Allow usage in other modules
 })
