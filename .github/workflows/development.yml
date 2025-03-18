@@ -1,0 +1,58 @@
+name: Development CI/CD
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+jobs:
+  build-and-test:
+    runs-on: self-hosted
+    env:
+      NODE_ENV: development
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'yarn'
+      
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      
+      - name: Lint code
+        run: yarn lint
+      
+      - name: Build application
+        run: yarn build
+      
+      - name: Start Docker services
+        run: docker compose up -d mongo redis
+      
+      - name: Run tests
+        run: yarn test
+      
+      - name: Stop Docker services
+        run: docker compose down
+  
+  deploy-dev:
+    needs: build-and-test
+    runs-on: self-hosted
+    env:
+      NODE_ENV: development
+    
+    steps:
+      - name: Deploy to development environment
+        run: |
+          docker compose down
+          docker compose up -d
+      
+      - name: Check deployment status
+        run: |
+          sleep 10
+          docker ps
+          curl -s http://localhost:8080/health || echo "Health check failed" 
