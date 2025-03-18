@@ -52,6 +52,9 @@ export class PoolService {
         return new ApiResponse<null>(400, `(joinPool) Pool is full.`);
       }
 
+      // TO DO IN THE FUTURE:
+      // Ensure that the pool prerequisites are met before joining.
+
       // ✅ Step 3: Insert operator into the pool **atomically** (prevent race conditions)
       const result = await this.poolOperatorModel.updateOne(
         { operatorId }, // Ensure operatorId is unique

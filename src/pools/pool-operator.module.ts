@@ -6,6 +6,7 @@ import {
   PoolOperatorSchema,
 } from './schemas/pool-operator.schema';
 import { PoolModule } from './pool.module';
+import { PoolOperatorController } from './pool-operator.controller';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { PoolModule } from './pool.module';
     ]), // Register Pool schema
     PoolModule,
   ],
-  controllers: [], // Expose API endpoints
+  controllers: [PoolOperatorController], // Expose API endpoints
   providers: [PoolOperatorService], // Business logic for pool operators
   exports: [
     MongooseModule.forFeature([

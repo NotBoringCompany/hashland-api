@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { PoolOperator } from './schemas/pool-operator.schema';
 import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
+import { ApiResponse } from 'src/common/dto/response.dto';
 
 @Injectable()
 export class PoolOperatorService {
@@ -17,50 +18,66 @@ export class PoolOperatorService {
    *
    * This is called when an operator joins a pool.
    */
-  async createPoolOperator(operatorId: Types.ObjectId, poolId: Types.ObjectId) {
+  async createPoolOperator(
+    operatorId: Types.ObjectId,
+    poolId: Types.ObjectId,
+  ): Promise<ApiResponse<null>> {
     try {
-      // check if the user is already part of a pool.
-      const existingPoolOperator = await this.poolOperatorModel.exists({
-        operatorId,
-      });
+      // ✅ Step 1: Fetch pool details + check if operator is already in a pool
+      const [operatorInPool, pool] = await Promise.all([
+        this.poolOperatorModel.exists({ operatorId }),
+        this.poolModel.findOne({ _id: poolId }, { maxOperators: 1 }).lean(),
+      ]);
 
-      if (existingPoolOperator) {
-        throw new Error(
-          `(createPoolOperator) Operator is already part of a pool.`,
+      if (operatorInPool) {
+        return new ApiResponse<null>(
+          400,
+          `(createPoolOperator) Operator is already in a pool.`,
         );
       }
 
-      // fetch the pool's `maxOperators` count.
-      const pool = await this.poolModel
-        .findOne({ _id: poolId })
-        .select('maxOperators')
-        .lean();
-
       if (!pool) {
-        throw new Error(`(addOperatorToPool) Pool not found: ${poolId}`);
+        return new ApiResponse<null>(
+          404,
+          `(createPoolOperator) Pool not found.`,
+        );
       }
 
-      // check amount of operators in this pool. if it's full, throw an error.
+      // ✅ Step 2: Check if the pool is full
       const poolOperatorCount = await this.poolOperatorModel.countDocuments({
         poolId,
       });
-
       if (poolOperatorCount >= pool.maxOperators) {
-        throw new Error(
-          `(addOperatorToPool) Pool is full. Max operators: ${pool.maxOperators}`,
+        return new ApiResponse<null>(400, `(joinPool) Pool is full.`);
+      }
+
+      // TO DO IN THE FUTURE:
+      // Ensure that the pool prerequisites are met before joining.
+
+      // ✅ Step 3: Insert operator into the pool **atomically** (prevent race conditions)
+      const result = await this.poolOperatorModel.updateOne(
+        { operatorId }, // Ensure operatorId is unique
+        { $setOnInsert: { operatorId, poolId } }, // Insert only if it doesn't exist
+        { upsert: true }, // Insert if not exists
+      );
+
+      if (result.upsertedCount === 0) {
+        return new ApiResponse<null>(
+          400,
+          `(createPoolOperator) Operator already joined this pool.`,
         );
       }
 
-      // TO DO: Pool prerequisites check.
-
-      // create the pool operator entry
-      await this.poolOperatorModel.create({
-        operatorId,
-        poolId,
-      });
+      return new ApiResponse<null>(
+        200,
+        `(createPoolOperator) Operator successfully joined pool.`,
+      );
     } catch (err: any) {
-      throw new Error(
-        `(addOperatorToPool) Error adding operator to pool: ${err.message}`,
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(createPoolOperator) Error joining pool: ${err.message}`,
+        ),
       );
     }
   }
@@ -70,12 +87,19 @@ export class PoolOperatorService {
    *
    * This is called when an operator leaves a pool.
    */
-  async removePoolOperator(operatorId: Types.ObjectId) {
+  async removePoolOperator(
+    operatorId: Types.ObjectId,
+  ): Promise<ApiResponse<null>> {
     try {
       // TO DO: Pool prerequisites check (e.g. if tgChannelId exists, the user needs to leave the channel first).
 
       // NOTE: Because operators can only be in one pool at a time, we can just delete the entry if found.
       await this.poolOperatorModel.findOneAndDelete({ operatorId });
+
+      return new ApiResponse<null>(
+        200,
+        `(removeOperatorFromPool) Operator successfully removed from pool.`,
+      );
     } catch (err: any) {
       throw new Error(
         `(removeOperatorFromPool) Error removing operator from pool: ${err.message}`,
