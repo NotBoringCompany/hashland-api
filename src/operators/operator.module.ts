@@ -13,6 +13,7 @@ import {
   OperatorWallet,
   OperatorWalletSchema,
 } from './schemas/operator-wallet.schema';
+import { OperatorController } from './operator.controller';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import {
     DrillModule,
   ],
   controllers: [], // Expose API endpoints
-  providers: [OperatorService, OperatorQueue], // Business logic for Operators
+  providers: [OperatorService, OperatorQueue, OperatorController], // Business logic for Operators
   exports: [MongooseModule, OperatorService], // Allow usage in other modules
 })
 export class OperatorModule {}
