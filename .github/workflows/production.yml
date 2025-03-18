@@ -1,0 +1,65 @@
+name: Production CI/CD
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: self-hosted
+    env:
+      NODE_ENV: production
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'yarn'
+      
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      
+      - name: Lint code
+        run: yarn lint
+      
+      - name: Build application
+        run: yarn build
+  
+  deploy-production:
+    needs: build
+    runs-on: self-hosted
+    env:
+      NODE_ENV: production
+    
+    steps:
+      - name: Build and tag Docker image
+        run: |
+          docker build -t hashland-api:production .
+          docker tag hashland-api:production hashland-api:latest
+      
+      - name: Stop existing container
+        run: |
+          docker stop hashland-api || true
+          docker rm hashland-api || true
+      
+      - name: Deploy to production
+        run: |
+          docker run -d \
+            --name hashland-api \
+            --restart always \
+            -p 8080:8080 \
+            --env-file .env.production \
+            --network hashland-network \
+            hashland-api:production
+      
+      - name: Check deployment status
+        run: |
+          sleep 10
+          docker ps
+          curl -s http://localhost:8080/health || echo "Health check failed"
+      
+      - name: Clean up old images
+        run: docker image prune -a -f --filter "until=24h" 
