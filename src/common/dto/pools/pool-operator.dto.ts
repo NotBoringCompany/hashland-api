@@ -18,13 +18,3 @@ export class CreatePoolOperatorDto {
   @IsNotEmpty()
   poolId: string;
 }
-
-export class DeletePoolOperatorDto {
-  @ApiProperty({
-    description: 'The database ID of the operator to remove from their pool',
-    example: '507f1f77bcf86cd799439011',
-  })
-  @IsString()
-  @IsNotEmpty()
-  operatorId: string;
-}

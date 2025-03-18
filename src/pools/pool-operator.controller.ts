@@ -1,12 +1,9 @@
-import { Body, Controller, Delete, Post } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Param, Post } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags, ApiParam } from '@nestjs/swagger';
 import { ApiResponse as AppApiResponse } from 'src/common/dto/response.dto';
 import { PoolOperatorService } from './pool-operator.service';
 import { Types } from 'mongoose';
-import {
-  CreatePoolOperatorDto,
-  DeletePoolOperatorDto,
-} from 'src/common/dto/pools/pool-operator.dto';
+import { CreatePoolOperatorDto } from 'src/common/dto/pools/pool-operator.dto';
 
 @ApiTags('Pool Operators')
 @Controller('pool-operators') // Base route: `/pool-controllers`
@@ -43,6 +40,11 @@ export class PoolOperatorController {
     summary: 'Delete a pool operator',
     description: 'Removes an operator from their current pool',
   })
+  @ApiParam({
+    name: 'operatorId',
+    description: 'The database ID of the operator to remove from their pool',
+    example: '507f1f77bcf86cd799439011',
+  })
   @ApiResponse({
     status: 200,
     description: 'Successfully removed operator from pool',
@@ -51,12 +53,12 @@ export class PoolOperatorController {
     status: 404,
     description: 'Pool operator not found',
   })
-  @Delete('/')
+  @Delete('/:operatorId')
   async deletePoolOperator(
-    @Body() deletePoolOperatorDto: DeletePoolOperatorDto,
+    @Param('operatorId') operatorId: string,
   ): Promise<AppApiResponse<null>> {
     return this.poolOperatorService.removePoolOperator(
-      new Types.ObjectId(deletePoolOperatorDto.operatorId),
+      new Types.ObjectId(operatorId),
     );
   }
 }
