@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
+import { LeaderboardEntryDto } from 'src/common/dto/leaderboard.dto';
 
 @Injectable()
 export class LeaderboardService {
@@ -22,11 +23,7 @@ export class LeaderboardService {
     page: number = 1,
     limit: number = 50,
   ): Promise<ApiResponse<{
-    leaderboard: Array<{
-      rank: number;
-      username: string;
-      earnedHASH: number;
-    }>;
+    leaderboard: LeaderboardEntryDto[];
   }> | null> {
     // Page number must be a positive integer
     if (isNaN(page) || page < 1) {
@@ -90,11 +87,7 @@ export class LeaderboardService {
     page: number = 1,
     limit: number = 50,
   ): Promise<ApiResponse<{
-    leaderboard: Array<{
-      rank: number;
-      username: string;
-      earnedHASH: number;
-    }>;
+    leaderboard: LeaderboardEntryDto[];
   }> | null> {
     // Page number must be a positive integer
     if (isNaN(page) || page < 1) {
