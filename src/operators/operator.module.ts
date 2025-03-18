@@ -30,8 +30,8 @@ import { OperatorController } from './operator.controller';
     PoolOperatorModule,
     DrillModule,
   ],
-  controllers: [], // Expose API endpoints
-  providers: [OperatorService, OperatorQueue, OperatorController], // Business logic for Operators
+  controllers: [OperatorController], // Expose API endpoints
+  providers: [OperatorService, OperatorQueue], // Business logic for Operators
   exports: [MongooseModule, OperatorService], // Allow usage in other modules
 })
 export class OperatorModule {}
