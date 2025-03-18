@@ -1,23 +1,48 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiResponse } from 'src/common/dto/response.dto';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiResponse as AppApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from './operator.service';
 import { Operator } from './schemas/operator.schema';
 import { Types } from 'mongoose';
+import { GetOperatorResponseDto } from 'src/common/dto/operator.dto';
 
-@Controller('operator') // Base route: `/controller`
+@ApiTags('Operators')
+@Controller('operator')
 export class OperatorController {
   constructor(private readonly operatorService: OperatorService) {}
 
-  /**
-   * GET `/`
-   * Fetches an operator with optional field projection.
-   * Example: `?projection=version,config`
-   */
+  @ApiOperation({
+    summary: 'Get operator data',
+    description: 'Fetches operator data with optional field projection',
+  })
+  @ApiQuery({
+    name: 'operatorId',
+    description: 'The ID of the operator to retrieve',
+    required: true,
+    type: String,
+    example: '507f1f77bcf86cd799439011',
+  })
+  @ApiQuery({
+    name: 'projection',
+    description: 'Comma-separated list of fields to include in the response',
+    required: false,
+    type: String,
+    example: 'username,assetEquity,cumulativeEff',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved operator data',
+    type: GetOperatorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Operator not found',
+  })
   @Get()
   async getOperatorData(
     @Query('operatorId') operatorId?: string,
     @Query('projection') projection?: string,
-  ): Promise<ApiResponse<{ operator: Partial<Operator> }>> {
+  ): Promise<AppApiResponse<{ operator: Partial<Operator> }>> {
     // Convert query string to Mongoose projection object
     const projectionObj = projection
       ? projection
