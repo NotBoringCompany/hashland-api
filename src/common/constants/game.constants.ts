@@ -96,11 +96,11 @@ export const GAME_CONSTANTS = {
       /**
        * The total % (in ratio format) of $HASH rewards that are distributed to the extractor's operator on that cycle.
        */
-      extractorOperator: 0.55,
+      extractorOperator: 0.8,
       /**
        * The total % (in ratio format) of $HASH rewards that are distributed to all other active operators on that cycle.
        */
-      allActiveOperators: 0.45,
+      allActiveOperators: 0.2,
     },
   },
 
