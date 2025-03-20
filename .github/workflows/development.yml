@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: self-hosted
+    runs-on: [self-hosted, development]
     env:
       NODE_ENV: development
     
@@ -41,7 +41,7 @@ jobs:
   
   deploy-dev:
     needs: build-and-test
-    runs-on: self-hosted
+    runs-on: [self-hosted, development]
     env:
       NODE_ENV: development
     

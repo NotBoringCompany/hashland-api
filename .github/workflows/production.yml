@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: [self-hosted, production]
     env:
       NODE_ENV: production
     
@@ -30,7 +30,7 @@ jobs:
   
   deploy-production:
     needs: build
-    runs-on: self-hosted
+    runs-on: [self-hosted, production]
     env:
       NODE_ENV: production
     
