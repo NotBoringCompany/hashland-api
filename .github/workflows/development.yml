@@ -67,7 +67,7 @@ jobs:
         run: docker compose down
   
   deploy:
-    needs: build-and-test
+    needs: build
     runs-on: [self-hosted, development]
     env:
       NODE_ENV: development
