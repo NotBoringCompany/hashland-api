@@ -17,7 +17,7 @@ The development workflow is triggered when:
 1. **Build and Test**
    - Checkout code
    - Set up Node.js environment
-   - Install dependencies using Yarn
+   - Install dependencies using npm
    - Lint the code
    - Build the application
    - Start Docker services (MongoDB and Redis)
@@ -47,7 +47,7 @@ The production workflow is triggered when:
 1. **Build**
    - Checkout code
    - Set up Node.js environment
-   - Install dependencies using Yarn
+   - Install dependencies using npm
    - Lint the code
    - Build the application
 

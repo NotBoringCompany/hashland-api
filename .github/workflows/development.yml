@@ -19,22 +19,22 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '20'
-          cache: 'yarn'
+          cache: 'npm'
       
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: npm ci
       
       - name: Lint code
-        run: yarn lint
+        run: npm run lint
       
       - name: Build application
-        run: yarn build
+        run: npm run build
       
       - name: Start Docker services
         run: docker compose up -d mongo redis
       
       - name: Run tests
-        run: yarn test
+        run: npm test
       
       - name: Stop Docker services
         run: docker compose down
