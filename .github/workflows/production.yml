@@ -11,8 +11,7 @@ jobs:
       NODE_ENV: production
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
       
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -28,123 +27,39 @@ jobs:
       
       - name: Build application
         run: npm run build
-      
-      - name: Build and tag Docker image
-        run: |
-          docker build -t hashland-api:production-${{ github.run_id }} .
-          docker tag hashland-api:production-${{ github.run_id }} hashland-api:latest
   
   deploy-production:
     needs: build
     runs-on: [self-hosted, production]
     env:
       NODE_ENV: production
-      INSTANCE_COUNT: 2  # Number of instances to run
     
     steps:
-      - name: Set Docker permissions
+      - name: Build and tag Docker image
         run: |
-          if [ ! -w /var/run/docker.sock ]; then
-            echo "Fixing Docker socket permissions"
-            sudo chmod 666 /var/run/docker.sock || true
-          fi
+          docker build -t hashland-api:production .
+          docker tag hashland-api:production hashland-api:latest
       
-      - name: Load balancer setup
+      - name: Stop existing container
         run: |
-          # Check if Traefik is running, if not start it
-          if ! docker ps | grep -q traefik; then
-            echo "Setting up Traefik load balancer"
-            docker run -d \
-              --name traefik \
-              --restart always \
-              -p 80:80 \
-              -p 443:443 \
-              -p 8080:8080 \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v traefik-certs:/letsencrypt \
-              traefik:v2.9 \
-              --entrypoints.web.address=:80 \
-              --entrypoints.websecure.address=:443 \
-              --providers.docker=true \
-              --api.dashboard=true
-          fi
+          docker stop hashland-api || true
+          docker rm hashland-api || true
       
-      - name: Deploy multiple instances
+      - name: Deploy to production
         run: |
-          # Create a tag for this deployment
-          DEPLOY_TAG=$(date +%Y%m%d%H%M%S)
-          
-          # Calculate port range 
-          BASE_PORT=9000
-          
-          # Remove old instances
-          for container in $(docker ps -a --filter "name=hashland-api-" --format "{{.Names}}"); do
-            echo "Stopping and removing container: $container"
-            docker stop $container || true
-            docker rm $container || true
-          done
-          
-          # Deploy new instances
-          for i in $(seq 1 $INSTANCE_COUNT); do
-            PORT=$((BASE_PORT + i))
-            CONTAINER_NAME="hashland-api-$i-$DEPLOY_TAG"
-            
-            echo "Deploying instance $i: $CONTAINER_NAME on port $PORT"
-            docker run -d \
-              --name $CONTAINER_NAME \
-              --restart always \
-              -p $PORT:8080 \
-              --env-file .env.production \
-              --env PORT=8080 \
-              --env INSTANCE_ID=$i \
-              --network hashland-network \
-              --label "traefik.enable=true" \
-              --label "traefik.http.routers.hashland-$i.rule=Host(\`api.hashland.io\`)" \
-              --label "traefik.http.services.hashland-$i.loadbalancer.server.port=8080" \
-              hashland-api:latest
-          done
+          docker run -d \
+            --name hashland-api \
+            --restart always \
+            -p 8080:8080 \
+            --env-file .env.production \
+            --network hashland-network \
+            hashland-api:production
       
-      - name: Health check with retry
+      - name: Check deployment status
         run: |
-          # Calculate port range
-          BASE_PORT=9000
-          
-          # Check all instances
-          for i in $(seq 1 $INSTANCE_COUNT); do
-            PORT=$((BASE_PORT + i))
-            health_endpoint="http://localhost:$PORT/health"
-            
-            echo "Checking health for instance $i at $health_endpoint"
-            
-            max_retries=5
-            retry_interval=5
-            retries=0
-            
-            until curl -s $health_endpoint | grep -q '"status":"ok"' || [ $retries -eq $max_retries ]; do
-              retries=$((retries+1))
-              echo "Health check attempt $retries failed, retrying in $retry_interval seconds..."
-              sleep $retry_interval
-            done
-            
-            if [ $retries -eq $max_retries ]; then
-              echo "Health check failed for instance $i after $max_retries attempts"
-              curl -v $health_endpoint || echo "Connection failed"
-              CONTAINER_NAME=$(docker ps --filter "publish=$PORT" --format "{{.Names}}")
-              docker logs $CONTAINER_NAME --tail 50
-              echo "Continuing with other instances..."
-            else
-              echo "Health check passed for instance $i after $retries attempts"
-            fi
-          done
-          
-          # Show all running containers
+          sleep 10
           docker ps
+          curl -s http://localhost:8080/health || echo "Health check failed"
       
       - name: Clean up old images
-        run: |
-          echo "Cleaning up old Docker images"
-          # Keep the last 5 production images
-          docker image prune -a -f --filter "until=24h" 
-          
-          # List remaining images
-          docker images | grep hashland-api 
+        run: docker image prune -a -f --filter "until=24h" 

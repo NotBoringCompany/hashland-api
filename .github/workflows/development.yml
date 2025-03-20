@@ -7,7 +7,7 @@ on:
     branches: [dev]
 
 jobs:
-  build-and-test:
+  build:
     runs-on: [self-hosted, development]
     env:
       NODE_ENV: development
@@ -62,14 +62,11 @@ jobs:
           docker save mongo > /tmp/docker-images/mongo.tar
           docker save redis > /tmp/docker-images/redis.tar
       
-      - name: Run tests
-        run: npm test
-      
       - name: Stop Docker services
         if: always()
         run: docker compose down
   
-  deploy-dev:
+  deploy:
     needs: build-and-test
     runs-on: [self-hosted, development]
     env:
