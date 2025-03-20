@@ -448,7 +448,29 @@ export class OperatorService {
     }
 
     try {
-      return JSON.parse(cachedData);
+      const parsed = JSON.parse(cachedData);
+
+      // Validate that we have valid numeric values
+      if (parsed && typeof parsed === 'object') {
+        const currentFuel = parseFloat(parsed.currentFuel);
+        const maxFuel = parseFloat(parsed.maxFuel);
+
+        // Return only if both values are valid numbers
+        if (!isNaN(currentFuel) && !isNaN(maxFuel)) {
+          return {
+            currentFuel,
+            maxFuel,
+          };
+        }
+
+        // Log warning if invalid values were found
+        this.logger.warn(
+          `Invalid fuel values in Redis for operator ${operatorId}: ${cachedData}`,
+        );
+      }
+
+      // Return null if validation failed
+      return null;
     } catch (error) {
       this.logger.error(`Error parsing cached fuel data: ${error.message}`);
       return null;
@@ -595,17 +617,20 @@ export class OperatorService {
         };
       }
 
+      // Ensure values are valid numbers
+      const currentFuel = isNaN(cachedFuel.currentFuel)
+        ? 0
+        : cachedFuel.currentFuel;
+      const maxFuel = isNaN(cachedFuel.maxFuel) ? 100 : cachedFuel.maxFuel;
+
       // Calculate new fuel value (capped at max fuel)
-      const newFuel = Math.min(
-        cachedFuel.maxFuel,
-        cachedFuel.currentFuel + fuelGained,
-      );
+      const newFuel = Math.min(maxFuel, currentFuel + fuelGained);
 
       // Add to fuel data for batch caching
       operatorFuelData.push({
         operatorId: operator._id,
         currentFuel: newFuel,
-        maxFuel: cachedFuel.maxFuel,
+        maxFuel,
       });
 
       // Add to bulk write operations
@@ -620,7 +645,7 @@ export class OperatorService {
       updatedOperators.push({
         operatorId: operator._id,
         currentFuel: newFuel,
-        maxFuel: cachedFuel.maxFuel,
+        maxFuel,
       });
     }
 
@@ -659,21 +684,35 @@ export class OperatorService {
     if (operatorFuelData.length === 0) return;
 
     const keyValuePairs: Record<string, string> = {};
+    const validEntries: string[] = [];
 
     // Prepare key-value pairs for batch update
     for (const data of operatorFuelData) {
+      // Validate fuel values before caching
+      if (isNaN(data.currentFuel) || isNaN(data.maxFuel)) {
+        this.logger.warn(
+          `Skipping invalid fuel values for operator ${data.operatorId}: currentFuel=${data.currentFuel}, maxFuel=${data.maxFuel}`,
+        );
+        continue;
+      }
+
       const key = this.getOperatorFuelCacheKey(data.operatorId);
       keyValuePairs[key] = JSON.stringify({
         currentFuel: data.currentFuel,
         maxFuel: data.maxFuel,
       });
+      validEntries.push(key);
+    }
+
+    if (Object.keys(keyValuePairs).length === 0) {
+      return; // No valid entries to cache
     }
 
     // Batch update Redis
     await this.redisService.mset(keyValuePairs);
 
     // Set expiration for each key (unfortunately Redis doesn't support batch expiry)
-    for (const key of Object.keys(keyValuePairs)) {
+    for (const key of validEntries) {
       await this.redisService.set(key, keyValuePairs[key], 3600); // 1 hour expiry
     }
   }
