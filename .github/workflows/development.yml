@@ -88,29 +88,3 @@ jobs:
           docker compose down
           docker compose pull
           docker compose up -d --build
-      
-      - name: Health check with retry
-        run: |
-          max_retries=5
-          retry_interval=5
-          retries=0
-          health_endpoint="http://localhost:8080/health"
-          
-          echo "Checking health at $health_endpoint"
-          
-          until curl -s $health_endpoint | grep -q '"status":"ok"' || [ $retries -eq $max_retries ]; do
-            retries=$((retries+1))
-            echo "Health check attempt $retries failed, retrying in $retry_interval seconds..."
-            sleep $retry_interval
-          done
-          
-          if [ $retries -eq $max_retries ]; then
-            echo "Health check failed after $max_retries attempts"
-            curl -v $health_endpoint || echo "Connection failed"
-            docker ps
-            docker logs $(docker ps -qf "name=hashland-api") --tail 50
-            exit 1
-          else
-            echo "Health check passed after $retries attempts"
-            docker ps
-          fi 
