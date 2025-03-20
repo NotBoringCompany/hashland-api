@@ -20,13 +20,17 @@ The development workflow is triggered when:
    - Install dependencies using npm
    - Lint the code
    - Build the application
+   - Set Docker permissions if needed
+   - Cache and load Docker images for faster builds
    - Start Docker services (MongoDB and Redis)
    - Run tests
    - Stop Docker services
 
 2. **Deploy to Development**
+   - Set Docker permissions if needed
    - Deploy the application using Docker Compose
-   - Perform a health check to verify deployment
+   - Perform health checks with retry mechanism
+   - Display logs if health check fails
 
 ### Docker Services in Development
 
@@ -50,17 +54,27 @@ The production workflow is triggered when:
    - Install dependencies using npm
    - Lint the code
    - Build the application
+   - Build and tag Docker image with unique run ID
 
 2. **Deploy to Production**
-   - Build and tag a Docker image
-   - Stop any existing container
-   - Deploy the new container with proper environment variables
-   - Perform a health check to verify deployment
+   - Set Docker permissions if needed
+   - Set up Traefik load balancer if not running
+   - Deploy multiple instances with unique names
+   - Configure load balancing with Traefik
+   - Perform health checks with retry mechanism for each instance
    - Clean up old Docker images
 
 ### Production Deployment
 
-In production, the application is deployed as a standalone Docker container that connects to external MongoDB and Redis services, using the configured environment variables in `.env.production`.
+In production, the application is deployed with the following architecture:
+
+- **Multiple Instances**: By default, 2 instances of the application are deployed
+- **Load Balancing**: Traefik is used as a reverse proxy/load balancer
+- **Port Management**: Each instance runs on a separate port (starting from 9001)
+- **Container Labeling**: Docker labels are used for Traefik integration
+- **Instance Awareness**: Each container has a unique INSTANCE_ID environment variable
+
+The instances connect to external MongoDB and Redis services using the configured environment variables in `.env.production`.
 
 ## Health Checks
 
@@ -78,6 +92,8 @@ The endpoint returns:
   "service": "hashland-api"
 }
 ```
+
+Health checks in production are performed for each instance separately with retry mechanisms.
 
 ## Workflow Files
 
@@ -100,6 +116,13 @@ To customize the workflows:
 1. Edit the respective workflow files in the `.github/workflows` directory
 2. Commit and push your changes to the repository
 3. GitHub Actions will use the updated workflow files for subsequent runs
+
+### Scaling Production Instances
+
+To change the number of production instances:
+
+1. Modify the `INSTANCE_COUNT` environment variable in the production workflow
+2. Adjust load balancer and network configurations if necessary
 
 ## Monitoring Workflow Runs
 

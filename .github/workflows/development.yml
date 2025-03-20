@@ -13,7 +13,8 @@ jobs:
       NODE_ENV: development
     
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
       
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -29,14 +30,43 @@ jobs:
       
       - name: Build application
         run: npm run build
+        
+      - name: Set Docker permissions
+        run: |
+          if [ ! -w /var/run/docker.sock ]; then
+            echo "Fixing Docker socket permissions"
+            sudo chmod 666 /var/run/docker.sock || true
+          fi
+      
+      - name: Cache Docker images
+        id: cache-docker-images
+        uses: actions/cache@v3
+        with:
+          path: /tmp/docker-images
+          key: ${{ runner.os }}-docker-images-${{ hashFiles('docker-compose.yml') }}
+      
+      - name: Load cached Docker images
+        if: steps.cache-docker-images.outputs.cache-hit == 'true'
+        run: |
+          echo "Loading cached Docker images"
+          docker load < /tmp/docker-images/mongo.tar || true
+          docker load < /tmp/docker-images/redis.tar || true
       
       - name: Start Docker services
         run: docker compose up -d mongo redis
+      
+      - name: Save Docker images
+        if: steps.cache-docker-images.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/docker-images
+          docker save mongo > /tmp/docker-images/mongo.tar
+          docker save redis > /tmp/docker-images/redis.tar
       
       - name: Run tests
         run: npm test
       
       - name: Stop Docker services
+        if: always()
         run: docker compose down
   
   deploy-dev:
@@ -46,13 +76,44 @@ jobs:
       NODE_ENV: development
     
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Set Docker permissions
+        run: |
+          if [ ! -w /var/run/docker.sock ]; then
+            echo "Fixing Docker socket permissions"
+            sudo chmod 666 /var/run/docker.sock || true
+          fi
+          
       - name: Deploy to development environment
         run: |
           docker compose down
-          docker compose up -d
+          docker compose pull
+          docker compose up -d --build
       
-      - name: Check deployment status
+      - name: Health check with retry
         run: |
-          sleep 10
-          docker ps
-          curl -s http://localhost:8080/health || echo "Health check failed" 
+          max_retries=5
+          retry_interval=5
+          retries=0
+          health_endpoint="http://localhost:8080/health"
+          
+          echo "Checking health at $health_endpoint"
+          
+          until curl -s $health_endpoint | grep -q '"status":"ok"' || [ $retries -eq $max_retries ]; do
+            retries=$((retries+1))
+            echo "Health check attempt $retries failed, retrying in $retry_interval seconds..."
+            sleep $retry_interval
+          done
+          
+          if [ $retries -eq $max_retries ]; then
+            echo "Health check failed after $max_retries attempts"
+            curl -v $health_endpoint || echo "Connection failed"
+            docker ps
+            docker logs $(docker ps -qf "name=hashland-api") --tail 50
+            exit 1
+          else
+            echo "Health check passed after $retries attempts"
+            docker ps
+          fi 
