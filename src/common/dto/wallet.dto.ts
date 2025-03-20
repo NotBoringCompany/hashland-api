@@ -127,19 +127,19 @@ export class ConnectedWalletResponseData {
     description: 'Operator ID',
     example: '60d21b4667d0d8da05ee0461',
   })
-  operatorId: Types.ObjectId;
+  operatorId?: Types.ObjectId;
 
   @ApiProperty({
     description: 'Wallet address',
     example: 'EQAbc123...',
   })
-  address: string;
+  address?: string;
 
   @ApiProperty({
     description: 'Blockchain network',
     example: 'TON',
   })
-  chain: string;
+  chain?: string;
 }
 
 /**

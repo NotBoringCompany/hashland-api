@@ -22,6 +22,7 @@ import {
   equityToActualEff,
   equityToEffMultiplier,
 } from 'src/common/utils/equity';
+import { ByteArray, keccak256, recoverAddress, Signature, toBytes } from 'viem';
 
 @Injectable()
 export class OperatorWalletService {
@@ -305,12 +306,12 @@ export class OperatorWalletService {
    * Connect a wallet to an operator
    * @param operatorId - The operator's ID
    * @param walletData - The wallet connection data
-   * @returns The connected wallet
+   * @returns The connected wallet's ID
    */
   async connectWallet(
     operatorId: Types.ObjectId,
     walletData: ConnectWalletDto,
-  ): Promise<OperatorWallet> {
+  ): Promise<Types.ObjectId> {
     try {
       // Check if operator exists
       const operator = await this.operatorModel.findById(operatorId);
@@ -337,28 +338,26 @@ export class OperatorWalletService {
         chain: walletData.chain,
       });
 
-      if (existingWallet) {
-        // Update the existing wallet with new signature
-        existingWallet.signature = walletData.signature;
-        existingWallet.signatureMessage = walletData.signatureMessage;
-        await existingWallet.save();
-        return existingWallet;
-      }
-
-      // Validate wallet ownership
+      // Validate wallet ownership first, before making any updates
       let isValid = false;
 
-      // If TON proof is provided, validate it
-      if (walletData.tonProof) {
-        isValid = await this.validateTonProof(
-          walletData.tonProof,
-          walletData.address,
-        );
-      } else {
-        // Otherwise validate the signature
-        isValid = await this.validateTonSignature(
-          walletData.signature,
+      if (walletData.chain === AllowedChain.TON) {
+        if (walletData.tonProof) {
+          isValid = await this.validateTonProof(
+            walletData.tonProof,
+            walletData.address,
+          );
+        } else {
+          isValid = await this.validateTonSignature(
+            walletData.signature,
+            walletData.signatureMessage,
+            walletData.address,
+          );
+        }
+      } else if (walletData.chain === AllowedChain.BERA) {
+        isValid = await this.validateEVMSignature(
           walletData.signatureMessage,
+          walletData.signature as `0x${string}`,
           walletData.address,
         );
       }
@@ -369,7 +368,15 @@ export class OperatorWalletService {
         );
       }
 
-      // Create new wallet
+      if (existingWallet) {
+        // Update the existing wallet with new signature after validation
+        existingWallet.signature = walletData.signature;
+        existingWallet.signatureMessage = walletData.signatureMessage;
+        await existingWallet.save();
+        return existingWallet._id;
+      }
+
+      // Create new wallet after validation
       const newWallet = new this.operatorWalletModel({
         operatorId,
         address: walletData.address,
@@ -387,7 +394,7 @@ export class OperatorWalletService {
         );
       });
 
-      return newWallet;
+      return newWallet._id;
     } catch (error) {
       this.logger.error(
         `(connectWallet) Error connecting wallet: ${error.message}`,
@@ -588,6 +595,72 @@ export class OperatorWalletService {
       );
       return false;
     }
+  }
+
+  /**
+   * Validate a signature signed by any EVM wallet address
+   * @param message - The message that was signed
+   * @param signature - The signature
+   * @param address - The wallet address
+   * @param chain - The chain the wallet is signed on
+   */
+  async validateEVMSignature(
+    message: string,
+    signature: `0x${string}` | ByteArray | Signature,
+    address: string | `0x${string}`,
+  ): Promise<boolean> {
+    if (!message || !signature || !address) return false;
+
+    try {
+      // Compute the Keccak-256 hash of the already prefixed message
+      const messageHash = keccak256(toBytes(message));
+
+      // Recover the address from the signature
+      const recoveredAddress = await recoverAddress({
+        hash: messageHash,
+        signature,
+      });
+
+      // Compare the recovered address with the provided address
+      return recoveredAddress.toLowerCase() === address.toLowerCase();
+    } catch (err: any) {
+      this.logger.error(
+        `(validateEVMSignature) Error validating EVM signature: ${err.message}`,
+        err.stack,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Generates a message when users want to link an EVM wallet to their account.
+   */
+  requestEVMSignatureMessage(walletAddress: string): string {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const hashSalt = this.generateHashSalt();
+
+    const rawMessage = `
+    Please sign the following message to link your wallet.
+    Wallet address: ${walletAddress}
+    Timestamp: ${timestamp}
+    Hash salt: ${hashSalt}
+    `.trim();
+
+    // EIP-191 Prefixed message
+    const eip191Message = `\x19Ethereum Signed Message:\n${rawMessage.length}${rawMessage}`;
+
+    return eip191Message;
+  }
+
+  /**
+   * Generates a random hash salt for cryptographic operations.
+   */
+  private generateHashSalt(): string {
+    // Generate 32 random bytes and convert to hex string
+    const salt = crypto.randomBytes(32).toString('hex');
+
+    // Compute the keccak256 hash using viem
+    return keccak256(toBytes(salt));
   }
 
   /**

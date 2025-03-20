@@ -67,9 +67,6 @@ export class OperatorWalletController {
 
     const responseData: ConnectedWalletResponseData = {
       _id: wallet._id,
-      operatorId: wallet.operatorId,
-      address: wallet.address,
-      chain: wallet.chain,
     };
 
     return new ConnectedWalletResponse(responseData);
