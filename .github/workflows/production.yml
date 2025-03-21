@@ -46,6 +46,8 @@ jobs:
           echo "JWT_EXPIRATION=24h" >> .env
           echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
           echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> .env
+          echo "MONGO_USERNAME=${{ secrets.MONGO_USERNAME }}" >> .env
+          echo "MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }}" >> .env
           echo "PORT=8080" >> .env
           echo "REDIS_URI=${{ secrets.REDIS_URI }}" >> .env
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
