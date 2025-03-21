@@ -66,5 +66,5 @@ jobs:
       
       - name: Deploy with docker-compose
         run: |
-          docker-compose down
-          docker-compose up -d 
+          docker compose down
+          docker compose up -d 
