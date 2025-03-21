@@ -54,8 +54,8 @@ NODE_ENV="<environment-name>"
 ## Development Workflow
 
 The development workflow is triggered when:
-- Code is pushed to the `development` branch
-- A pull request is created targeting the `development` branch
+- Code is pushed to the `dev` branch
+- A pull request is created targeting the `dev` branch
 - Code is tagged with 'development'
 - The workflow is manually triggered
 
@@ -107,7 +107,7 @@ The production environment runs as a standalone Docker container that connects t
 
 The repository follows this branch structure:
 - `main`: Production code 
-- `development`: Development code
+- `dev`: Development code
 
 You can also trigger workflows by using tags:
 - Tag with 'production' to trigger a production deployment

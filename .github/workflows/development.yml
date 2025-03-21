@@ -3,12 +3,12 @@ name: Development Deployment
 on:
   push:
     branches:
-      - development
+      - dev
     tags:
       - 'development'
   pull_request:
     branches:
-      - development
+      - dev
   workflow_dispatch:
 
 jobs:
