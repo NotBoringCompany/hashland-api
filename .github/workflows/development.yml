@@ -62,7 +62,7 @@ jobs:
       
       - name: Modify docker-compose for pre-built image
         run: |
-          sed -i "s|dockerfile: Dockerfile.dev|image: ${{ secrets.DOCKER_USERNAME }}/hashland-api:development|g" docker-compose.yml
+          sed -i 's/build:[^}]*}/image: ${{ secrets.DOCKER_USERNAME }}\/hashland-api:development/g' docker-compose.yml
       
       - name: Deploy with docker-compose
         run: |
