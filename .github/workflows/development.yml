@@ -1,90 +1,75 @@
-name: Development CI/CD
+name: Development Deployment
 
 on:
   push:
-    branches: [dev]
+    branches:
+      - development
+    tags:
+      - 'development'
   pull_request:
-    branches: [dev]
+    branches:
+      - development
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: [self-hosted, development]
-    env:
-      NODE_ENV: development
+  test:
+    runs-on: self-hosted
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Install dependencies
         run: npm ci
       
-      - name: Lint code
-        run: npm run lint
-      
-      - name: Build application
-        run: npm run build
-        
-      - name: Set Docker permissions
-        run: |
-          if [ ! -w /var/run/docker.sock ]; then
-            echo "Fixing Docker socket permissions"
-            sudo chmod 666 /var/run/docker.sock || true
-          fi
-      
-      - name: Cache Docker images
-        id: cache-docker-images
-        uses: actions/cache@v3
-        with:
-          path: /tmp/docker-images
-          key: ${{ runner.os }}-docker-images-${{ hashFiles('docker-compose.yml') }}
-      
-      - name: Load cached Docker images
-        if: steps.cache-docker-images.outputs.cache-hit == 'true'
-        run: |
-          echo "Loading cached Docker images"
-          docker load < /tmp/docker-images/mongo.tar || true
-          docker load < /tmp/docker-images/redis.tar || true
-      
-      - name: Start Docker services
-        run: docker compose up -d mongo redis
-      
-      - name: Save Docker images
-        if: steps.cache-docker-images.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p /tmp/docker-images
-          docker save mongo > /tmp/docker-images/mongo.tar
-          docker save redis > /tmp/docker-images/redis.tar
-      
-      - name: Stop Docker services
-        if: always()
-        run: docker compose down
+      - name: Run tests
+        run: npm test
   
-  deploy:
-    needs: build
-    runs-on: [self-hosted, development]
-    env:
-      NODE_ENV: development
+  build-and-deploy:
+    needs: test
+    runs-on: self-hosted
+    environment: development
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        
-      - name: Set Docker permissions
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Build Docker image
         run: |
-          if [ ! -w /var/run/docker.sock ]; then
-            echo "Fixing Docker socket permissions"
-            sudo chmod 666 /var/run/docker.sock || true
-          fi
-          
-      - name: Deploy to development environment
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/hashland-api:dev -f Dockerfile.dev .
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/hashland-api:development -f Dockerfile.dev .
+          docker push ${{ secrets.DOCKER_USERNAME }}/hashland-api:dev
+          docker push ${{ secrets.DOCKER_USERNAME }}/hashland-api:development
+      
+      - name: Create .env file
         run: |
-          docker compose down
-          docker compose pull
-          docker compose up -d --build
+          echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" > .env
+          echo "DATABASE_NAME=main" >> .env
+          echo "JWT_EXPIRATION=24h" >> .env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+          echo "MONGO_URI=mongodb://mongo:27017/main" >> .env
+          echo "PORT=8080" >> .env
+          echo "REDIS_URI=redis://redis:6379" >> .env
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "TON_API_KEY=${{ secrets.TON_API_KEY }}" >> .env
+          echo "TON_API_ENDPOINT=${{ secrets.TON_API_ENDPOINT }}" >> .env
+          echo "ALCHEMY_API_KEY=${{ secrets.ALCHEMY_API_KEY }}" >> .env
+          echo "TON_RECEIVER_ADDRESS=${{ secrets.TON_RECEIVER_ADDRESS }}" >> .env
+          echo "TON_X_API_KEY=${{ secrets.TON_X_API_KEY }}" >> .env
+          echo "NODE_ENV=development" >> .env
+          echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
+      
+      - name: Modify docker-compose for pre-built image
+        run: |
+          sed -i "s|dockerfile: Dockerfile.dev|image: ${{ secrets.DOCKER_USERNAME }}/hashland-api:development|g" docker-compose.yml
+      
+      - name: Deploy with docker-compose
+        run: |
+          docker-compose down
+          docker-compose up -d 

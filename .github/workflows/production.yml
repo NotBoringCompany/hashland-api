@@ -1,65 +1,59 @@
-name: Production CI/CD
+name: Production Deployment
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    tags:
+      - 'production'
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: [self-hosted, production]
-    env:
-      NODE_ENV: production
+  build-and-deploy:
+    runs-on: self-hosted
+    environment: production
     
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
       
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          node-version: '20'
-          cache: 'npm'
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
       
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Lint code
-        run: npm run lint
-      
-      - name: Build application
-        run: npm run build
-  
-  deploy-production:
-    needs: build
-    runs-on: [self-hosted, production]
-    env:
-      NODE_ENV: production
-    
-    steps:
-      - name: Build and tag Docker image
+      - name: Build Docker image
         run: |
-          docker build -t hashland-api:production .
-          docker tag hashland-api:production hashland-api:latest
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/hashland-api:latest -f Dockerfile .
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/hashland-api:production -f Dockerfile .
+          docker push ${{ secrets.DOCKER_USERNAME }}/hashland-api:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/hashland-api:production
       
-      - name: Stop existing container
+      - name: Create .env file
         run: |
+          echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" > .env
+          echo "DATABASE_NAME=main" >> .env
+          echo "JWT_EXPIRATION=24h" >> .env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+          echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> .env
+          echo "PORT=8080" >> .env
+          echo "REDIS_URI=${{ secrets.REDIS_URI }}" >> .env
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "TON_API_KEY=${{ secrets.TON_API_KEY }}" >> .env
+          echo "TON_API_ENDPOINT=${{ secrets.TON_API_ENDPOINT }}" >> .env
+          echo "ALCHEMY_API_KEY=${{ secrets.ALCHEMY_API_KEY }}" >> .env
+          echo "TON_RECEIVER_ADDRESS=${{ secrets.TON_RECEIVER_ADDRESS }}" >> .env
+          echo "TON_X_API_KEY=${{ secrets.TON_X_API_KEY }}" >> .env
+          echo "NODE_ENV=production" >> .env
+      
+      - name: Deploy container
+        run: |
+          docker pull ${{ secrets.DOCKER_USERNAME }}/hashland-api:production
           docker stop hashland-api || true
           docker rm hashland-api || true
-      
-      - name: Deploy to production
-        run: |
-          docker run -d \
-            --name hashland-api \
-            --restart always \
+          docker run -d --name hashland-api \
+            --restart unless-stopped \
             -p 8080:8080 \
-            --env-file .env.production \
-            --network hashland-network \
-            hashland-api:production
-      
-      - name: Check deployment status
-        run: |
-          sleep 10
-          docker ps
-          curl -s http://localhost:8080/health || echo "Health check failed"
-      
-      - name: Clean up old images
-        run: docker image prune -a -f --filter "until=24h" 
+            --env-file .env \
+            ${{ secrets.DOCKER_USERNAME }}/hashland-api:production 
