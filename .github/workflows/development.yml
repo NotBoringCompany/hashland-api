@@ -17,6 +17,11 @@ jobs:
     environment: development
     
     steps:
+      - name: Fix permissions before checkout
+        run: |
+          sudo chown -R $(whoami):$(whoami) /opt/actions-runner/dev/_work || true
+          sudo chmod -R 755 /opt/actions-runner/dev/_work || true
+      
       - name: Checkout code
         uses: actions/checkout@v4
       
