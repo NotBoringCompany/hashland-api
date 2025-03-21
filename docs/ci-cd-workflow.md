@@ -59,18 +59,18 @@ The development workflow is triggered when:
 - Code is tagged with 'development'
 - The workflow is manually triggered
 
-### Workflow Steps
+### Workflow Jobs
 
-1. **Test**
-   - Checkout code
-   - Install dependencies using npm
-   - Run tests
+The development workflow consists of two separate jobs:
 
-2. **Build and Deploy**
+1. **Build Job**
    - Checkout code
    - Login to Docker Hub
    - Build Docker image with both 'dev' and 'development' tags
    - Push images to Docker Hub
+
+2. **Deploy Job**
+   - Checkout code
    - Create .env file with necessary environment variables
    - Modify docker-compose.yml to use the pre-built image
    - Deploy using docker-compose with MongoDB and Redis
@@ -82,13 +82,18 @@ The production workflow is triggered when:
 - Code is tagged with 'production'
 - The workflow is manually triggered
 
-### Workflow Steps
+### Workflow Jobs
 
-1. **Build and Deploy**
+The production workflow consists of two separate jobs:
+
+1. **Build Job**
    - Checkout code
    - Login to Docker Hub
    - Build Docker image with both 'latest' and 'production' tags
    - Push images to Docker Hub
+
+2. **Deploy Job**
+   - Checkout code
    - Create .env file with necessary environment variables
    - Deploy as a standalone Docker container
 

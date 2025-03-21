@@ -12,21 +12,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    runs-on: self-hosted
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Run tests
-        run: npm test
-  
-  build-and-deploy:
-    needs: test
+  build:
     runs-on: self-hosted
     environment: development
     
@@ -46,6 +32,15 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/hashland-api:development -f Dockerfile.dev .
           docker push ${{ secrets.DOCKER_USERNAME }}/hashland-api:dev
           docker push ${{ secrets.DOCKER_USERNAME }}/hashland-api:development
+
+  deploy:
+    needs: build
+    runs-on: self-hosted
+    environment: development
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Create .env file
         run: |

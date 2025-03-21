@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: self-hosted
     environment: production
     
@@ -29,6 +29,15 @@ jobs:
           docker build -t ${{ secrets.DOCKER_USERNAME }}/hashland-api:production -f Dockerfile .
           docker push ${{ secrets.DOCKER_USERNAME }}/hashland-api:latest
           docker push ${{ secrets.DOCKER_USERNAME }}/hashland-api:production
+
+  deploy:
+    needs: build
+    runs-on: self-hosted
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       
       - name: Create .env file
         run: |
