@@ -23,16 +23,12 @@ import {
   equityToEffMultiplier,
 } from 'src/common/utils/equity';
 import { ByteArray, keccak256, recoverAddress, Signature, toBytes } from 'viem';
+import { AlchemyService } from 'src/alchemy/alchemy.service';
 
 @Injectable()
 export class OperatorWalletService {
   private readonly logger = new Logger(OperatorWalletService.name);
   private tonClient: TonClient;
-
-  // ✅ Explicitly defined batch size and max requests per second (for fetching TON balance)
-  private readonly batchSize = 1024; // Max 1024 wallets per request
-  private readonly maxRequestsPerSecond = 10; // API rate limit: 10 requests/sec
-  private readonly tonPriceApi = `https://data-api.binance.vision/api/v3/ticker/price?symbols=[%22TONUSDT%22]`;
 
   constructor(
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
@@ -40,6 +36,7 @@ export class OperatorWalletService {
     private operatorWalletModel: Model<OperatorWallet>,
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly redisService: RedisService,
+    private readonly alchemyService: AlchemyService,
   ) {
     // Initialize TON client
     const endpoint =
@@ -140,7 +137,7 @@ export class OperatorWalletService {
     try {
       let totalUsdBalance = 0;
 
-      // ✅ Organize wallets by chain
+      // ✅ Group wallet addresses by chain
       const chainWalletsMap: Partial<Record<AllowedChain, string[]>> = {};
       for (const wallet of wallets) {
         if (!chainWalletsMap[wallet.chain]) {
@@ -149,104 +146,89 @@ export class OperatorWalletService {
         chainWalletsMap[wallet.chain]!.push(wallet.address);
       }
 
-      // ✅ Step 1: Fetch TON/USD Price (Avoid multiple API calls)
-      let tonUsdRate = 10; // Default to 10 in case of failure
-      try {
-        tonUsdRate = await this.fetchTonToUsdRate();
-      } catch (err: any) {
-        this.logger.warn(
-          `⚠️ (fetchTotalBalanceForWallets) Failed to fetch TON/USD rate. Defaulting to 1. Error: ${err.message}`,
-        );
-      }
+      // ✅ Fetch exchange rates once
+      const rates = await this.fetchEligibleTokenRates();
 
+      // ✅ TON Chain Handling
       if (chainWalletsMap[AllowedChain.TON]?.length) {
         const tonApiKey = process.env.TON_API_KEY || '';
-        const tonXApiKey = process.env.TON_X_API_KEY || '';
-        const tonXApiUrl = `https://mainnet-rpc.tonxapi.com/v2/json-rpc/${tonXApiKey}`;
-
-        // ✅ Step 2: Fetch Native TON Balances (Single API Call)
-        const tonBalanceApiUrl =
+        const apiUrl =
           `https://toncenter.com/api/v3/accountStates?include_boc=false&api_key=${tonApiKey}&` +
           chainWalletsMap[AllowedChain.TON]!.map(
             (addr) => `address=${addr}`,
           ).join('&');
 
-        let totalTonBalance = 0;
-        try {
-          const tonResponse = await axios.get(tonBalanceApiUrl);
-          if (tonResponse.data?.accounts) {
-            totalTonBalance = tonResponse.data.accounts.reduce(
-              (sum: number, walletData: any) =>
-                sum +
-                (walletData.balance ? parseFloat(walletData.balance) / 1e9 : 0), // Convert from nanotons to TON
-              0,
-            );
-          }
-        } catch (err: any) {
-          this.logger.warn(
-            `⚠️ (fetchTotalBalanceForWallets) Failed to fetch TON balances. Error: ${err.message}`,
+        const response = await axios.get(apiUrl);
+        if (response.data?.accounts) {
+          const totalTonBalance = response.data.accounts.reduce(
+            (sum: number, walletData: any) =>
+              sum +
+              (walletData.balance ? parseFloat(walletData.balance) / 1e9 : 0),
+            0,
           );
-        }
 
-        totalUsdBalance += totalTonBalance * tonUsdRate;
+          totalUsdBalance += totalTonBalance * (rates.ton || 0);
 
-        // ✅ Step 3: Batch Fetch Jetton Balances (Optimized)
-        const requests = chainWalletsMap[AllowedChain.TON]!.map(
-          (addr, index) => ({
-            id: index + 1,
-            jsonrpc: '2.0',
-            method: 'getAccountJettonsBalances',
-            params: { account_id: addr },
-          }),
-        );
+          const tonXApiKey = process.env.TON_X_API_KEY || '';
+          const tonXApiUrl = `https://mainnet-rpc.tonxapi.com/v2/json-rpc/${tonXApiKey}`;
 
-        const allowedJettonAddresses = new Set([
-          '0:b113a994b5024a16719f69139328eb759596c38a25f59028b146fecdc3621dfe', // USDT
-          '0:7e30fc2b7751ba58a3642f3fd59d5e96a810ddd78d8a310bfe8353bef10500df', // USDC
-        ]);
-
-        // ✅ Step 4: Execute Batch Requests with Parallel Execution
-        const batchJettonResponses = await Promise.allSettled(
-          requests.map((body) =>
-            axios.post(tonXApiUrl, body, {
-              headers: { 'Content-Type': 'application/json' },
+          const requests = chainWalletsMap[AllowedChain.TON]!.map(
+            (addr, index) => ({
+              id: index + 1,
+              jsonrpc: '2.0',
+              method: 'getAccountJettonsBalances',
+              params: { account_id: addr },
             }),
-          ),
-        );
+          );
 
-        // ✅ Step 5: Process Jetton Balances More Efficiently
-        const totalJettonUsdBalance = batchJettonResponses.reduce(
-          (sum, response) => {
-            if (
-              response.status === 'fulfilled' &&
-              response.value?.data?.result?.balances
-            ) {
-              const balances = response.value.data.result.balances;
-              return (
-                sum +
-                balances.reduce((innerSum, balanceData) => {
-                  const jettonAddr = balanceData.jetton?.address; // Get jetton contract address
-                  if (allowedJettonAddresses.has(jettonAddr)) {
-                    return (
-                      innerSum +
-                      parseFloat(balanceData.balance) /
-                        Math.pow(10, balanceData.jetton.decimals || 9) // Convert to correct decimal format
-                    );
-                  }
-                  return innerSum;
-                }, 0)
-              );
+          const batchResponses = await axios.all(
+            requests.map((body) =>
+              axios.post(tonXApiUrl, body, {
+                headers: { 'Content-Type': 'application/json' },
+              }),
+            ),
+          );
+
+          const allowedJettonAddresses = new Set([
+            '0:b113a994b5024a16719f69139328eb759596c38a25f59028b146fecdc3621dfe', // USDT
+            '0:7e30fc2b7751ba58a3642f3fd59d5e96a810ddd78d8a310bfe8353bef10500df', // USDC
+          ]);
+
+          for (const response of batchResponses) {
+            if (response.data?.result?.balances) {
+              for (const balanceData of response.data.result.balances) {
+                const jettonAddr = balanceData.jetton?.address;
+                if (allowedJettonAddresses.has(jettonAddr)) {
+                  const jettonBalance =
+                    parseFloat(balanceData.balance) /
+                    Math.pow(10, balanceData.jetton.decimals || 9);
+                  totalUsdBalance += jettonBalance; // Assume USDT/USDC = 1 USD
+                }
+              }
             }
-            return sum;
-          },
-          0,
-        );
-
-        // ✅ Step 6: Add Jetton Balance to Total USD Balance
-        totalUsdBalance += totalJettonUsdBalance; // USDT/USDC ≈ 1 USD
+          }
+        }
       }
 
-      // Add other chains here...
+      // ✅ BERA Chain Handling
+      if (chainWalletsMap[AllowedChain.BERA]?.length) {
+        const beraRate = rates.bera || 0;
+
+        for (const address of chainWalletsMap[AllowedChain.BERA]) {
+          const balances =
+            await this.alchemyService.getEligibleBERATokenBalances(address);
+
+          for (const tokenData of balances) {
+            const { token, balance } = tokenData;
+
+            if (token === 'USDT' || token === 'USDC') {
+              totalUsdBalance += parseFloat(balance); // $1 stablecoins
+            } else if (token === 'BERA') {
+              totalUsdBalance += parseFloat(balance) * beraRate;
+            }
+          }
+        }
+      }
 
       return totalUsdBalance;
     } catch (error) {
@@ -258,49 +240,123 @@ export class OperatorWalletService {
   }
 
   /**
-   * Fetches the latest TON/USD exchange rate from a cached Redis value.
+   * Fetches the latest exchange rates from Binance for eligible token rates (that will be read for asset equity) and caches them in Redis.
+   *
+   * Returns an object like: { ton: 3.6, bera: 6.73 }
    */
-  async fetchTonToUsdRate(): Promise<number> {
+  async fetchEligibleTokenRates(): Promise<{ ton: number; bera: number }> {
+    const tonCacheKey = 'ton-usd-rate';
+    const beraCacheKey = 'bera-usd-rate';
+    const lockKey = 'token-usd-rate:lock';
+    const expiryInSeconds = 300; // Cache TTL: 5 mins
+
     try {
-      const cacheKey = 'ton-usd-rate';
-      const lockKey = 'ton-usd-rate:lock';
-      const expiryInSeconds = 300;
+      // ✅ Try fetching from cache first
+      const [cachedTon, cachedBera] = await Promise.all([
+        this.redisService.get(tonCacheKey),
+        this.redisService.get(beraCacheKey),
+      ]);
 
-      // Check cache first
-      const cachedRate = await this.redisService.get(cacheKey);
-      if (cachedRate) return parseFloat(cachedRate);
+      const tonRate = cachedTon ? parseFloat(cachedTon) : null;
+      const beraRate = cachedBera ? parseFloat(cachedBera) : null;
 
-      // Check if another request is already fetching the price
-      const lock = await this.redisService.get(lockKey);
-      if (lock) {
-        // Wait and retry (polling mechanism, can be optimized further)
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        return this.fetchTonToUsdRate(); // Retry fetching
+      if (tonRate !== null && beraRate !== null) {
+        return { ton: tonRate, bera: beraRate };
       }
 
-      // Set lock to prevent duplicate API calls
-      await this.redisService.set(lockKey, '1', 5); // Lock expires in 5 seconds
+      // ✅ Avoid race conditions using Redis lock
+      const lock = await this.redisService.get(lockKey);
+      if (lock) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return this.fetchEligibleTokenRates(); // Retry
+      }
 
-      // Fetch from API if cache is expired
-      const response = await axios.get(this.tonPriceApi);
-      const tonToUsdRate = response.data?.price
-        ? parseFloat(response.data.price)
-        : 10;
+      await this.redisService.set(lockKey, '1', 5); // Lock for 5s
 
-      // Store new value and remove the lock
-      await this.redisService.set(
-        cacheKey,
-        tonToUsdRate.toString(),
-        expiryInSeconds,
+      // ✅ Fetch from Binance API
+      const response = await axios.get(
+        'https://data-api.binance.vision/api/v3/ticker/price?symbols=["BERAUSDT","TONUSDT"]',
       );
-      await this.redisService.set(lockKey, '', 1); // Unlock
 
-      return tonToUsdRate;
+      const prices = response.data || [];
+
+      // Default fallback values
+      let finalTon = 10;
+      let finalBera = 10;
+
+      for (const token of prices) {
+        if (token.symbol === 'TONUSDT') finalTon = parseFloat(token.price);
+        if (token.symbol === 'BERAUSDT') finalBera = parseFloat(token.price);
+      }
+
+      // ✅ Cache values
+      await Promise.all([
+        this.redisService.set(
+          tonCacheKey,
+          finalTon.toString(),
+          expiryInSeconds,
+        ),
+        this.redisService.set(
+          beraCacheKey,
+          finalBera.toString(),
+          expiryInSeconds,
+        ),
+        this.redisService.set(lockKey, '', 1), // Unlock
+      ]);
+
+      return { ton: finalTon, bera: finalBera };
     } catch (error) {
-      this.logger.error(`❌ Error fetching TON price: ${error.message}`);
-      return 1;
+      this.logger.error(
+        `❌ (fetchTonAndBeraRates) Failed to fetch token rates: ${error.message}`,
+      );
+      return { ton: 10, bera: 10 }; // Fallback values
     }
   }
+
+  // /**
+  //  * Fetches the latest TON/USD exchange rate from a cached Redis value.
+  //  */
+  // async fetchTonToUsdRate(): Promise<number> {
+  //   try {
+  //     const cacheKey = 'ton-usd-rate';
+  //     const lockKey = 'ton-usd-rate:lock';
+  //     const expiryInSeconds = 300;
+
+  //     // Check cache first
+  //     const cachedRate = await this.redisService.get(cacheKey);
+  //     if (cachedRate) return parseFloat(cachedRate);
+
+  //     // Check if another request is already fetching the price
+  //     const lock = await this.redisService.get(lockKey);
+  //     if (lock) {
+  //       // Wait and retry (polling mechanism, can be optimized further)
+  //       await new Promise((resolve) => setTimeout(resolve, 1000));
+  //       return this.fetchTonToUsdRate(); // Retry fetching
+  //     }
+
+  //     // Set lock to prevent duplicate API calls
+  //     await this.redisService.set(lockKey, '1', 5); // Lock expires in 5 seconds
+
+  //     // Fetch from API if cache is expired
+  //     const response = await axios.get(this.tonPriceApi);
+  //     const tonToUsdRate = response.data?.price
+  //       ? parseFloat(response.data.price)
+  //       : 10;
+
+  //     // Store new value and remove the lock
+  //     await this.redisService.set(
+  //       cacheKey,
+  //       tonToUsdRate.toString(),
+  //       expiryInSeconds,
+  //     );
+  //     await this.redisService.set(lockKey, '', 1); // Unlock
+
+  //     return tonToUsdRate;
+  //   } catch (error) {
+  //     this.logger.error(`❌ Error fetching TON price: ${error.message}`);
+  //     return 1;
+  //   }
+  // }
 
   /**
    * Connect a wallet to an operator

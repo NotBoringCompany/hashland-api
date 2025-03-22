@@ -17,7 +17,7 @@ export class AlchemyService {
   /**
    * Fetches token balances for eligible tokens (BERA, USDC, USDT).
    */
-  async getEligibleTokenBalances(address: string) {
+  async getEligibleBERATokenBalances(address: string) {
     try {
       const tokenMap: Record<string, string> = {
         '0x549943e04f40284185054145c6E4e9568C1D3241': 'USDC',
