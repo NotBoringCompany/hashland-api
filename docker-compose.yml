@@ -14,16 +14,18 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=8080
-      - MONGO_URI=mongodb://mongo:27017/main
+      - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongo:27017/main?authSource=admin
       - REDIS_URI=redis://redis:6379
       - DATABASE_NAME=main
-      - JWT_SECRET=your_jwt_secret_here
+      - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION=24h
       - TON_API_ENDPOINT=https://toncenter.com/api/v2/jsonRPC
     depends_on:
       - mongo
       - redis
     command: npm run start:dev
+    env_file:
+      - .env
 
   mongo:
     image: mongo:latest
@@ -34,6 +36,11 @@ services:
       - mongo-data:/data/db
     environment:
       - MONGO_INITDB_DATABASE=main
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+    command: mongod --bind_ip_all --auth
+    env_file:
+      - .env
 
   redis:
     image: redis:alpine

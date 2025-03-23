@@ -163,6 +163,9 @@ export class DrillingCycleService {
     // ✅ Step 2: Select extractor
     const extractorData = await this.drillService.selectExtractor();
     let finalExtractorOperatorId: Types.ObjectId | null = null;
+    let extractorName: string | null = null;
+    // Store the total weighted efficiency from extractor selection
+    const totalWeightedEff = extractorData?.totalWeightedEff || 0;
 
     if (extractorData) {
       const extractorOperatorId = extractorData.drillOperatorId;
@@ -171,6 +174,7 @@ export class DrillingCycleService {
       const [extractorOperator, extractorOperatorWallets] = await Promise.all([
         this.operatorService.findById(extractorOperatorId, {
           assetEquity: 1,
+          username: 1, // Add username to the query
         }),
         this.operatorWalletService.getOperatorWallets(extractorOperatorId, {
           address: 1,
@@ -183,6 +187,7 @@ export class DrillingCycleService {
           `(endCurrentCycle) Extractor operator ${extractorOperatorId} not found. Skipping extractor.`,
         );
       } else {
+        extractorName = extractorOperator.username || 'Unknown Extractor';
         const storedAssetEquity = extractorOperator.assetEquity;
         const minThreshold =
           GAME_CONSTANTS.EXTRACTOR.OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD *
@@ -216,15 +221,25 @@ export class DrillingCycleService {
     }
 
     // ✅ Step 3: Distribute rewards to extractor operator and active operators (extractorOperatorId could be null)
-    await this.distributeCycleRewards(finalExtractorOperatorId, issuedHASH);
+    const rewardShares = await this.distributeCycleRewards(
+      finalExtractorOperatorId,
+      issuedHASH,
+    );
 
     // ✅ Step 4: Process Fuel for ALL Operators
     await this.processFuelForAllOperators(cycleNumber);
 
-    // ✅ Step 5: Update the cycle with extractor ID (can be null)
-    await this.drillingCycleModel.updateOne(
+    // ✅ Step 5: Update the cycle
+    const latestCycle = await this.drillingCycleModel.findOneAndUpdate(
       { cycleNumber },
-      { extractorId: extractorData?.drillId || null }, // ✅ Store null if no extractor is chosen
+      {
+        extractorId: extractorData?.drillId || null, // ✅ Store null if no extractor is chosen
+        extractorOperatorId: finalExtractorOperatorId,
+        extractorOperatorName: extractorName,
+        rewardShares,
+        totalWeightedEff,
+      },
+      { new: true },
     );
 
     // ✅ Step 6: Complete any stopping sessions
@@ -242,6 +257,13 @@ export class DrillingCycleService {
       );
     }
 
+    // ✅ Step 7: Send WebSocket notification about the latest cycle
+    // Store the rewards in Redis for history
+    await this.drillingGateway.storeLatestCycleInRedis(latestCycle);
+
+    // Send WebSocket notification
+    await this.drillingGatewayService.notifyNewCycle(latestCycle);
+
     const endTime = performance.now();
     this.logger.log(
       `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${(endTime - startTime).toFixed(2)}ms.`,
@@ -254,11 +276,16 @@ export class DrillingCycleService {
   async distributeCycleRewards(
     extractorOperatorId: Types.ObjectId | null, // ✅ Extractor operator ID can be null
     issuedHash: number,
-  ) {
+  ): Promise<
+    { operatorId: Types.ObjectId; operatorName: string; amount: number }[]
+  > {
     const now = performance.now();
     const rewardData: { operatorId: Types.ObjectId; amount: number }[] = [];
-    let extractorName: string | null = null;
-    const currentCycleNumber = await this.redisService.get(this.redisCycleKey);
+    const rewardSharesWithNames: {
+      operatorId: Types.ObjectId;
+      operatorName: string;
+      amount: number;
+    }[] = [];
 
     // ✅ Step 1: Fetch All Active Operators' IDs
     const allActiveOperatorIds =
@@ -267,7 +294,7 @@ export class DrillingCycleService {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No active operators found for reward distribution.`,
       );
-      return;
+      return [];
     }
 
     // ✅ Step 2: Fetch Active Operators' Data (Cumulative Eff, Eff Multiplier)
@@ -282,7 +309,7 @@ export class DrillingCycleService {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No valid active operators.`,
       );
-      return;
+      return [];
     }
 
     // Create a map of operator IDs to names for quick lookup
@@ -292,18 +319,6 @@ export class DrillingCycleService {
         op.username || 'Unknown Operator',
       ]),
     );
-
-    // If we have an extractor, fetch its name
-    if (extractorOperatorId) {
-      const extractorOperator = await this.operatorModel
-        .findById(extractorOperatorId)
-        .select('username')
-        .lean();
-
-      if (extractorOperator) {
-        extractorName = extractorOperator.username || 'Unknown Extractor';
-      }
-    }
 
     // ✅ Step 3: Apply Luck Factor & Compute Weighted Eff
     const operatorsWithLuck = activeOperators.map((operator) => {
@@ -329,7 +344,7 @@ export class DrillingCycleService {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No valid weighted EFF for reward distribution.`,
       );
-      return;
+      return [];
     }
 
     if (extractorOperatorId === null) {
@@ -399,7 +414,7 @@ export class DrillingCycleService {
           this.logger.error(
             `(distributeCycleRewards) Pool not found for extractor operator: ${extractorOperatorId}`,
           );
-          return;
+          return [];
         }
 
         // ✅ Step 6: Get Active Pool Operators
@@ -430,7 +445,7 @@ export class DrillingCycleService {
           this.logger.warn(
             `⚠️ (distributeCycleRewards) No valid weighted EFF for pool reward distribution.`,
           );
-          return;
+          return [];
         }
 
         const extractorReward =
@@ -460,47 +475,23 @@ export class DrillingCycleService {
     // ✅ Step 8: Batch Issue Rewards
     await this.batchIssueHashRewards(rewardData);
 
-    // ✅ Step 9: Prepare and send WebSocket notification
-    const rewardSharesWithNames = rewardData.map((reward) => ({
-      operatorId: reward.operatorId,
-      operatorName:
-        operatorNameMap.get(reward.operatorId.toString()) || 'Unknown Operator',
-      amount: reward.amount,
-    }));
-
-    // Create the payload for WebSocket notification
-    const timestamp = new Date().toISOString();
-    const rewardPayload = {
-      cycleNumber: parseInt(currentCycleNumber, 10),
-      timestamp,
-      extractor: {
-        id: extractorOperatorId ? extractorOperatorId.toString() : null,
-        name: extractorName,
-      },
-      totalReward: issuedHash,
-      shares: rewardSharesWithNames.map((share) => ({
-        operatorId: share.operatorId.toString(),
-        operatorName: share.operatorName,
-        amount: share.amount,
-      })),
-    };
-
-    // Store the rewards in Redis for history
-    await this.drillingGateway.storeCycleRewardsInRedis(rewardPayload);
-
-    // Send WebSocket notification
-    await this.drillingGatewayService.notifyCycleRewards(
-      parseInt(currentCycleNumber, 10),
-      extractorOperatorId,
-      extractorName,
-      issuedHash,
-      rewardSharesWithNames,
-    );
+    // ✅ Step 9: Prepare reward shares with operator names
+    for (const reward of rewardData) {
+      rewardSharesWithNames.push({
+        operatorId: reward.operatorId,
+        operatorName:
+          operatorNameMap.get(reward.operatorId.toString()) ||
+          'Unknown Operator',
+        amount: reward.amount,
+      });
+    }
 
     const end = performance.now();
     this.logger.log(
       `✅ (distributeCycleRewards) Rewards distributed in ${(end - now).toFixed(2)}ms.`,
     );
+
+    return rewardSharesWithNames;
   }
 
   /**

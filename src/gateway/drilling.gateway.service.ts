@@ -4,7 +4,7 @@ import { RedisService } from 'src/common/redis.service';
 import { DrillService } from 'src/drills/drill.service';
 import { DrillingSessionStatus } from 'src/drills/drilling-session.service';
 import { Types } from 'mongoose';
-import { CycleRewardsResponse } from './drilling.gateway.types';
+import { DrillingCycle } from 'src/drills/schemas/drilling-cycle.schema';
 
 /**
  * Service for handling WebSocket interactions with the drilling gateway.
@@ -157,47 +157,14 @@ export class DrillingGatewayService {
   }
 
   /**
-   * Notifies all active operators about cycle rewards.
-   *
-   * @param cycleNumber The cycle number
-   * @param extractorId The ID of the extractor (or null if no extractor)
-   * @param extractorName The name of the extractor (or null if no extractor)
-   * @param totalReward Total HASH reward for the cycle
-   * @param rewardShares Array of operator IDs and their reward amounts
+   * Notifies all active operators about the latest driling cycle.
    */
-  async notifyCycleRewards(
-    cycleNumber: number,
-    extractorId: Types.ObjectId | null,
-    extractorName: string | null,
-    totalReward: number,
-    rewardShares: {
-      operatorId: Types.ObjectId;
-      operatorName: string;
-      amount: number;
-    }[],
-  ) {
-    // Convert the data to the format expected by the frontend
-    const timestamp = new Date().toISOString();
-    const payload: CycleRewardsResponse = {
-      cycleNumber,
-      timestamp,
-      extractor: {
-        id: extractorId ? extractorId.toString() : null,
-        name: extractorName,
-      },
-      totalReward,
-      shares: rewardShares.map((share) => ({
-        operatorId: share.operatorId.toString(),
-        operatorName: share.operatorName,
-        amount: share.amount,
-      })),
-    };
-
+  async notifyNewCycle(drillingCycle: DrillingCycle) {
     // Broadcast to all connected clients
-    this.drillingGateway.server.emit('cycle-rewards', payload);
+    this.drillingGateway.server.emit('new-cycle', drillingCycle);
 
     this.logger.log(
-      `💰 Broadcasted cycle rewards for cycle #${cycleNumber} with ${rewardShares.length} operators`,
+      `💰 Broadcasted new cycle #${drillingCycle.cycleNumber} with ${drillingCycle.rewardShares.length} operators and total weighted efficiency of ${drillingCycle.totalWeightedEff}`,
     );
   }
 }

@@ -6,105 +6,125 @@ This document describes the CI/CD workflow for the Hashland API project, explain
 
 The Hashland API project uses GitHub Actions with self-hosted runners to implement CI/CD pipelines for both development and production environments. The workflows are defined in the `.github/workflows` directory.
 
+## Secrets Required
+
+The following secrets need to be configured in your GitHub repository:
+
+### Repository Secrets (Shared)
+- `DOCKER_USERNAME`: Your Docker Hub username
+- `DOCKER_PASSWORD`: Your Docker Hub password
+- `ADMIN_PASSWORD`: Admin password hash
+- `JWT_SECRET`: Secret key for JWT token generation
+- `TELEGRAM_BOT_TOKEN`: Telegram bot token
+- `TON_API_KEY`: TON API key
+- `TON_API_ENDPOINT`: API endpoint for TON blockchain (e.g., "https://toncenter.com/api/v2/jsonRPC")
+- `ALCHEMY_API_KEY`: Alchemy API key
+- `TON_RECEIVER_ADDRESS`: TON wallet address for receiving funds
+- `TON_X_API_KEY`: TON X API key
+
+### Environment Secrets
+
+Configure these in the production environment:
+- `MONGO_URI`: MongoDB connection URI
+- `REDIS_URI`: Redis connection URI
+
+Note: For the development environment, local MongoDB and Redis instances are used through docker-compose.
+
+## Environment Variables
+
+The following environment variables are set in the .env files during deployment:
+
+```
+ADMIN_PASSWORD="<from-secrets>"
+DATABASE_NAME="main"
+JWT_EXPIRATION="24h"
+JWT_SECRET="<from-secrets>"
+MONGO_URI="<from-secrets-or-local-docker>"
+PORT="8080"
+REDIS_URI="<from-secrets-or-local-docker>"
+TELEGRAM_BOT_TOKEN="<from-secrets>"
+TON_API_KEY="<from-secrets>"
+TON_API_ENDPOINT="<from-secrets>"
+ALCHEMY_API_KEY="<from-secrets>"
+TON_RECEIVER_ADDRESS="<from-secrets>"
+TON_X_API_KEY="<from-secrets>"
+NODE_ENV="<environment-name>"
+```
+
 ## Development Workflow
 
 The development workflow is triggered when:
 - Code is pushed to the `dev` branch
 - A pull request is created targeting the `dev` branch
+- Code is tagged with 'development'
+- The workflow is manually triggered
 
-### Workflow Steps
+### Workflow Jobs
 
-1. **Build and Test**
+The development workflow consists of two separate jobs:
+
+1. **Build Job**
    - Checkout code
-   - Set up Node.js environment
-   - Install dependencies using Yarn
-   - Lint the code
-   - Build the application
-   - Start Docker services (MongoDB and Redis)
-   - Run tests
-   - Stop Docker services
+   - Login to Docker Hub
+   - Build Docker image with both 'dev' and 'development' tags
+   - Push images to Docker Hub
 
-2. **Deploy to Development**
-   - Deploy the application using Docker Compose
-   - Perform a health check to verify deployment
-
-### Docker Services in Development
-
-The development environment uses Docker Compose to run:
-- The Hashland API application
-- MongoDB database
-- Redis cache
-
-All services are defined in the `docker-compose.yml` file.
+2. **Deploy Job**
+   - Checkout code
+   - Create .env file with necessary environment variables
+   - Modify docker-compose.yml to use the pre-built image
+   - Deploy using docker-compose with MongoDB and Redis
 
 ## Production Workflow
 
 The production workflow is triggered when:
 - Code is pushed to the `main` branch
+- Code is tagged with 'production'
+- The workflow is manually triggered
 
-### Workflow Steps
+### Workflow Jobs
 
-1. **Build**
+The production workflow consists of two separate jobs:
+
+1. **Build Job**
    - Checkout code
-   - Set up Node.js environment
-   - Install dependencies using Yarn
-   - Lint the code
-   - Build the application
+   - Login to Docker Hub
+   - Build Docker image with both 'latest' and 'production' tags
+   - Push images to Docker Hub
 
-2. **Deploy to Production**
-   - Build and tag a Docker image
-   - Stop any existing container
-   - Deploy the new container with proper environment variables
-   - Perform a health check to verify deployment
-   - Clean up old Docker images
+2. **Deploy Job**
+   - Checkout code
+   - Create .env file with necessary environment variables
+   - Deploy as a standalone Docker container
 
-### Production Deployment
+## Docker Configuration
 
-In production, the application is deployed as a standalone Docker container that connects to external MongoDB and Redis services, using the configured environment variables in `.env.production`.
+### Development Environment
+The development environment uses docker-compose.yml which includes:
+- The HashLand API application
+- MongoDB for data storage
+- Redis for caching and message queuing
 
-## Health Checks
+### Production Environment
+The production environment runs as a standalone Docker container that connects to external MongoDB and Redis services specified in the environment variables.
 
-Both workflows include health checks to verify successful deployment. The health check endpoint is available at:
+## Branch Structure
 
-```
-GET /health
-```
+The repository follows this branch structure:
+- `main`: Production code 
+- `dev`: Development code
 
-The endpoint returns:
-```json
-{
-  "status": "ok",
-  "timestamp": "2023-06-07T12:34:56.789Z",
-  "service": "hashland-api"
-}
-```
+You can also trigger workflows by using tags:
+- Tag with 'production' to trigger a production deployment
+- Tag with 'development' to trigger a development deployment
 
-## Workflow Files
+## Setting Up GitHub Environments
 
-The GitHub Actions workflow files are located at:
-- `.github/workflows/development.yml`: Development workflow
-- `.github/workflows/production.yml`: Production workflow
+1. Go to your GitHub repository
+2. Navigate to Settings → Environments
+3. Create two environments: "production" and "development"
+4. Add the environment-specific secrets to each environment
 
 ## Self-Hosted Runner Requirements
 
-The workflows are designed to run on self-hosted GitHub Actions runners with the following labels:
-- Development: `self-hosted,Linux,X64,dev`
-- Production: `self-hosted,Linux,X64,prod`
-
-For details on setting up these runners, see the [GitHub Runners Setup](./github-runners-setup.md) documentation.
-
-## Customizing the Workflows
-
-To customize the workflows:
-
-1. Edit the respective workflow files in the `.github/workflows` directory
-2. Commit and push your changes to the repository
-3. GitHub Actions will use the updated workflow files for subsequent runs
-
-## Monitoring Workflow Runs
-
-You can monitor workflow runs in the GitHub repository:
-1. Go to your repository on GitHub
-2. Click on the "Actions" tab
-3. View the list of workflow runs
-4. Click on a specific run to see details and logs 
+The workflows are designed to run on self-hosted GitHub Actions runners. For details on setting up these runners, see the [GitHub Runners Setup](./github-runners-setup.md) documentation. 
