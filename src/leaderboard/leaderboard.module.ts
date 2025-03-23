@@ -6,7 +6,10 @@ import {
 } from 'src/operators/schemas/operator.schema';
 import { LeaderboardService } from './leaderboard.service';
 import { LeaderboardController } from './leaderboard.controller';
-import { PoolOperator, PoolOperatorSchema } from 'src/pools/schemas/pool-operator.schema';
+import {
+  PoolOperator,
+  PoolOperatorSchema,
+} from 'src/pools/schemas/pool-operator.schema';
 
 @Module({
   imports: [

@@ -12,6 +12,7 @@ import { RedisService } from 'src/common/redis.service';
 import { OperatorWallet } from './schemas/operator-wallet.schema';
 import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { HASHReserve } from 'src/hash-reserve/schemas/hash-reserve.schema';
 
 @Injectable()
 export class OperatorService {
@@ -28,7 +29,71 @@ export class OperatorService {
     private readonly poolService: PoolService,
     private readonly drillService: DrillService,
     private readonly redisService: RedisService,
+    @InjectModel(HASHReserve.name) private hashReserveModel: Model<HASHReserve>,
   ) {}
+
+  /**
+   * Fetches the overview data for all operators in Hashland.
+   * Includes:
+   * - Total number of operators
+   * - Total $HASH extracted by all operators
+   * - Estimated asset equity for a given operator
+   * - Total $HASH in the reserve
+   */
+  async fetchOverviewData(operatorId: Types.ObjectId): Promise<
+    ApiResponse<{
+      assetEquity: number;
+      totalOperators: number;
+      totalHASHExtracted: number;
+      totalHASHReserve: number;
+    }>
+  > {
+    try {
+      // Run all queries in parallel
+      const [operator, totalOperators, hashExtractedAgg, hashReserve] =
+        await Promise.all([
+          this.operatorModel
+            .findOne({ _id: operatorId }, { assetEquity: 1 })
+            .lean(),
+
+          this.operatorModel.countDocuments(),
+
+          this.operatorModel.aggregate([
+            {
+              $group: {
+                _id: null,
+                total: { $sum: '$totalEarnedHASH' },
+              },
+            },
+          ]),
+
+          this.hashReserveModel.findOne({}, { totalHASH: 1, _id: 0 }).lean(),
+        ]);
+
+      if (!operator) {
+        return new ApiResponse(404, `(fetchOverviewData) Operator not found`);
+      }
+
+      const totalHASHExtracted = hashExtractedAgg?.[0]?.total || 0;
+      const totalHASHReserve = hashReserve?.totalHASH || 0;
+
+      return new ApiResponse(
+        200,
+        `(fetchOverviewData) Overview data fetched successfully`,
+        {
+          assetEquity: operator.assetEquity,
+          totalOperators,
+          totalHASHExtracted,
+          totalHASHReserve,
+        },
+      );
+    } catch (err: any) {
+      return new ApiResponse(
+        500,
+        `(fetchOverviewData) Error fetching overview data: ${err.message}`,
+      );
+    }
+  }
 
   /**
    * Fetches an operator's data. Includes their base data, their wallet instances, their drills and also their pool ID if in a pool.

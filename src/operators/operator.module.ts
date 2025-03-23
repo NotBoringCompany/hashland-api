@@ -14,6 +14,10 @@ import {
   OperatorWalletSchema,
 } from './schemas/operator-wallet.schema';
 import { OperatorController } from './operator.controller';
+import {
+  HASHReserve,
+  HashReserveSchema,
+} from 'src/hash-reserve/schemas/hash-reserve.schema';
 
 @Module({
   imports: [
@@ -22,6 +26,7 @@ import { OperatorController } from './operator.controller';
       { name: Operator.name, schema: OperatorSchema },
       { name: Drill.name, schema: DrillSchema },
       { name: OperatorWallet.name, schema: OperatorWalletSchema },
+      { name: HASHReserve.name, schema: HashReserveSchema },
     ]),
     BullModule.registerQueue({
       name: 'operator-queue',

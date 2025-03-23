@@ -66,4 +66,38 @@ export class OperatorController {
       projectionObj,
     );
   }
+
+  @ApiOperation({
+    summary: 'Get operator overview data',
+    description:
+      'Fetches overview data, including total number of operators, $HASH extracted by all operators, and so on',
+  })
+  @ApiQuery({
+    name: 'operatorId',
+    description: 'The ID of the operator to retrieve',
+    required: true,
+    type: String,
+    example: '507f1f77bcf86cd799439011',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved operator overview data',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Operator not found',
+  })
+  @Get('overview')
+  async getOverviewData(@Query('operatorId') operatorId?: string): Promise<
+    AppApiResponse<{
+      operator: Partial<Operator>;
+      wallets: Partial<OperatorWallet[]>;
+      drills: Partial<Drill[]>;
+      poolId?: Types.ObjectId;
+    }>
+  > {
+    return this.operatorService.fetchOperatorData(
+      new Types.ObjectId(operatorId),
+    );
+  }
 }
