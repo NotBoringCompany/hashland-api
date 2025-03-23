@@ -88,20 +88,25 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
    - `maxFuel`: Maximum fuel capacity
    - `fuelPercentage`: Percentage of fuel remaining (0-100)
 
-12. **cycle-rewards**: Sent when rewards are distributed at the end of a drilling cycle
-   - `cycleNumber`: The cycle number
-   - `timestamp`: ISO date string of when the rewards were distributed
-   - `extractor`: Object containing extractor information
-     - `id`: The ID of the extractor operator (null if no extractor)
-     - `name`: The username of the extractor operator (null if no extractor)
-   - `totalReward`: Total HASH reward for the cycle
-   - `shares`: Array of reward shares for all operators
-     - `operatorId`: The ID of the operator
-     - `operatorName`: The username of the operator
-     - `amount`: The amount of HASH rewarded to this operator
+12. **new-cycle**: Sent when rewards are distributed at the end of a drilling cycle
+   - `_id`: The database ID of the drilling cycle
+   - `cycleNumber`: The current cycle number
+   - `startTime`: The start time of the drilling cycle
+   - `endTime`: The end time of the drilling cycle
+   - `extractorId`: The database ID of the drill that was selected as the extractor for this cycle
+   - `activeOperators`: The number of active operators during this cycle
+   - `difficulty`: An arbitrary difficulty value that determines how hard it is to extract $HASH during this cycle
+   - `issuedHASH`: The total amount of $HASH that was issued during this cycle
+   - `extractorOperatorId`: The database ID of the operator who owns the extractor drill
+   - `extractorOperatorName`: The name of the operator who owns the extractor drill
+   - `rewardShares`: The detailed reward shares for all operators who received rewards in this cycle
+   - `operatorId`: The database ID of the operator who received the reward
+   - `operatorName`: The username of the operator who received the reward
+   - `amount`: The amount of $HASH the operator received
+   - `totalWeightedEff`: The total weighted efficiency from all operators in this cycle
 
-13. **recent-rewards**: Sent in response to a get-recent-rewards request
-   - Array of the latest 5 cycle rewards, each with the same structure as the cycle-rewards event
+13. **latest-cycle**: Sent in response to a get-latest-cycle request
+   - Array of the latest 5 drilling cycle, each with the same structure as the latest-cycle event
 
 ## Usage Example
 
@@ -154,8 +159,8 @@ socket.on('drilling-stopped', (data) => console.log('Drilling stopped:', data));
 socket.on('drilling-error', (data) => console.error('Drilling error:', data.message));
 socket.on('fuel-update', (data) => console.log('Fuel update:', data));
 
-// Listen for cycle rewards
-socket.on('cycle-rewards', (data) => {
+// Listen for new cycle
+socket.on('new-cycle', (data) => {
   console.log('Cycle rewards for cycle #' + data.cycleNumber);
   console.log('Extractor:', data.extractor.name || 'No extractor');
   console.log('Total reward:', data.totalReward + ' HASH');
@@ -177,8 +182,8 @@ socket.on('cycle-rewards', (data) => {
   });
 });
 
-// Listen for recent rewards history
-socket.on('recent-rewards', (rewards) => {
+// Listen for recent cycle history
+socket.on('latest-cycle', (rewards) => {
   console.log('Recent cycle rewards:');
   rewards.forEach((reward, index) => {
     console.log(`Cycle #${reward.cycleNumber} (${new Date(reward.timestamp).toLocaleString()})`);

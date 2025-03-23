@@ -169,25 +169,6 @@ export interface FuelStatusResponse {
   fuelPercentage: number;
 }
 
-/**
- * Response for cycle-rewards event
- */
-export interface CycleRewardsResponse {
-  cycleNumber: number;
-  timestamp: string; // ISO date string
-  extractor: {
-    id: string | null;
-    name: string | null;
-  };
-  totalReward: number;
-  totalWeightedEff: number; // Total weighted efficiency from the cycle
-  shares: {
-    operatorId: string;
-    operatorName: string;
-    amount: number;
-  }[];
-}
-
 // ==========================================
 // Internal Types
 // ==========================================

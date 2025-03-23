@@ -229,8 +229,8 @@ export class DrillingCycleService {
     // ✅ Step 4: Process Fuel for ALL Operators
     await this.processFuelForAllOperators(cycleNumber);
 
-    // ✅ Step 5: Update the cycle with extractor ID (can be null)
-    await this.drillingCycleModel.updateOne(
+    // ✅ Step 5: Update the cycle
+    const latestCycle = await this.drillingCycleModel.findOneAndUpdate(
       { cycleNumber },
       {
         extractorId: extractorData?.drillId || null, // ✅ Store null if no extractor is chosen
@@ -239,6 +239,7 @@ export class DrillingCycleService {
         rewardShares,
         totalWeightedEff,
       },
+      { new: true },
     );
 
     // ✅ Step 6: Complete any stopping sessions
@@ -256,41 +257,12 @@ export class DrillingCycleService {
       );
     }
 
-    // ✅ Step 7: Send WebSocket notification about cycle rewards
-    if (rewardShares && rewardShares.length > 0) {
-      // Create the payload for WebSocket notification
-      const timestamp = new Date().toISOString();
-      const rewardPayload = {
-        cycleNumber,
-        timestamp,
-        extractor: {
-          id: finalExtractorOperatorId
-            ? finalExtractorOperatorId.toString()
-            : null,
-          name: extractorName,
-        },
-        totalReward: issuedHASH,
-        totalWeightedEff,
-        shares: rewardShares.map((share) => ({
-          operatorId: share.operatorId.toString(),
-          operatorName: share.operatorName,
-          amount: share.amount,
-        })),
-      };
+    // ✅ Step 7: Send WebSocket notification about the latest cycle
+    // Store the rewards in Redis for history
+    await this.drillingGateway.storeLatestCycleInRedis(latestCycle);
 
-      // Store the rewards in Redis for history
-      await this.drillingGateway.storeCycleRewardsInRedis(rewardPayload);
-
-      // Send WebSocket notification
-      await this.drillingGatewayService.notifyCycleRewards(
-        cycleNumber,
-        finalExtractorOperatorId,
-        extractorName,
-        issuedHASH,
-        rewardShares,
-        totalWeightedEff,
-      );
-    }
+    // Send WebSocket notification
+    await this.drillingGatewayService.notifyNewCycle(latestCycle);
 
     const endTime = performance.now();
     this.logger.log(
