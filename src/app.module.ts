@@ -15,6 +15,7 @@ import { ShopItemModule } from './shops/shop-item.module';
 import { ShopPurchaseModule } from './shops/shop-purchase.module';
 import { TonModule } from './ton/ton.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
+import { AlchemyModule } from './alchemy/alchemy.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { LeaderboardModule } from './leaderboard/leaderboard.module';
     ShopPurchaseModule,
     TonModule,
     LeaderboardModule,
+    AlchemyModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -35,6 +35,7 @@
     "@nestjs/websockets": "^11.0.11",
     "@ton/core": "^0.60.1",
     "@ton/ton": "^15.2.1",
+    "alchemy-sdk": "^3.5.5",
     "axios": "^1.8.2",
     "bull": "^4.16.5",
     "class-transformer": "^0.5.1",
@@ -48,7 +49,8 @@
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
-    "tonweb": "^0.0.66"
+    "tonweb": "^0.0.66",
+    "viem": "^2.23.13"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

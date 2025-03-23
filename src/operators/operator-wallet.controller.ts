@@ -8,6 +8,7 @@ import {
   UseGuards,
   Request,
   HttpCode,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -39,6 +40,23 @@ export class OperatorWalletController {
   constructor(private readonly operatorWalletService: OperatorWalletService) {}
 
   @ApiOperation({
+    summary: 'Request an EVM wallet signature message',
+    description: 'Requests a message for EVM wallet signature verification',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'EVM signature message requested',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request - Missing or invalid parameters',
+  })
+  @Get('request-evm-signature-message')
+  requestEVMSignatureMessage(@Query('address') address: string): string {
+    return this.operatorWalletService.requestEVMSignatureMessage(address);
+  }
+
+  @ApiOperation({
     summary: 'Connect a wallet to an operator',
     description: 'Connects a wallet to the authenticated operator',
   })
@@ -67,9 +85,6 @@ export class OperatorWalletController {
 
     const responseData: ConnectedWalletResponseData = {
       _id: wallet._id,
-      operatorId: wallet.operatorId,
-      address: wallet.address,
-      chain: wallet.chain,
     };
 
     return new ConnectedWalletResponse(responseData);

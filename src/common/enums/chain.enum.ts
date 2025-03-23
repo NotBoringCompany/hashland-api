@@ -3,4 +3,5 @@
  */
 export enum AllowedChain {
   TON = 'TON',
+  BERA = 'BERA',
 }
