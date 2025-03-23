@@ -105,6 +105,13 @@ export class DrillingCycle extends Document {
    */
   @Prop({ type: [RewardShare], default: [] })
   rewardShares: RewardShare[];
+
+  /**
+   * The total weighted efficiency from all operators in this cycle.
+   * This is calculated during the extractor selection process.
+   */
+  @Prop({ type: Number, default: 0 })
+  totalWeightedEff: number;
 }
 
 export const DrillingCycleSchema = SchemaFactory.createForClass(DrillingCycle);

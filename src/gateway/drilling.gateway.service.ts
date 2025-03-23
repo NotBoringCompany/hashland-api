@@ -164,6 +164,7 @@ export class DrillingGatewayService {
    * @param extractorName The name of the extractor (or null if no extractor)
    * @param totalReward Total HASH reward for the cycle
    * @param rewardShares Array of operator IDs and their reward amounts
+   * @param totalWeightedEff Total weighted efficiency of operators in this cycle
    */
   async notifyCycleRewards(
     cycleNumber: number,
@@ -175,6 +176,7 @@ export class DrillingGatewayService {
       operatorName: string;
       amount: number;
     }[],
+    totalWeightedEff: number = 0,
   ) {
     // Convert the data to the format expected by the frontend
     const timestamp = new Date().toISOString();
@@ -186,6 +188,7 @@ export class DrillingGatewayService {
         name: extractorName,
       },
       totalReward,
+      totalWeightedEff,
       shares: rewardShares.map((share) => ({
         operatorId: share.operatorId.toString(),
         operatorName: share.operatorName,
@@ -197,7 +200,7 @@ export class DrillingGatewayService {
     this.drillingGateway.server.emit('cycle-rewards', payload);
 
     this.logger.log(
-      `💰 Broadcasted cycle rewards for cycle #${cycleNumber} with ${rewardShares.length} operators`,
+      `💰 Broadcasted cycle rewards for cycle #${cycleNumber} with ${rewardShares.length} operators and total weighted efficiency of ${totalWeightedEff}`,
     );
   }
 }

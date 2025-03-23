@@ -164,6 +164,8 @@ export class DrillingCycleService {
     const extractorData = await this.drillService.selectExtractor();
     let finalExtractorOperatorId: Types.ObjectId | null = null;
     let extractorName: string | null = null;
+    // Store the total weighted efficiency from extractor selection
+    const totalWeightedEff = extractorData?.totalWeightedEff || 0;
 
     if (extractorData) {
       const extractorOperatorId = extractorData.drillOperatorId;
@@ -235,6 +237,7 @@ export class DrillingCycleService {
         extractorOperatorId: finalExtractorOperatorId,
         extractorOperatorName: extractorName,
         rewardShares,
+        totalWeightedEff,
       },
     );
 
@@ -267,6 +270,7 @@ export class DrillingCycleService {
           name: extractorName,
         },
         totalReward: issuedHASH,
+        totalWeightedEff,
         shares: rewardShares.map((share) => ({
           operatorId: share.operatorId.toString(),
           operatorName: share.operatorName,
@@ -284,6 +288,7 @@ export class DrillingCycleService {
         extractorName,
         issuedHASH,
         rewardShares,
+        totalWeightedEff,
       );
     }
 

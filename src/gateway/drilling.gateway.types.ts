@@ -180,6 +180,7 @@ export interface CycleRewardsResponse {
     name: string | null;
   };
   totalReward: number;
+  totalWeightedEff: number; // Total weighted efficiency from the cycle
   shares: {
     operatorId: string;
     operatorName: string;
