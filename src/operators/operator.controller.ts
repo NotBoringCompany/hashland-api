@@ -90,13 +90,13 @@ export class OperatorController {
   @Get('overview')
   async getOverviewData(@Query('operatorId') operatorId?: string): Promise<
     AppApiResponse<{
-      operator: Partial<Operator>;
-      wallets: Partial<OperatorWallet[]>;
-      drills: Partial<Drill[]>;
-      poolId?: Types.ObjectId;
+      assetEquity: number;
+      totalOperators: number;
+      totalHASHExtracted: number;
+      totalHASHReserve: number;
     }>
   > {
-    return this.operatorService.fetchOperatorData(
+    return this.operatorService.fetchOverviewData(
       new Types.ObjectId(operatorId),
     );
   }
