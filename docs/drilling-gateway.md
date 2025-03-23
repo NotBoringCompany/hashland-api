@@ -12,7 +12,7 @@ Drilling sessions follow a specific lifecycle:
 4. **COMPLETED**: At the end of a cycle, all stopping sessions are completed and removed from Redis
 
 ## Authentication
-The gateway uses JWT authentication. Clients must include a valid JWT token in the authorization header when connecting.
+The gateway uses JWT authentication. Clients must include a valid JWT token in the auth object when connecting.
 
 ## Available Events
 
@@ -29,7 +29,7 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
 4. **get-fuel-status**: Request the current fuel status of the operator
    - No parameters required
 
-5. **get-recent-rewards**: Request the latest 5 cycle rewards
+5. **get-latest-cycle**: Request the latest 5 cycle rewards
    - No parameters required
 
 ### Server-to-Client Events
@@ -63,6 +63,7 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
    - `message`: Status message
    - `reason`: Reason for stopping (e.g., 'fuel_depleted')
    - `status`: Session status (COMPLETED)
+   - `operatorId`: ID of the operator whose session was stopped (only in broadcast messages)
 
 8. **drilling-status**: Sent in response to a get-drilling-status request
    - `status`: Current session status (WAITING, ACTIVE, STOPPING, or 'inactive')
@@ -77,44 +78,47 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
    - `message`: Error message
 
 10. **fuel-update**: Sent when an operator's fuel is depleted or replenished
-   - `currentFuel`: Current fuel level
-   - `maxFuel`: Maximum fuel capacity
-   - `changeAmount`: Amount of fuel changed
-   - `changeType`: Type of change ('depleted' or 'replenished')
-   - `message`: Descriptive message about the fuel change
+    - `currentFuel`: Current fuel level
+    - `maxFuel`: Maximum fuel capacity
+    - `changeAmount`: Amount of fuel changed
+    - `changeType`: Type of change ('depleted' or 'replenished')
+    - `message`: Descriptive message about the fuel change
 
 11. **fuel-status**: Sent in response to a get-fuel-status request
-   - `currentFuel`: Current fuel level
-   - `maxFuel`: Maximum fuel capacity
-   - `fuelPercentage`: Percentage of fuel remaining (0-100)
+    - `currentFuel`: Current fuel level
+    - `maxFuel`: Maximum fuel capacity
+    - `fuelPercentage`: Percentage of fuel remaining (0-100)
 
-12. **new-cycle**: Sent when rewards are distributed at the end of a drilling cycle
-   - `_id`: The database ID of the drilling cycle
-   - `cycleNumber`: The current cycle number
-   - `startTime`: The start time of the drilling cycle
-   - `endTime`: The end time of the drilling cycle
-   - `extractorId`: The database ID of the drill that was selected as the extractor for this cycle
-   - `activeOperators`: The number of active operators during this cycle
-   - `difficulty`: An arbitrary difficulty value that determines how hard it is to extract $HASH during this cycle
-   - `issuedHASH`: The total amount of $HASH that was issued during this cycle
-   - `extractorOperatorId`: The database ID of the operator who owns the extractor drill
-   - `extractorOperatorName`: The name of the operator who owns the extractor drill
-   - `rewardShares`: The detailed reward shares for all operators who received rewards in this cycle
-   - `operatorId`: The database ID of the operator who received the reward
-   - `operatorName`: The username of the operator who received the reward
-   - `amount`: The amount of $HASH the operator received
-   - `totalWeightedEff`: The total weighted efficiency from all operators in this cycle
+12. **drilling-update**: Sent periodically with real-time drilling information
+    - `currentCycleNumber`: The current cycle number
+    - `onlineOperatorCount`: Number of online operators
+    - `issuedHASH`: The total amount of HASH issued in the current cycle
+    - `operatorEffData`: Data about operator efficiency and drilling difficulty
 
-13. **latest-cycle**: Sent in response to a get-latest-cycle request
-   - Array of the latest 5 drilling cycle, each with the same structure as the latest-cycle event
+13. **new-cycle**: Sent when rewards are distributed at the end of a drilling cycle
+    - `_id`: The database ID of the drilling cycle
+    - `cycleNumber`: The current cycle number
+    - `startTime`: The start time of the drilling cycle
+    - `endTime`: The end time of the drilling cycle
+    - `extractorId`: The database ID of the drill that was selected as the extractor for this cycle
+    - `activeOperators`: The number of active operators during this cycle
+    - `difficulty`: An arbitrary difficulty value that determines how hard it is to extract $HASH during this cycle
+    - `issuedHASH`: The total amount of $HASH that was issued during this cycle
+    - `extractorOperatorId`: The database ID of the operator who owns the extractor drill
+    - `extractorOperatorName`: The name of the operator who owns the extractor drill
+    - `rewardShares`: The detailed reward shares for all operators who received rewards in this cycle
+    - `totalWeightedEff`: The total weighted efficiency from all operators in this cycle
+
+14. **latest-cycle**: Sent in response to a get-latest-cycle request
+    - Array of the latest 5 drilling cycles, each with the same structure as the new-cycle event
 
 ## Usage Example
 
 ```javascript
 // Connect to the WebSocket server with authentication
 const socket = io('https://api.hashland.com', {
-  extraHeaders: {
-    Authorization: `Bearer ${jwtToken}`
+  auth: {
+    token: jwtToken
   }
 });
 
@@ -129,7 +133,7 @@ socket.emit('get-drilling-status');
 socket.emit('get-fuel-status');
 
 // Request recent cycle rewards
-socket.emit('get-recent-rewards');
+socket.emit('get-latest-cycle');
 
 // Listen for drilling status response
 socket.on('drilling-status', (data) => {
@@ -158,22 +162,24 @@ socket.on('drilling-completed', (data) => console.log('Drilling completed:', dat
 socket.on('drilling-stopped', (data) => console.log('Drilling stopped:', data));
 socket.on('drilling-error', (data) => console.error('Drilling error:', data.message));
 socket.on('fuel-update', (data) => console.log('Fuel update:', data));
+socket.on('drilling-update', (data) => console.log('Real-time update:', data));
 
 // Listen for new cycle
 socket.on('new-cycle', (data) => {
   console.log('Cycle rewards for cycle #' + data.cycleNumber);
-  console.log('Extractor:', data.extractor.name || 'No extractor');
-  console.log('Total reward:', data.totalReward + ' HASH');
+  console.log('Extractor operator:', data.extractorOperatorName || 'No extractor');
+  console.log('Total issued HASH:', data.issuedHASH);
+  console.log('Total weighted efficiency:', data.totalWeightedEff);
   
   // Find my reward share
   const myOperatorId = 'your-operator-id';
-  const myShare = data.shares.find(share => share.operatorId === myOperatorId);
+  const myShare = data.rewardShares.find(share => share.operatorId === myOperatorId);
   if (myShare) {
     console.log('My reward:', myShare.amount + ' HASH');
   }
   
   // Display top earners
-  const topEarners = [...data.shares]
+  const topEarners = [...data.rewardShares]
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3);
   console.log('Top earners:');
@@ -183,21 +189,21 @@ socket.on('new-cycle', (data) => {
 });
 
 // Listen for recent cycle history
-socket.on('latest-cycle', (rewards) => {
+socket.on('latest-cycle', (cycles) => {
   console.log('Recent cycle rewards:');
-  rewards.forEach((reward, index) => {
-    console.log(`Cycle #${reward.cycleNumber} (${new Date(reward.timestamp).toLocaleString()})`);
-    console.log(`Extractor: ${reward.extractor.name || 'No extractor'}`);
-    console.log(`Total reward: ${reward.totalReward} HASH`);
+  cycles.forEach((cycle, index) => {
+    console.log(`Cycle #${cycle.cycleNumber} (${new Date(cycle.startTime).toLocaleString()})`);
+    console.log(`Extractor operator: ${cycle.extractorOperatorName || 'No extractor'}`);
+    console.log(`Total issued HASH: ${cycle.issuedHASH}`);
     
     // Find my reward share in each cycle
     const myOperatorId = 'your-operator-id';
-    const myShare = reward.shares.find(share => share.operatorId === myOperatorId);
+    const myShare = cycle.rewardShares.find(share => share.operatorId === myOperatorId);
     if (myShare) {
       console.log(`My reward: ${myShare.amount} HASH`);
     }
     
-    if (index < rewards.length - 1) {
+    if (index < cycles.length - 1) {
       console.log('-------------------');
     }
   });
@@ -219,9 +225,9 @@ socket.emit('stop-drilling');
 The gateway uses Redis to persist operator status and session data:
 - `drilling:onlineOperators`: Stores the list of online operators
 - `drilling:activeDrillingOperators`: Stores the mapping of actively drilling operators to their socket IDs
-- `drilling:activeSessionsCount`: Counts active drilling sessions
-- `drilling:waitingSessionsCount`: Counts waiting drilling sessions
-- `drilling:stoppingSessionsCount`: Counts stopping drilling sessions
+- `drilling:recent-cycle-rewards`: Stores the latest 5 drilling cycles
+- `drilling-cycle:current`: Stores the current cycle number
+- `drilling-cycle:{cycleNumber}:issuedHASH`: Stores the total HASH issued in a specific cycle
 - `drilling:session:{operatorId}`: Stores the session data for each operator
 
 ## Session Data Structure
@@ -249,7 +255,7 @@ The gateway handles various error scenarios including:
 All errors are logged server-side and relevant errors are sent to clients via the `drilling-error` event.
 
 ## Automatic Fuel Monitoring
-The system automatically stops drilling when an operator's fuel drops below the threshold defined in `GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits`.
+The system automatically stops drilling when an operator's fuel drops below the required threshold.
 
 ## Disconnection Handling
 When an operator disconnects, the system:
