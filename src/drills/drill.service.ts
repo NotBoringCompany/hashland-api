@@ -119,6 +119,7 @@ export class DrillService {
     drillId: Types.ObjectId;
     drillOperatorId: Types.ObjectId;
     eff: number;
+    totalWeightedEff: number;
   } | null> {
     const selectionStartTime = performance.now();
 
@@ -231,11 +232,17 @@ export class DrillService {
           drillId: drill._id,
           drillOperatorId: selectedOperator.operatorId,
           eff: drill.actualEff,
+          totalWeightedEff,
         };
       }
     }
 
-    return null;
+    return {
+      drillId: null,
+      drillOperatorId: null,
+      eff: null,
+      totalWeightedEff,
+    };
   }
 
   /**
