@@ -6,7 +6,7 @@ export async function runAlchemy() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const alchemyService = app.get(AlchemyService);
 
-  const result = await alchemyService.getEligibleTokenBalances(
+  const result = await alchemyService.getEligibleBERATokenBalances(
     '0x50415B9D886892Be314f5CbAF600C3a4B625CBE5',
   );
   console.log('✅ getTokenBalances result:', result);
