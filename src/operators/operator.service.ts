@@ -155,7 +155,7 @@ export class OperatorService {
     try {
       await this.operatorModel.updateOne(
         { _id: operatorId },
-        { $inc: { totalHASHEarned: amount } },
+        { $inc: { totalEarnedHASH: amount } },
       );
     } catch (err: any) {
       throw new Error(
