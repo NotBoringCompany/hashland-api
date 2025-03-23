@@ -3,6 +3,29 @@ import { Document, Types } from 'mongoose';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 
 /**
+ * Represents a reward share given to an operator in a drilling cycle.
+ */
+export class RewardShare {
+  /**
+   * The database ID of the operator who received the reward.
+   */
+  @Prop({ type: Types.ObjectId, ref: 'Operators', required: true })
+  operatorId: Types.ObjectId;
+
+  /**
+   * The username of the operator who received the reward.
+   */
+  @Prop({ type: String })
+  operatorName: string;
+
+  /**
+   * The amount of $HASH the operator received.
+   */
+  @Prop({ type: Number, required: true })
+  amount: number;
+}
+
+/**
  * A drilling cycle represents a period of time where operators can have a chance to extract $HASH. This is similar to how a block works in a blockchain.
  *
  * Each cycle lasts a specific amount of seconds. Towards the end of the cycle, one drill will be selected as the 'extractor' (similar to a miner or a validator in a blockchain) to extract $HASH.
@@ -64,6 +87,24 @@ export class DrillingCycle extends Document {
     default: GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE,
   })
   issuedHASH: number;
+
+  /**
+   * The database ID of the operator who owns the extractor drill.
+   */
+  @Prop({ type: Types.ObjectId, ref: 'Operators', default: null })
+  extractorOperatorId: Types.ObjectId | null;
+
+  /**
+   * The name of the operator who owns the extractor drill.
+   */
+  @Prop({ type: String, default: null })
+  extractorOperatorName: string | null;
+
+  /**
+   * The detailed reward shares for all operators who received rewards in this cycle.
+   */
+  @Prop({ type: [RewardShare], default: [] })
+  rewardShares: RewardShare[];
 }
 
 export const DrillingCycleSchema = SchemaFactory.createForClass(DrillingCycle);
