@@ -3,22 +3,29 @@ FROM node:20-alpine
 # Add a non-root user and group
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Set working directory and change ownership
+# Set working directory
 WORKDIR /app
-COPY package*.json ./
 
-# Install dependencies
-RUN npm install
-
-# Copy application code
-COPY . .
-
-# Set proper permissions - use environment variables for user IDs to match host's github-runner
-# ARG values will be overridden at build time in CI/CD pipeline
+# Set ARGs for user ID mapping with host
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
-# Change ownership of all files to match the host runner's UID/GID
+# Update the appuser and appgroup IDs to match host's user
+RUN apk add --no-cache shadow && \
+    groupmod -g ${GROUP_ID} appgroup && \
+    usermod -u ${USER_ID} appuser && \
+    apk del shadow
+
+# Copy package files with correct ownership
+COPY --chown=${USER_ID}:${GROUP_ID} package*.json ./
+
+# Install dependencies as root (needed for some npm packages)
+RUN npm install
+
+# Copy application code with correct ownership
+COPY --chown=${USER_ID}:${GROUP_ID} . .
+
+# Ensure all files have correct ownership
 RUN chown -R ${USER_ID}:${GROUP_ID} /app
 
 # Switch to non-root user

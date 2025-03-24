@@ -19,17 +19,23 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY package*.json ./
-COPY tsconfig*.json ./
-
-# Set proper permissions - use environment variables for user IDs to match host's github-runner
-# ARG values will be overridden at build time in CI/CD pipeline
+# Set ARGs for user ID mapping with host
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 
-# Change ownership of all files to match the host runner's UID/GID
+# Update the appuser and appgroup IDs to match host's user
+RUN apk add --no-cache shadow && \
+    groupmod -g ${GROUP_ID} appgroup && \
+    usermod -u ${USER_ID} appuser && \
+    apk del shadow
+
+# Copy build artifacts with correct ownership
+COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /app/dist ./dist
+COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /app/node_modules ./node_modules
+COPY --chown=${USER_ID}:${GROUP_ID} package*.json ./
+COPY --chown=${USER_ID}:${GROUP_ID} tsconfig*.json ./
+
+# Ensure all files have correct ownership
 RUN chown -R ${USER_ID}:${GROUP_ID} /app
 
 # Switch to non-root user for running the app
