@@ -12,11 +12,6 @@ jobs:
     environment: development
 
     steps:
-      - name: Clean previous build artifacts
-        run: |
-          sudo rm -rf /opt/actions-runner/dev/_work/hashland-api/hashland-api/dist || true
-          sudo rm -rf /opt/actions-runner/dev/_work/hashland-api/hashland-api/node_modules || true
-
       - name: Checkout code
         uses: actions/checkout@v4
       
