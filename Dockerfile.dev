@@ -1,12 +1,28 @@
 FROM node:20-alpine
 
-WORKDIR /app
+# Add a non-root user and group
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
+# Set working directory and change ownership
+WORKDIR /app
 COPY package*.json ./
 
+# Install dependencies
 RUN npm install
 
+# Copy application code
 COPY . .
+
+# Set proper permissions - use environment variables for user IDs to match host's github-runner
+# ARG values will be overridden at build time in CI/CD pipeline
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+# Change ownership of all files to match the host runner's UID/GID
+RUN chown -R ${USER_ID}:${GROUP_ID} /app
+
+# Switch to non-root user
+USER appuser
 
 EXPOSE 8080
 
