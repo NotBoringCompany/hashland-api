@@ -63,10 +63,6 @@ jobs:
           echo "NODE_ENV=development" >> .env
           echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
       
-      - name: Modify docker-compose for pre-built image
-        run: |
-          sed -i 's/build:[^}]*}/image: ${{ secrets.DOCKER_USERNAME }}\/hashland-api:development/g' docker-compose.yml
-      
       - name: Deploy with docker-compose
         run: |
           docker compose down
