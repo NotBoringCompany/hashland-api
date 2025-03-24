@@ -10,14 +10,14 @@ on:
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64, production]
     environment: production
     
     steps:
       - name: Fix permissions before checkout
         run: |
-          sudo chown -R $(whoami):$(whoami) /opt/actions-runner/dev/_work || true
-          sudo chmod -R 755 /opt/actions-runner/dev/_work || true
+          sudo chown -R $(whoami):$(whoami) /opt/actions-runner/prod/_work || true
+          sudo chmod -R 755 /opt/actions-runner/prod/_work || true
       
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,7 +43,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64, production]
     environment: production
     
     steps:
