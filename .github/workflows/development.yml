@@ -12,21 +12,18 @@ jobs:
     environment: development
 
     steps:
-      - name: Stop current container
-        run: |
-          docker compose down
-
       - name: Remove container
         run: |
           docker rm -f hashland-api
 
-      - name: Remove artifact
+      - name: Remove artifacts
         run: |
           rm -rf /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/dist
+          rm -rf /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/node_modules
 
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Create .env file
         run: |
           echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" > .env
@@ -49,4 +46,5 @@ jobs:
       
       - name: Deploy with docker-compose
         run: |
+          docker compose down
           docker compose up -d 
