@@ -18,8 +18,8 @@ jobs:
 
       - name: Remove artifacts
         run: |
-          sudo rm -rf /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/dist
-          sudo rm -rf /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/node_modules
+          echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rm -rf /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/dist
+          echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rm -rf /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/node_modules
 
       - name: Checkout code
         uses: actions/checkout@v4
