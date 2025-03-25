@@ -9,7 +9,7 @@ import {
 } from 'src/common/dto/shops/shop-item.dto';
 
 @ApiTags('Shop Items')
-@Controller('shop-item') // Base route: `/shop-item`
+@Controller('shop-items') // Base route: `/shop-items`
 export class ShopItemController {
   constructor(private readonly shopItemService: ShopItemService) {}
 
