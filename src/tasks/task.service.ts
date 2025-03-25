@@ -57,14 +57,7 @@ export class TaskService {
     }>
   > {
     try {
-      const task = await this.taskModel
-        .findOne(
-          { _id: taskId },
-          {
-            maxCompletions: 1,
-          },
-        )
-        .lean();
+      const task = await this.taskModel.findOne({ _id: taskId }).lean();
 
       if (!task) {
         return new ApiResponse<null>(404, '(completeTask) Task not found.');
