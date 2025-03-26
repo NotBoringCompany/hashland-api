@@ -14,6 +14,12 @@ import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 import { PoolModule } from 'src/pools/pool.module';
 import { OperatorWalletModule } from 'src/operators/operator-wallet.module';
 import { DrillModule } from 'src/drills/drill.module';
+import { WalletAuthService } from './wallet-auth.service';
+import { WalletAuthController } from './wallet-auth.controller';
+import {
+  OperatorWallet,
+  OperatorWalletSchema,
+} from 'src/operators/schemas/operator-wallet.schema';
 
 @Module({
   imports: [
@@ -36,10 +42,20 @@ import { DrillModule } from 'src/drills/drill.module';
     }),
     MongooseModule.forFeature([
       { name: Operator.name, schema: OperatorSchema },
+      { name: OperatorWallet.name, schema: OperatorWalletSchema },
     ]),
   ],
-  controllers: [TelegramAuthController, JwtAuthController],
-  providers: [TelegramAuthService, JwtStrategy, OperatorService],
-  exports: [TelegramAuthService, JwtStrategy, JwtModule],
+  controllers: [
+    TelegramAuthController,
+    JwtAuthController,
+    WalletAuthController,
+  ],
+  providers: [
+    TelegramAuthService,
+    JwtStrategy,
+    OperatorService,
+    WalletAuthService,
+  ],
+  exports: [TelegramAuthService, WalletAuthService, JwtStrategy, JwtModule],
 })
 export class AuthModule {}
