@@ -8,7 +8,7 @@ Hashland supports authentication using various wallet types:
 - EVM-compatible wallets (Ethereum, Optimism, Arbitrum, Base, Polygon, BERA)
 - TON wallets
 
-An operator can have multiple wallets connected to their account and can use any of them to authenticate.
+An operator can have multiple wallets connected to their account and can use any of them to authenticate. If a wallet is not yet linked to any operator, a new operator account will be automatically created during the authentication process.
 
 ## API Endpoints
 
@@ -182,7 +182,6 @@ The authentication endpoints may return the following errors:
 
 - `401 Unauthorized`:
   - Invalid wallet signature
-  - Wallet not linked to any operator
   - Operator not found
 
 - `400 Bad Request`:
@@ -192,3 +191,5 @@ The authentication endpoints may return the following errors:
 
 - `500 Internal Server Error`:
   - Server-side errors during authentication
+
+## Security Considerations
