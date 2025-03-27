@@ -130,6 +130,30 @@ export class Operator extends Document {
   } | null;
 
   /**
+   * An optional wallet profile. Should only be set if the operator was created via wallet authentication.
+   */
+  @ApiProperty({
+    description: "The operator's primary wallet profile (optional)",
+    required: false,
+    example: {
+      address: '0x1234567890abcdef1234567890abcdef12345678',
+      chain: 'ETH',
+    },
+  })
+  @Prop({
+    type: {
+      address: { type: String, required: true, index: true },
+      chain: { type: String, required: true },
+    },
+    required: false,
+    default: null,
+  })
+  walletProfile?: {
+    address: string;
+    chain: string;
+  } | null;
+
+  /**
    * The timestamp when the operator was created
    */
   @ApiProperty({

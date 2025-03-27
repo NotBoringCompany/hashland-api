@@ -92,6 +92,8 @@ export class WalletAuthService {
         operator = await this.operatorService.findOrCreateOperator({
           id: walletLoginData.address.substring(0, 8),
           username,
+          walletAddress: walletLoginData.address,
+          walletChain: walletLoginData.chain,
         });
 
         // Create wallet record
