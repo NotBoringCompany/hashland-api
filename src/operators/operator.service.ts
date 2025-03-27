@@ -391,7 +391,7 @@ export class OperatorService {
     const operatorData: any = {
       username,
       assetEquity: 0,
-      cumulativeEff: 0,
+      cumulativeEff: GAME_CONSTANTS.DRILLS.BASIC_DRILL_STARTING_ACTUAL_EFF,
       effMultiplier: 1,
       maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
