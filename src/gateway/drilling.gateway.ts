@@ -49,10 +49,14 @@ export class DrillingGateway
   private readonly logger = new Logger(DrillingGateway.name);
 
   // Redis keys for storing operator data
-  private readonly redisOnlineOperatorsKey = 'drilling:onlineOperators';
+  private readonly redisOnlineOperatorsKey =
+    'hashland-drilling:onlineOperators';
   private readonly redisActiveDrillingOperatorsKey =
-    'drilling:activeDrillingOperators';
-  private readonly redisRecentCycleRewardsKey = 'drilling:recent-cycle-rewards';
+    'hashland-drilling:activeDrillingOperators';
+  private readonly redisRecentCycleRewardsKey =
+    'hashland-drilling:recent-cycle-rewards';
+  private readonly redisOperatorSocketsKey =
+    'hashland-drilling:operator-sockets';
 
   /**
    * Keeps track of online operators.
@@ -63,9 +67,15 @@ export class DrillingGateway
 
   /**
    * Keeps track of actively drilling operators.
-   * Maps operator IDs to their socket IDs.
+   * Maps operator IDs to their primary socket ID.
    */
   private activeDrillingOperators = new Map<string, string>();
+
+  /**
+   * Maps operator IDs to all of their connected socket IDs.
+   * Allows operators to connect from multiple devices simultaneously.
+   */
+  private operatorSockets = new Map<string, Set<string>>();
 
   constructor(
     private readonly drillingSessionService: DrillingSessionService,
@@ -111,6 +121,22 @@ export class DrillingGateway
           `Loaded ${this.activeDrillingOperators.size} active drilling operators from Redis`,
         );
       }
+
+      // Load operator sockets map
+      const operatorSocketsJson = await this.redisService.get(
+        this.redisOperatorSocketsKey,
+      );
+      if (operatorSocketsJson) {
+        const operatorSocketsArray = JSON.parse(operatorSocketsJson);
+        // Convert array format back to Map of Sets
+        this.operatorSockets = new Map();
+        for (const [operatorId, socketIds] of operatorSocketsArray) {
+          this.operatorSockets.set(operatorId, new Set(socketIds));
+        }
+        this.logger.log(
+          `Loaded operator sockets for ${this.operatorSockets.size} operators from Redis`,
+        );
+      }
     } catch (error) {
       this.logger.error(`Error loading operators from Redis: ${error.message}`);
     }
@@ -153,6 +179,27 @@ export class DrillingGateway
   }
 
   /**
+   * Saves operator sockets map to Redis.
+   */
+  private async saveOperatorSocketsToRedis() {
+    try {
+      // Convert Map<string, Set<string>> to Array format for JSON serialization
+      const operatorSocketsArray = Array.from(
+        this.operatorSockets.entries(),
+      ).map(([operatorId, socketSet]) => [operatorId, Array.from(socketSet)]);
+
+      await this.redisService.set(
+        this.redisOperatorSocketsKey,
+        JSON.stringify(operatorSocketsArray),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error saving operator sockets to Redis: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Handles a new WebSocket connection.
    * - Authenticates the operator using JWT.
    * - Adds the operator to the online tracking list.
@@ -176,10 +223,19 @@ export class DrillingGateway
 
       // Add to online operators
       this.onlineOperators.add(operatorId);
+
+      // Add socket to operator sockets map
+      if (!this.operatorSockets.has(operatorId)) {
+        this.operatorSockets.set(operatorId, new Set<string>());
+      }
+      this.operatorSockets.get(operatorId).add(client.id);
+
+      // Save to Redis
       await this.saveOnlineOperatorsToRedis();
+      await this.saveOperatorSocketsToRedis();
 
       this.logger.log(
-        `🔗 Operator Connected: ${operatorId} (Online Operators: ${this.onlineOperators.size})`,
+        `🔗 Operator Connected: ${operatorId} (Socket: ${client.id}, Total Connections: ${this.operatorSockets.get(operatorId).size})`,
       );
       this.broadcastOnlineOperators(); // Notify all clients
     } catch (error) {
@@ -190,8 +246,8 @@ export class DrillingGateway
 
   /**
    * Handles a WebSocket disconnection.
-   * - Removes the operator from the online tracking list.
-   * - Automatically stops any active drilling session.
+   * - Removes the operator from the online tracking list if all their connections are closed.
+   * - Automatically stops any active drilling session if the primary socket disconnects.
    * - Emits an updated online operator count.
    *
    * @param client The disconnected WebSocket client.
@@ -201,18 +257,51 @@ export class DrillingGateway
       const operatorId = client.data.operatorId;
 
       if (operatorId) {
-        // Stop drilling if the operator was actively drilling
-        if (this.activeDrillingOperators.has(operatorId)) {
-          await this.stopDrilling(client);
+        // Remove this socket from operator sockets
+        if (this.operatorSockets.has(operatorId)) {
+          const sockets = this.operatorSockets.get(operatorId);
+          sockets.delete(client.id);
+
+          // Check if this was the primary socket for drilling
+          const isPrimarySocket =
+            this.activeDrillingOperators.get(operatorId) === client.id;
+
+          // If this was the primary socket and operator was drilling, handle it
+          if (isPrimarySocket && this.activeDrillingOperators.has(operatorId)) {
+            // If there are other sockets for this operator, pick one as the new primary
+            if (sockets.size > 0) {
+              const newPrimarySocket = Array.from(sockets)[0];
+              this.activeDrillingOperators.set(operatorId, newPrimarySocket);
+              this.logger.log(
+                `🔄 Primary socket changed for operator ${operatorId} from ${client.id} to ${newPrimarySocket}`,
+              );
+            } else {
+              // No other connections, stop drilling
+              await this.stopDrilling(client);
+            }
+          }
+
+          // If no more sockets, remove operator from online list
+          if (sockets.size === 0) {
+            this.operatorSockets.delete(operatorId);
+            this.onlineOperators.delete(operatorId);
+            this.logger.log(
+              `❌ Operator Disconnected: ${operatorId} (All connections closed)`,
+            );
+          } else {
+            this.logger.log(
+              `🔌 Socket Disconnected: ${client.id} for operator ${operatorId} (Remaining connections: ${sockets.size})`,
+            );
+          }
+
+          // Save changes to Redis
+          await this.saveOnlineOperatorsToRedis();
+          await this.saveOperatorSocketsToRedis();
+          await this.saveActiveDrillingOperatorsToRedis();
+
+          // Update online counts for all clients
+          this.broadcastOnlineOperators();
         }
-
-        this.onlineOperators.delete(operatorId);
-        await this.saveOnlineOperatorsToRedis();
-
-        this.logger.log(
-          `❌ Operator Disconnected: ${operatorId} (Online Operators: ${this.onlineOperators.size})`,
-        );
-        this.broadcastOnlineOperators(); // Notify all clients
       }
     } catch (error) {
       this.logger.error(`Error in handleDisconnect: ${error.message}`);
@@ -239,10 +328,23 @@ export class DrillingGateway
   }
 
   /**
-   * Gets the socket ID for a specific operator.
+   * Gets all socket IDs for a specific operator.
    *
    * @param operatorId The operator ID to look up
-   * @returns The socket ID if found, undefined otherwise
+   * @returns Array of socket IDs if found, empty array otherwise
+   */
+  getAllSocketsForOperator(operatorId: string): string[] {
+    if (this.operatorSockets.has(operatorId)) {
+      return Array.from(this.operatorSockets.get(operatorId));
+    }
+    return [];
+  }
+
+  /**
+   * Gets the primary socket ID for a specific operator.
+   *
+   * @param operatorId The operator ID to look up
+   * @returns The primary socket ID if found, undefined otherwise
    */
   getSocketIdForOperator(operatorId: string): string | undefined {
     return this.activeDrillingOperators.get(operatorId);
@@ -294,27 +396,35 @@ export class DrillingGateway
         await this.drillingSessionService.startDrillingSession(objectId);
 
       if (response.status === 200) {
-        // Track this operator as actively drilling
+        // Track this operator as actively drilling with this socket as the primary
         this.activeDrillingOperators.set(operatorId, client.id);
         await this.saveActiveDrillingOperatorsToRedis();
 
-        client.emit('drilling-started', {
+        // Send drilling started response to all connected sockets for this operator
+        const allSockets = this.getAllSocketsForOperator(operatorId);
+        const drillingStarted = {
           message: 'Drilling session started successfully',
           status: DrillingSessionStatus.WAITING,
-        } as DrillingStartedResponse);
+        } as DrillingStartedResponse;
+
+        const drillingInfo = {
+          message:
+            'Your drilling session will be activated at the start of the next cycle',
+        } as DrillingInfoResponse;
+
+        for (const socketId of allSockets) {
+          if (this.server.sockets.sockets.has(socketId)) {
+            this.server.to(socketId).emit('drilling-started', drillingStarted);
+            this.server.to(socketId).emit('drilling-info', drillingInfo);
+          }
+        }
 
         // Broadcast updated counts
         this.broadcastOnlineOperators();
 
         this.logger.log(
-          `🔄 Operator ${operatorId} started drilling in waiting status`,
+          `🔄 Operator ${operatorId} started drilling in waiting status (primary socket: ${client.id})`,
         );
-
-        // Inform the client that the session will be activated on the next cycle
-        client.emit('drilling-info', {
-          message:
-            'Your drilling session will be activated at the start of the next cycle',
-        } as DrillingInfoResponse);
       } else {
         client.emit('drilling-error', {
           message: response.message,
@@ -353,25 +463,28 @@ export class DrillingGateway
       const session =
         await this.drillingSessionService.getOperatorSession(objectId);
 
-      if (session) {
-        // Get current cycle number for context
-        const cycleNumberStr = await this.redisService.get(
-          'drilling-cycle:current',
-        );
-        const currentCycleNumber = cycleNumberStr
-          ? parseInt(cycleNumberStr, 10)
-          : 0;
+      // Get current cycle number for context
+      const cycleNumberStr = await this.redisService.get(
+        'drilling-cycle:current',
+      );
+      const currentCycleNumber = cycleNumberStr
+        ? parseInt(cycleNumberStr, 10)
+        : 0;
 
-        client.emit('drilling-status', {
+      if (session) {
+        const statusResponse = {
           status: session.status,
           startTime: session.startTime,
           earnedHASH: session.earnedHASH,
           cycleStarted: session.cycleStarted,
           cycleEnded: session.cycleEnded,
           currentCycleNumber,
-        } as DrillingStatusResponse);
+        } as DrillingStatusResponse;
 
-        this.logger.log(`📊 Sent drilling status to operator ${operatorId}`);
+        client.emit('drilling-status', statusResponse);
+        this.logger.log(
+          `📊 Sent drilling status to operator ${operatorId} on socket ${client.id}`,
+        );
       } else {
         client.emit('drilling-status', {
           status: 'inactive',
@@ -421,7 +534,9 @@ export class DrillingGateway
           fuelPercentage: Math.round(fuelPercentage * 10) / 10, // Round to 1 decimal place
         } as FuelStatusResponse);
 
-        this.logger.log(`⛽ Sent fuel status to operator ${operatorId}`);
+        this.logger.log(
+          `⛽ Sent fuel status to operator ${operatorId} on socket ${client.id}`,
+        );
       } else {
         client.emit('drilling-error', {
           message: 'Failed to get fuel status',
@@ -470,17 +585,26 @@ export class DrillingGateway
         );
 
       if (response.status === 200) {
-        client.emit('drilling-stopping', {
+        // Get all connected sockets for this operator
+        const allSockets = this.getAllSocketsForOperator(operatorId);
+        const stoppingMessage = {
           message:
             'Drilling session stopping initiated. Will complete at end of cycle.',
           status: DrillingSessionStatus.STOPPING,
-        } as DrillingStoppingResponse);
+        } as DrillingStoppingResponse;
+
+        // Notify all connected sockets for this operator
+        for (const socketId of allSockets) {
+          if (this.server.sockets.sockets.has(socketId)) {
+            this.server.to(socketId).emit('drilling-stopping', stoppingMessage);
+          }
+        }
 
         // Broadcast updated counts
         this.broadcastOnlineOperators();
 
         this.logger.log(
-          `🛑 Operator ${operatorId} initiated stopping drilling`,
+          `🛑 Operator ${operatorId} initiated stopping drilling on socket ${client.id} (total connections: ${allSockets.length})`,
         );
       } else {
         client.emit('drilling-error', {
@@ -506,8 +630,6 @@ export class DrillingGateway
 
     // Check if this operator is actively drilling
     if (this.activeDrillingOperators.has(operatorIdStr)) {
-      const socketId = this.activeDrillingOperators.get(operatorIdStr);
-
       try {
         // Get current cycle number
         const cycleNumberStr = await this.redisService.get(
@@ -521,24 +643,31 @@ export class DrillingGateway
           cycleNumber,
         );
 
+        // Get all connected sockets for this operator
+        const allSockets = this.getAllSocketsForOperator(operatorIdStr);
+
         // Remove from active drilling operators
         this.activeDrillingOperators.delete(operatorIdStr);
         await this.saveActiveDrillingOperatorsToRedis();
 
-        // Notify the client if they're still connected
-        if (socketId && this.server.sockets.sockets.has(socketId)) {
-          this.server.to(socketId).emit('drilling-stopped', {
-            message: 'Drilling stopped due to insufficient fuel',
-            reason: 'fuel_depleted',
-            status: DrillingSessionStatus.COMPLETED,
-          } as DrillingStoppedResponse);
+        // Notify all connected sockets
+        const stoppedMessage = {
+          message: 'Drilling stopped due to insufficient fuel',
+          reason: 'fuel_depleted',
+          status: DrillingSessionStatus.COMPLETED,
+        } as DrillingStoppedResponse;
+
+        for (const socketId of allSockets) {
+          if (this.server.sockets.sockets.has(socketId)) {
+            this.server.to(socketId).emit('drilling-stopped', stoppedMessage);
+          }
         }
 
         // Broadcast updated counts
         this.broadcastOnlineOperators();
 
         this.logger.log(
-          `⚠️ Operator ${operatorIdStr} stopped drilling due to fuel depletion`,
+          `⚠️ Operator ${operatorIdStr} stopped drilling due to fuel depletion (notified on ${allSockets.length} connections)`,
         );
       } catch (error) {
         this.logger.error(
@@ -569,8 +698,6 @@ export class DrillingGateway
 
       // Check if this operator is actively drilling
       if (this.activeDrillingOperators.has(operatorIdStr)) {
-        const socketId = this.activeDrillingOperators.get(operatorIdStr);
-
         try {
           // Force end the drilling session
           await this.drillingSessionService.forceEndDrillingSession(
@@ -578,20 +705,27 @@ export class DrillingGateway
             cycleNumber,
           );
 
+          // Get all connected sockets for this operator
+          const allSockets = this.getAllSocketsForOperator(operatorIdStr);
+
           // Remove from active drilling operators
           this.activeDrillingOperators.delete(operatorIdStr);
 
-          // Notify the client if they're still connected
-          if (socketId && this.server.sockets.sockets.has(socketId)) {
-            this.server.to(socketId).emit('drilling-stopped', {
-              ...payload,
-              operatorId: operatorIdStr,
-              status: DrillingSessionStatus.COMPLETED,
-            } as DrillingStoppedResponse);
+          // Notify all connected sockets
+          const stoppedMessage = {
+            ...payload,
+            operatorId: operatorIdStr,
+            status: DrillingSessionStatus.COMPLETED,
+          } as DrillingStoppedResponse;
+
+          for (const socketId of allSockets) {
+            if (this.server.sockets.sockets.has(socketId)) {
+              this.server.to(socketId).emit('drilling-stopped', stoppedMessage);
+            }
           }
 
           this.logger.log(
-            `⚠️ Operator ${operatorIdStr} stopped drilling due to fuel depletion`,
+            `⚠️ Operator ${operatorIdStr} stopped drilling due to fuel depletion (notified on ${allSockets.length} connections)`,
           );
         } catch (error) {
           this.logger.error(
@@ -657,7 +791,9 @@ export class DrillingGateway
       // Send the rewards to the client
       client.emit('latest-cycle', latestCycle);
 
-      this.logger.log(`📊 Sent latest cycle to operator ${operatorId}`);
+      this.logger.log(
+        `📊 Sent latest cycle to operator ${operatorId} on socket ${client.id}`,
+      );
     } catch (error) {
       this.logger.error(`Error getting recent rewards: ${error.message}`);
       client.emit('drilling-error', {

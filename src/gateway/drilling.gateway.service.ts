@@ -65,20 +65,26 @@ export class DrillingGatewayService {
   ) {
     for (const operatorId of operatorIds) {
       const operatorIdStr = operatorId.toString();
-      const socketId =
-        this.drillingGateway.getSocketIdForOperator(operatorIdStr);
+      const socketIds =
+        this.drillingGateway.getAllSocketsForOperator(operatorIdStr);
 
-      if (socketId) {
-        this.drillingGateway.server.to(socketId).emit('drilling-activated', {
-          message: `Your drilling session has been activated in cycle #${cycleNumber}`,
-          status: DrillingSessionStatus.ACTIVE,
-          cycleNumber,
-        });
+      const activationMessage = {
+        message: `Your drilling session has been activated in cycle #${cycleNumber}`,
+        status: DrillingSessionStatus.ACTIVE,
+        cycleNumber,
+      };
 
-        this.logger.log(
-          `🚀 Notified operator ${operatorIdStr} that their session was activated in cycle #${cycleNumber}`,
-        );
+      for (const socketId of socketIds) {
+        if (this.drillingGateway.server.sockets.sockets.has(socketId)) {
+          this.drillingGateway.server
+            .to(socketId)
+            .emit('drilling-activated', activationMessage);
+        }
       }
+
+      this.logger.log(
+        `🚀 Notified operator ${operatorIdStr} on ${socketIds.length} device(s) that their session was activated in cycle #${cycleNumber}`,
+      );
     }
   }
 
@@ -96,21 +102,27 @@ export class DrillingGatewayService {
   ) {
     for (const operatorId of operatorIds) {
       const operatorIdStr = operatorId.toString();
-      const socketId =
-        this.drillingGateway.getSocketIdForOperator(operatorIdStr);
+      const socketIds =
+        this.drillingGateway.getAllSocketsForOperator(operatorIdStr);
 
-      if (socketId) {
-        this.drillingGateway.server.to(socketId).emit('drilling-completed', {
-          message: `Your drilling session has been completed at the end of cycle #${cycleNumber}`,
-          status: DrillingSessionStatus.COMPLETED,
-          cycleNumber,
-          earnedHASH: earnedHASH.get(operatorIdStr) || 0,
-        });
+      const completionMessage = {
+        message: `Your drilling session has been completed at the end of cycle #${cycleNumber}`,
+        status: DrillingSessionStatus.COMPLETED,
+        cycleNumber,
+        earnedHASH: earnedHASH.get(operatorIdStr) || 0,
+      };
 
-        this.logger.log(
-          `🏁 Notified operator ${operatorIdStr} that their session was completed in cycle #${cycleNumber}`,
-        );
+      for (const socketId of socketIds) {
+        if (this.drillingGateway.server.sockets.sockets.has(socketId)) {
+          this.drillingGateway.server
+            .to(socketId)
+            .emit('drilling-completed', completionMessage);
+        }
       }
+
+      this.logger.log(
+        `🏁 Notified operator ${operatorIdStr} on ${socketIds.length} device(s) that their session was completed in cycle #${cycleNumber}`,
+      );
     }
   }
 
@@ -132,27 +144,33 @@ export class DrillingGatewayService {
   ) {
     for (const update of operatorUpdates) {
       const operatorIdStr = update.operatorId.toString();
-      const socketId =
-        this.drillingGateway.getSocketIdForOperator(operatorIdStr);
+      const socketIds =
+        this.drillingGateway.getAllSocketsForOperator(operatorIdStr);
 
-      if (socketId) {
-        const message =
-          changeType === 'depleted'
-            ? `Your fuel has been depleted by ${changeAmount} units.`
-            : `Your fuel has been replenished by ${changeAmount} units.`;
+      const message =
+        changeType === 'depleted'
+          ? `Your fuel has been depleted by ${changeAmount} units.`
+          : `Your fuel has been replenished by ${changeAmount} units.`;
 
-        this.drillingGateway.server.to(socketId).emit('fuel-update', {
-          currentFuel: update.currentFuel,
-          maxFuel: update.maxFuel,
-          changeAmount,
-          changeType,
-          message,
-        });
+      const fuelUpdateMessage = {
+        currentFuel: update.currentFuel,
+        maxFuel: update.maxFuel,
+        changeAmount,
+        changeType,
+        message,
+      };
 
-        this.logger.log(
-          `⚡ Notified operator ${operatorIdStr} about fuel ${changeType}: ${changeAmount} units. Current: ${update.currentFuel}/${update.maxFuel}`,
-        );
+      for (const socketId of socketIds) {
+        if (this.drillingGateway.server.sockets.sockets.has(socketId)) {
+          this.drillingGateway.server
+            .to(socketId)
+            .emit('fuel-update', fuelUpdateMessage);
+        }
       }
+
+      this.logger.log(
+        `⚡ Notified operator ${operatorIdStr} on ${socketIds.length} device(s) about fuel ${changeType}: ${changeAmount} units. Current: ${update.currentFuel}/${update.maxFuel}`,
+      );
     }
   }
 
