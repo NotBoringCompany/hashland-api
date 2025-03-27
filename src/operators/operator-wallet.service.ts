@@ -668,17 +668,32 @@ export class OperatorWalletService {
     if (!message || !signature || !address) return false;
 
     try {
-      // Compute the Keccak-256 hash of the already prefixed message
-      const messageHash = keccak256(toBytes(message));
+      this.logger.debug(`Validating EVM signature for address: ${address}`);
+      this.logger.debug(`Message: ${message}`);
+      this.logger.debug(`Signature: ${signature}`);
+
+      // Prepare the message hash with proper EIP-191 prefixing
+      // Use the same method that wallets use: \x19Ethereum Signed Message:\n<length><message>
+      const stringMessage = String(message); // Ensure message is a string
+      const prefixedMessage = `\x19Ethereum Signed Message:\n${stringMessage.length}${stringMessage}`;
+
+      // Hash the properly prefixed message
+      const messageHash = keccak256(toBytes(prefixedMessage));
 
       // Recover the address from the signature
       const recoveredAddress = await recoverAddress({
         hash: messageHash,
-        signature,
+        signature: signature as `0x${string}`,
       });
 
+      this.logger.debug(`Recovered address: ${recoveredAddress}`);
+      this.logger.debug(`Expected address: ${address}`);
+
       // Compare the recovered address with the provided address
-      return recoveredAddress.toLowerCase() === address.toLowerCase();
+      const isValid = recoveredAddress.toLowerCase() === address.toLowerCase();
+      this.logger.debug(`Signature validation result: ${isValid}`);
+
+      return isValid;
     } catch (err: any) {
       this.logger.error(
         `(validateEVMSignature) Error validating EVM signature: ${err.message}`,
@@ -702,10 +717,7 @@ export class OperatorWalletService {
     Hash salt: ${hashSalt}
     `.trim();
 
-    // EIP-191 Prefixed message
-    const eip191Message = `\x19Ethereum Signed Message:\n${rawMessage.length}${rawMessage}`;
-
-    return eip191Message;
+    return rawMessage;
   }
 
   /**
