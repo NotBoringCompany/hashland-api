@@ -1,7 +1,11 @@
 import { Controller, Post, Body, HttpCode, Get, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { WalletAuthService } from './wallet-auth.service';
-import { WalletLoginDto } from '../common/dto/wallet-auth.dto';
+import {
+  WalletLoginDto,
+  SignatureMessageResponse,
+  SignatureMessageResponseData,
+} from '../common/dto/wallet-auth.dto';
 import { AuthenticatedResponse } from '../common/dto/auth.dto';
 import {
   ProofChallengeResponseData,
@@ -51,11 +55,18 @@ export class WalletAuthController {
   @ApiResponse({
     status: 200,
     description: 'Signature message generated',
-    type: String,
+    type: SignatureMessageResponse,
   })
   @Get('message')
-  getEVMSignatureMessage(@Query('address') address: string): string {
-    return this.operatorWalletService.requestEVMSignatureMessage(address);
+  getEVMSignatureMessage(
+    @Query('address') address: string,
+  ): SignatureMessageResponse {
+    const message =
+      this.operatorWalletService.requestEVMSignatureMessage(address);
+    const responseData: SignatureMessageResponseData = {
+      message,
+    };
+    return new SignatureMessageResponse(responseData);
   }
 
   @ApiOperation({

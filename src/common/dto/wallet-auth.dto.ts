@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { AllowedChain } from '../enums/chain.enum';
+import { ApiResponse } from './response.dto';
 
 /**
  * DTO for authenticating with a wallet
@@ -40,4 +41,25 @@ export class WalletLoginDto {
   @IsString()
   @IsNotEmpty()
   chain: string;
+}
+
+/**
+ * Response data for signature message
+ */
+export class SignatureMessageResponseData {
+  @ApiProperty({
+    description: 'Message to sign with wallet',
+    example:
+      'Please sign the following message to link your wallet.\nWallet address: 0x1234...\nTimestamp: 1646146412\nHash salt: 0xabcd...',
+  })
+  message: string;
+}
+
+/**
+ * Response for signature message request
+ */
+export class SignatureMessageResponse extends ApiResponse<SignatureMessageResponseData> {
+  constructor(data: SignatureMessageResponseData) {
+    super(200, 'Signature message generated successfully', data);
+  }
 }
