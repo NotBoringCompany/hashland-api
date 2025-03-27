@@ -154,8 +154,10 @@ export class DrillingGateway
       );
     } catch (error) {
       this.logger.error(
-        `Error saving online operators to Redis: ${error.message}`,
+        `❌ Error saving online operators to Redis: ${error.message}`,
       );
+      // Log the stack trace for better debugging
+      this.logger.error(error.stack);
     }
   }
 
@@ -173,8 +175,10 @@ export class DrillingGateway
       );
     } catch (error) {
       this.logger.error(
-        `Error saving active drilling operators to Redis: ${error.message}`,
+        `❌ Error saving active drilling operators to Redis: ${error.message}`,
       );
+      // Log the stack trace for better debugging
+      this.logger.error(error.stack);
     }
   }
 
@@ -194,8 +198,10 @@ export class DrillingGateway
       );
     } catch (error) {
       this.logger.error(
-        `Error saving operator sockets to Redis: ${error.message}`,
+        `❌ Error saving operator sockets to Redis: ${error.message}`,
       );
+      // Log the stack trace for better debugging
+      this.logger.error(error.stack);
     }
   }
 
@@ -230,17 +236,40 @@ export class DrillingGateway
       }
       this.operatorSockets.get(operatorId).add(client.id);
 
-      // Save to Redis
-      await this.saveOnlineOperatorsToRedis();
-      await this.saveOperatorSocketsToRedis();
+      // Save to Redis with error handling
+      try {
+        await Promise.all([
+          this.saveOnlineOperatorsToRedis(),
+          this.saveOperatorSocketsToRedis(),
+        ]);
+      } catch (redisError) {
+        this.logger.error(
+          `Redis error during connection: ${redisError.message}`,
+        );
+        // Continue execution despite Redis errors - local state is still updated
+      }
 
       this.logger.log(
         `🔗 Operator Connected: ${operatorId} (Socket: ${client.id}, Total Connections: ${this.operatorSockets.get(operatorId).size})`,
       );
-      this.broadcastOnlineOperators(); // Notify all clients
+
+      try {
+        this.broadcastOnlineOperators(); // Notify all clients
+      } catch (broadcastError) {
+        this.logger.error(
+          `Error broadcasting online operators: ${broadcastError.message}`,
+        );
+      }
     } catch (error) {
       this.logger.error(`Error in handleConnection: ${error.message}`);
-      client.disconnect();
+      this.logger.error(error.stack);
+      try {
+        client.disconnect();
+      } catch (disconnectError) {
+        this.logger.error(
+          `Error disconnecting client: ${disconnectError.message}`,
+        );
+      }
     }
   }
 
@@ -277,7 +306,13 @@ export class DrillingGateway
               );
             } else {
               // No other connections, stop drilling
-              await this.stopDrilling(client);
+              try {
+                await this.stopDrilling(client);
+              } catch (stopError) {
+                this.logger.error(
+                  `Error stopping drilling during disconnect: ${stopError.message}`,
+                );
+              }
             }
           }
 
@@ -294,17 +329,33 @@ export class DrillingGateway
             );
           }
 
-          // Save changes to Redis
-          await this.saveOnlineOperatorsToRedis();
-          await this.saveOperatorSocketsToRedis();
-          await this.saveActiveDrillingOperatorsToRedis();
+          // Save changes to Redis with error handling
+          try {
+            await Promise.all([
+              this.saveOnlineOperatorsToRedis(),
+              this.saveOperatorSocketsToRedis(),
+              this.saveActiveDrillingOperatorsToRedis(),
+            ]);
+          } catch (redisError) {
+            this.logger.error(
+              `Redis error during disconnect: ${redisError.message}`,
+            );
+            // Continue execution despite Redis errors - local state is still updated
+          }
 
           // Update online counts for all clients
-          this.broadcastOnlineOperators();
+          try {
+            this.broadcastOnlineOperators();
+          } catch (broadcastError) {
+            this.logger.error(
+              `Error broadcasting online operators: ${broadcastError.message}`,
+            );
+          }
         }
       }
     } catch (error) {
       this.logger.error(`Error in handleDisconnect: ${error.message}`);
+      this.logger.error(error.stack);
     }
   }
 
@@ -785,19 +836,28 @@ export class DrillingGateway
         return;
       }
 
-      // Get recent rewards from Redis
-      const latestCycle = await this.getLatestCycles();
+      // Get recent rewards from Redis with proper error handling
+      try {
+        const latestCycle = await this.getLatestCycles();
 
-      // Send the rewards to the client
-      client.emit('latest-cycle', latestCycle);
+        // Send the rewards to the client
+        client.emit('latest-cycle', latestCycle);
 
-      this.logger.log(
-        `📊 Sent latest cycle to operator ${operatorId} on socket ${client.id}`,
-      );
+        this.logger.log(
+          `📊 Sent latest cycle to operator ${operatorId} on socket ${client.id}`,
+        );
+      } catch (redisError) {
+        this.logger.error(
+          `Redis error fetching latest cycle: ${redisError.message}`,
+        );
+        // Send an empty array as fallback
+        client.emit('latest-cycle', []);
+      }
     } catch (error) {
-      this.logger.error(`Error getting recent rewards: ${error.message}`);
+      this.logger.error(`Error getting latest cycle: ${error.message}`);
+      this.logger.error(error.stack);
       client.emit('drilling-error', {
-        message: `Failed to get recent rewards: ${error.message}`,
+        message: `Failed to get latest cycle: ${error.message}`,
       } as DrillingErrorResponse);
     }
   }
@@ -822,6 +882,8 @@ export class DrillingGateway
       this.logger.error(
         `❌ Error retrieving recent drilling cycles from Redis: ${error.message}`,
       );
+      this.logger.error(error.stack);
+      // Return empty array instead of failing
       return [];
     }
   }
@@ -839,7 +901,14 @@ export class DrillingGateway
       let latestCycles: DrillingCycle[] = [];
 
       if (existingCyclesStr) {
-        latestCycles = JSON.parse(existingCyclesStr);
+        try {
+          latestCycles = JSON.parse(existingCyclesStr);
+        } catch (parseError) {
+          this.logger.error(
+            `❌ Error parsing existing cycles JSON: ${parseError.message}`,
+          );
+          // Continue with an empty array if parsing fails
+        }
       }
 
       // Add new cycle to the beginning of the array
@@ -864,6 +933,8 @@ export class DrillingGateway
       this.logger.error(
         `❌ Error storing drilling cycle in Redis: ${error.message}`,
       );
+      this.logger.error(error.stack);
+      // Log but don't throw - this operation should not disrupt the main flow
     }
   }
 }
