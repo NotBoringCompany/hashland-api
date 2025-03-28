@@ -13,6 +13,7 @@ import {
   OperatorSchema,
 } from 'src/operators/schemas/operator.schema';
 import { ShopPurchaseController } from './shop-purchase.controller';
+import { AlchemyModule } from 'src/alchemy/alchemy.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ShopPurchaseController } from './shop-purchase.controller';
       { name: Operator.name, schema: OperatorSchema },
     ]), // Register ShopPurchase schema
     TonModule,
+    AlchemyModule,
   ],
   controllers: [ShopPurchaseController], // Expose API endpoints
   providers: [ShopPurchaseService], // Business logic for ShopService

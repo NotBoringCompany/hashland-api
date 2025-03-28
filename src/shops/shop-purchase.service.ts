@@ -14,6 +14,9 @@ import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { TonService } from 'src/ton/ton.service';
 import { DrillConfig } from 'src/common/enums/drill.enum';
+import { AllowedChain } from 'src/common/enums/chain.enum';
+import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
+import { AlchemyService } from 'src/alchemy/alchemy.service';
 
 @Injectable()
 export class ShopPurchaseService {
@@ -29,6 +32,7 @@ export class ShopPurchaseService {
     @InjectModel(Operator.name)
     private readonly operatorModel: Model<Operator>,
     private readonly tonService: TonService,
+    private readonly alchemyService: AlchemyService,
   ) {}
 
   /**
@@ -38,10 +42,12 @@ export class ShopPurchaseService {
     operatorId: Types.ObjectId,
     shopItemId: Types.ObjectId,
     shopItemName: string,
+    /** The chain the purchase was made from */
+    chain: AllowedChain,
     /** The address the purchase was made from */
     address: string,
-    /** The BOC (TX Hash) of the purchase */
-    boc: string,
+    /** The transaction hash (or BOC for TON transactions) of the purchase */
+    txHash: string,
   ): Promise<
     ApiResponse<{
       shopPurchaseId: string;
@@ -51,6 +57,7 @@ export class ShopPurchaseService {
       // Check if the purchase is allowed
       const purchaseAllowedResponse = await this.checkPurchaseAllowed(
         operatorId,
+        true,
         true,
         shopItemId,
         shopItemName,
@@ -64,16 +71,29 @@ export class ShopPurchaseService {
       }
 
       // Check if the payment is valid
-      const blockchainData = await this.tonService.verifyTONTransaction(
-        operatorId,
-        address,
-        boc,
-      );
+      let blockchainData: BlockchainData | null = null;
+
+      if (chain === AllowedChain.TON) {
+        blockchainData = await this.tonService.verifyTONTransaction(
+          operatorId,
+          address,
+          txHash,
+        );
+      } else if (chain === AllowedChain.BERA) {
+        blockchainData = await this.alchemyService.verifyEVMTransaction(
+          operatorId,
+          address,
+          chain,
+          txHash,
+          shopItemName,
+          purchaseAllowedResponse.data.shopItemPrice.bera,
+        );
+      }
 
       if (!blockchainData) {
         return new ApiResponse<null>(
           403,
-          `(purchaseItem) Invalid TON transaction.`,
+          `(purchaseItem) Invalid blockchain transaction.`,
         );
       }
 
@@ -212,10 +232,12 @@ export class ShopPurchaseService {
    * Otherwise, the operator might have already paid for the item even though the purchase is not allowed.
    *
    * Optionally returns the shop item's effect if `showShopItemEffect` is set to true.
+   * Optionally returns the shop item's price if `showShopItemPrice` is set to true.
    */
   async checkPurchaseAllowed(
     operatorId: Types.ObjectId,
     showShopItemEffects: boolean = false,
+    showShopItemPrice: boolean = false,
     shopItemId?: Types.ObjectId,
     shopItemName?: string,
   ): Promise<
@@ -223,6 +245,10 @@ export class ShopPurchaseService {
       purchaseAllowed: boolean;
       reason?: string;
       shopItemEffects?: ShopItemEffects;
+      shopItemPrice?: {
+        ton: number;
+        bera: number;
+      };
     } | null>
   > {
     try {
@@ -243,6 +269,7 @@ export class ShopPurchaseService {
         .findOne(query, {
           item: 1,
           ...(showShopItemEffects && { itemEffect: 1 }),
+          ...(showShopItemPrice && { purchaseCost: 1 }),
         })
         .lean();
 
@@ -360,9 +387,14 @@ export class ShopPurchaseService {
       return new ApiResponse<{
         purchaseAllowed: boolean;
         shopItemEffects?: ShopItemEffects;
+        shopItemPrice?: {
+          ton: number;
+          bera: number;
+        };
       }>(200, `(checkPurchaseAllowed) Purchase allowed.`, {
         purchaseAllowed: true,
         shopItemEffects: showShopItemEffects ? shopItem.itemEffects : undefined,
+        shopItemPrice: showShopItemPrice ? shopItem.purchaseCost : undefined,
       });
     } catch (err: any) {
       throw new InternalServerErrorException(

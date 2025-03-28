@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
+import { AllowedChain } from 'src/common/enums/chain.enum';
 import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
 
 export class PurchaseItemDto {
@@ -37,13 +38,21 @@ export class PurchaseItemDto {
   address: string;
 
   @ApiProperty({
-    description: 'The BOC (TX Hash) of the purchase',
+    description: 'The chain used to make the purchase',
+    example: 'TON',
+  })
+  @IsString()
+  @IsNotEmpty()
+  chain: AllowedChain;
+
+  @ApiProperty({
+    description: 'The transaction hash (or BOC for TON) of the purchase',
     example:
       'te6cckECEQEAAzYAART/APSkE/S88sgLAQIBYgIDAgLMBAUCASAGBwIBIAgJAHW0qWl8sMnP...',
   })
   @IsString()
   @IsNotEmpty()
-  boc: string;
+  txHash: string;
 }
 
 export class PurchaseItemResponseDto {
@@ -86,6 +95,13 @@ export class CheckPurchaseAllowedDto {
     default: false,
   })
   showShopItemEffects?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to include shop item price in the response',
+    example: true,
+    default: false,
+  })
+  showShopItemPrice?: boolean;
 }
 
 export class CheckPurchaseAllowedResponseDto {
@@ -109,4 +125,17 @@ export class CheckPurchaseAllowedResponseDto {
     required: false,
   })
   shopItemEffects?: ShopItemEffects;
+
+  @ApiProperty({
+    description: 'The price of the shop item (if showShopItemPrice is true)',
+    example: {
+      ton: 1,
+      bera: 1,
+    },
+    required: false,
+  })
+  shopItemPrice?: {
+    ton: number;
+    bera: number;
+  };
 }
