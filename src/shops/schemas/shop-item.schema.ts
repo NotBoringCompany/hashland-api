@@ -57,14 +57,26 @@ export class ShopItem extends Document {
   description: string;
 
   /**
-   * The purchase cost of the shop item (in TON).
+   * The purchase cost of the shop item (in supported native currencies).
    */
   @ApiProperty({
     description: 'The cost of the shop item in TON',
-    example: 0.95,
+    example: {
+      ton: 1,
+      bera: 1,
+    },
   })
-  @Prop({ required: true, default: 10 })
-  purchaseCost: number;
+  @Prop({
+    required: true,
+    default: {
+      ton: 0,
+      bera: 0,
+    },
+  })
+  purchaseCost: {
+    ton: number;
+    bera: number;
+  };
 }
 
 export const ShopItemSchema = SchemaFactory.createForClass(ShopItem);

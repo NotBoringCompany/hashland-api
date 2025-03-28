@@ -19,7 +19,10 @@ export class ShopItemService {
     item: ShopItemType,
     itemEffects: ShopItemEffects,
     description: string,
-    purchaseCost: number,
+    purchaseCost: {
+      ton: number;
+      bera: number;
+    },
   ): Promise<ApiResponse<{ shopItemId: string } | null>> {
     try {
       const shopItem = await this.shopItemModel.create({

@@ -71,8 +71,9 @@ export class ShopPurchaseController {
       operatorObjectId,
       shopItemObjectId,
       purchaseItemDto.shopItemName,
+      purchaseItemDto.chain,
       purchaseItemDto.address,
-      purchaseItemDto.boc,
+      purchaseItemDto.txHash,
     );
   }
 }
