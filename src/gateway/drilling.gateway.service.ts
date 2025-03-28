@@ -177,12 +177,20 @@ export class DrillingGatewayService {
   /**
    * Notifies all active operators about the latest driling cycle.
    */
-  async notifyNewCycle(drillingCycle: DrillingCycle) {
+  async notifyNewCycle(drillingCycle: DrillingCycle | null) {
+    // Ensure we have a valid cycle before broadcasting
+    if (!drillingCycle || !drillingCycle.cycleNumber) {
+      this.logger.warn(
+        '⚠️ Attempted to notify about null or invalid drilling cycle, skipping notification',
+      );
+      return;
+    }
+
     // Broadcast to all connected clients
     this.drillingGateway.server.emit('new-cycle', drillingCycle);
 
     this.logger.log(
-      `💰 Broadcasted new cycle #${drillingCycle.cycleNumber} with ${drillingCycle.rewardShares.length} operators and total weighted efficiency of ${drillingCycle.totalWeightedEff}`,
+      `💰 Broadcasted new cycle #${drillingCycle.cycleNumber} with ${drillingCycle.rewardShares?.length || 0} operators and total weighted efficiency of ${drillingCycle.totalWeightedEff || 0}`,
     );
   }
 }

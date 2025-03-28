@@ -892,8 +892,18 @@ export class DrillingGateway
    * Stores drilling cycle data in Redis for later retrieval.
    * Maintains a list of the latest 5 drilling cycles.
    */
-  async storeLatestCycleInRedis(drillingCycle: DrillingCycle): Promise<void> {
+  async storeLatestCycleInRedis(
+    drillingCycle: DrillingCycle | null,
+  ): Promise<void> {
     try {
+      // Check if drillingCycle is null or undefined
+      if (!drillingCycle) {
+        this.logger.warn(
+          '⚠️ Attempted to store null drilling cycle in Redis, skipping operation',
+        );
+        return;
+      }
+
       // Get existing cycles list
       const existingCyclesStr = await this.redisService.get(
         this.redisRecentCycleRewardsKey,

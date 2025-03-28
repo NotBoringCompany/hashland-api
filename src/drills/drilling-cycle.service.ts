@@ -51,20 +51,71 @@ export class DrillingCycleService {
    * Initializes the cycle number in Redis if not already set.
    */
   async initializeCycleNumber() {
-    const cycleNumber = await this.redisService.get(this.redisCycleKey);
+    try {
+      // Check if cycle number exists in Redis
+      const cycleNumber = await this.redisService.get(this.redisCycleKey);
 
-    if (!cycleNumber) {
-      const latestCycle = await this.drillingCycleModel
-        .findOne()
-        .sort({ cycleNumber: -1 })
-        .exec();
-      const newCycleNumber = latestCycle ? latestCycle.cycleNumber + 1 : 1;
+      if (!cycleNumber) {
+        // First try to find the latest cycle in MongoDB
+        const latestCycle = await this.drillingCycleModel
+          .findOne()
+          .sort({ cycleNumber: -1 })
+          .exec();
 
-      await this.redisService.set(
-        this.redisCycleKey,
-        newCycleNumber.toString(),
-      );
-      this.logger.log(`🔄 Redis Cycle Number Initialized: ${newCycleNumber}`);
+        // Initialize with either the next cycle number or 1 if no cycles exist
+        const newCycleNumber = latestCycle ? latestCycle.cycleNumber + 1 : 1;
+
+        // If we found an existing cycle, verify it with a manual count to ensure consistency
+        if (latestCycle) {
+          // Get count of all cycles to verify that there's no gap
+          const totalCycles = await this.drillingCycleModel.countDocuments();
+
+          // If we have a mismatch between latest cycle number and total count, log a warning
+          if (latestCycle.cycleNumber !== totalCycles) {
+            this.logger.warn(
+              `⚠️ Cycle number inconsistency detected: Latest cycle is #${latestCycle.cycleNumber}, but there are ${totalCycles} total cycles. This may indicate missing cycles.`,
+            );
+          }
+        }
+
+        // Store the new cycle number in Redis
+        await this.redisService.set(
+          this.redisCycleKey,
+          newCycleNumber.toString(),
+        );
+        this.logger.log(`🔄 Redis Cycle Number Initialized: ${newCycleNumber}`);
+      } else {
+        // Verify that the Redis cycle number matches what's in MongoDB
+        const redisCycleNumber = parseInt(cycleNumber, 10);
+        const expectedNextCycle = redisCycleNumber + 1; // The next cycle we'll create
+
+        // Find the latest cycle in MongoDB to compare
+        const latestCycle = await this.drillingCycleModel
+          .findOne()
+          .sort({ cycleNumber: -1 })
+          .exec();
+
+        if (latestCycle) {
+          // Check if there's a mismatch between Redis and MongoDB
+          if (latestCycle.cycleNumber >= expectedNextCycle) {
+            this.logger.warn(
+              `⚠️ Redis cycle number (${redisCycleNumber}) is behind MongoDB's latest cycle (${latestCycle.cycleNumber}). This may cause issues.`,
+            );
+          } else if (latestCycle.cycleNumber < redisCycleNumber - 1) {
+            this.logger.warn(
+              `⚠️ Gap detected between Redis cycle number (${redisCycleNumber}) and MongoDB's latest cycle (${latestCycle.cycleNumber}). This may indicate missing cycles.`,
+            );
+          } else {
+            this.logger.log(
+              `✅ Redis cycle number (${redisCycleNumber}) and MongoDB's latest cycle (${latestCycle.cycleNumber}) are in sync.`,
+            );
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error(`❌ Error initializing cycle number: ${error.message}`);
+      this.logger.error(error.stack);
+      // Continue execution despite this error - the system can try to recover
     }
   }
 
@@ -113,8 +164,8 @@ export class DrillingCycleService {
       const activeOperators =
         await this.drillingSessionService.fetchActiveDrillingSessionsCount();
 
-      // Create the drilling cycle with active operator count
-      await this.drillingCycleModel.create({
+      // Create the drilling cycle with active operator count and store the result
+      const newCycle = await this.drillingCycleModel.create({
         cycleNumber: newCycleNumber,
         startTime: now,
         endTime: new Date(now.getTime() + this.cycleDuration),
@@ -123,6 +174,16 @@ export class DrillingCycleService {
         difficulty: 0,
         issuedHASH: GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE,
       });
+
+      // Verify that we have a valid cycle object with cycleNumber
+      if (!newCycle || !newCycle.cycleNumber) {
+        throw new Error(
+          `Failed to create drilling cycle #${newCycleNumber} in MongoDB`,
+        );
+      }
+
+      // Store this cycle in Redis for recent cycles history
+      await this.drillingGateway.storeLatestCycleInRedis(newCycle);
 
       const endFetchTime = performance.now();
 
@@ -133,9 +194,32 @@ export class DrillingCycleService {
       // ✅ Step 2: Trigger WebSocket real-time updates (handles active operators, difficulty, etc.)
       this.drillingGatewayService.sendRealTimeUpdates();
 
+      // Also notify about the new cycle
+      await this.drillingGatewayService.notifyNewCycle(newCycle);
+
       return newCycleNumber;
     } catch (error) {
       this.logger.error(`❌ Error Creating Drilling Cycle: ${error.message}`);
+      this.logger.error(error.stack);
+
+      // Try to recover - check if the cycle was actually created despite the error
+      try {
+        const existingCycle = await this.drillingCycleModel.findOne({
+          cycleNumber: newCycleNumber,
+        });
+
+        if (existingCycle) {
+          this.logger.warn(
+            `⚠️ Cycle #${newCycleNumber} exists in MongoDB despite error - continuing operation`,
+          );
+          return newCycleNumber;
+        }
+      } catch (verifyError) {
+        this.logger.error(
+          `❌ Error verifying cycle existence: ${verifyError.message}`,
+        );
+      }
+
       throw error;
     }
   }
@@ -241,6 +325,76 @@ export class DrillingCycleService {
       },
       { new: true },
     );
+
+    // Check if the cycle document was found and updated
+    if (!latestCycle) {
+      this.logger.error(
+        `❌ (endCurrentCycle) Failed to update cycle #${cycleNumber} - document not found in MongoDB`,
+      );
+
+      // Try to find the cycle document by cycleNumber
+      const existingCycle = await this.drillingCycleModel.findOne({
+        cycleNumber,
+      });
+
+      if (!existingCycle) {
+        this.logger.error(
+          `❌ (endCurrentCycle) Cycle #${cycleNumber} does not exist in MongoDB`,
+        );
+        // Create a new cycle document as fallback
+        try {
+          const now = new Date();
+          const newCycle = await this.drillingCycleModel.create({
+            cycleNumber,
+            startTime: now,
+            endTime: new Date(now.getTime() + this.cycleDuration),
+            activeOperators: 0,
+            extractorId: null,
+            extractorOperatorId: null,
+            extractorOperatorName: null,
+            rewardShares,
+            issuedHASH: 0,
+          });
+          this.logger.warn(
+            `⚠️ (endCurrentCycle) Created a new cycle #${cycleNumber} as fallback`,
+          );
+
+          // ✅ Step 6: Complete any stopping sessions
+          const completionResult =
+            await this.drillingSessionService.completeStoppingSessionsForEndCycle(
+              cycleNumber,
+            );
+
+          // Notify operators that their sessions were completed
+          if (completionResult.operatorIds.length > 0) {
+            this.drillingGatewayService.notifySessionsCompleted(
+              completionResult.operatorIds,
+              cycleNumber,
+              completionResult.earnedHASH,
+            );
+          }
+
+          // ✅ Step 7: Send WebSocket notification about the latest cycle
+          // Store the rewards in Redis for history - use the newly created cycle
+          await this.drillingGateway.storeLatestCycleInRedis(newCycle);
+
+          // Send WebSocket notification
+          await this.drillingGatewayService.notifyNewCycle(newCycle);
+
+          const endTime = performance.now();
+          this.logger.log(
+            `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${(endTime - startTime).toFixed(2)}ms (fallback path).`,
+          );
+
+          return;
+        } catch (createError) {
+          this.logger.error(
+            `❌ (endCurrentCycle) Failed to create fallback cycle: ${createError.message}`,
+          );
+          throw new Error(`Failed to find or create cycle #${cycleNumber}`);
+        }
+      }
+    }
 
     // ✅ Step 6: Complete any stopping sessions
     const completionResult =
