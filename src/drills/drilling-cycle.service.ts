@@ -182,20 +182,11 @@ export class DrillingCycleService {
         );
       }
 
-      // Store this cycle in Redis for recent cycles history
-      await this.drillingGateway.storeLatestCycleInRedis(newCycle);
-
       const endFetchTime = performance.now();
 
       this.logger.log(
         `⏳ (Performance) Drilling Cycle #${newCycleNumber} setup with ${activeOperators} operators took ${endFetchTime - startFetchTime}ms.`,
       );
-
-      // ✅ Step 2: Trigger WebSocket real-time updates (handles active operators, difficulty, etc.)
-      this.drillingGatewayService.sendRealTimeUpdates();
-
-      // Also notify about the new cycle
-      await this.drillingGatewayService.notifyNewCycle(newCycle);
 
       return newCycleNumber;
     } catch (error) {
@@ -332,68 +323,7 @@ export class DrillingCycleService {
         `❌ (endCurrentCycle) Failed to update cycle #${cycleNumber} - document not found in MongoDB`,
       );
 
-      // Try to find the cycle document by cycleNumber
-      const existingCycle = await this.drillingCycleModel.findOne({
-        cycleNumber,
-      });
-
-      if (!existingCycle) {
-        this.logger.error(
-          `❌ (endCurrentCycle) Cycle #${cycleNumber} does not exist in MongoDB`,
-        );
-        // Create a new cycle document as fallback
-        try {
-          const now = new Date();
-          const newCycle = await this.drillingCycleModel.create({
-            cycleNumber,
-            startTime: now,
-            endTime: new Date(now.getTime() + this.cycleDuration),
-            activeOperators: 0,
-            extractorId: null,
-            extractorOperatorId: null,
-            extractorOperatorName: null,
-            rewardShares,
-            issuedHASH: 0,
-          });
-          this.logger.warn(
-            `⚠️ (endCurrentCycle) Created a new cycle #${cycleNumber} as fallback`,
-          );
-
-          // ✅ Step 6: Complete any stopping sessions
-          const completionResult =
-            await this.drillingSessionService.completeStoppingSessionsForEndCycle(
-              cycleNumber,
-            );
-
-          // Notify operators that their sessions were completed
-          if (completionResult.operatorIds.length > 0) {
-            this.drillingGatewayService.notifySessionsCompleted(
-              completionResult.operatorIds,
-              cycleNumber,
-              completionResult.earnedHASH,
-            );
-          }
-
-          // ✅ Step 7: Send WebSocket notification about the latest cycle
-          // Store the rewards in Redis for history - use the newly created cycle
-          await this.drillingGateway.storeLatestCycleInRedis(newCycle);
-
-          // Send WebSocket notification
-          await this.drillingGatewayService.notifyNewCycle(newCycle);
-
-          const endTime = performance.now();
-          this.logger.log(
-            `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${(endTime - startTime).toFixed(2)}ms (fallback path).`,
-          );
-
-          return;
-        } catch (createError) {
-          this.logger.error(
-            `❌ (endCurrentCycle) Failed to create fallback cycle: ${createError.message}`,
-          );
-          throw new Error(`Failed to find or create cycle #${cycleNumber}`);
-        }
-      }
+      return;
     }
 
     // ✅ Step 6: Complete any stopping sessions
