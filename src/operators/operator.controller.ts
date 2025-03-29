@@ -1,5 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ApiResponse as AppApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from './operator.service';
 import { Operator } from './schemas/operator.schema';
@@ -7,6 +13,7 @@ import { Types } from 'mongoose';
 import { GetOperatorResponseDto } from 'src/common/dto/operator.dto';
 import { OperatorWallet } from './schemas/operator-wallet.schema';
 import { Drill } from 'src/drills/schemas/drill.schema';
+import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
 
 @ApiTags('Operators')
 @Controller('operator')
@@ -42,9 +49,11 @@ export class OperatorController {
     status: 404,
     description: 'Operator not found',
   })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Get()
   async getOperatorData(
-    @Query('operatorId') operatorId?: string,
+    @Request() req,
     @Query('projection') projection?: string,
   ): Promise<
     AppApiResponse<{
@@ -54,6 +63,8 @@ export class OperatorController {
       poolId?: Types.ObjectId;
     }>
   > {
+    const operatorId = new Types.ObjectId(req.user.operatorId);
+
     // Convert query string to Mongoose projection object
     const projectionObj = projection
       ? projection
