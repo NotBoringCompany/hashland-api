@@ -13,7 +13,7 @@ export async function runShopItems() {
       replenishFuelRatio: 1,
     },
     'Replenishes fuel back to max capacity.',
-    0.95,
+    { ton: 0, bera: 0.95 },
   );
   console.log('✅ addShopItem result:', result);
 
