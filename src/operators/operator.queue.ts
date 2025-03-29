@@ -1,4 +1,10 @@
-import { Processor, Process, InjectQueue } from '@nestjs/bull';
+import {
+  Processor,
+  Process,
+  InjectQueue,
+  OnGlobalQueueStalled,
+  OnGlobalQueueFailed,
+} from '@nestjs/bull';
 import { Queue } from 'bull';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OperatorService } from './operator.service';
@@ -31,7 +37,11 @@ export class OperatorQueue implements OnModuleInit {
       await this.operatorQueue.add(
         jobName,
         {},
-        { repeat: { every: intervalMs } },
+        {
+          repeat: { every: intervalMs },
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
       );
       this.logger.log(
         `✅ (operatorQueue) Scheduled job: ${jobName} every ${intervalMs / 1000 / 60} minutes.`,
@@ -43,8 +53,12 @@ export class OperatorQueue implements OnModuleInit {
 
   /**
    * Processes the cumulativeEff update job (now runs **every hour**).
+   * This is a resource-intensive operation, so we set concurrency to 1.
    */
-  @Process('update-cumulative-eff')
+  @Process({
+    name: 'update-cumulative-eff',
+    concurrency: 1, // Limit to one concurrent job at a time
+  })
   async handleCumulativeEffUpdate() {
     this.logger.log(
       `🔄 (update-cumulative-eff) Running scheduled cumulativeEff update...`,
@@ -59,5 +73,28 @@ export class OperatorQueue implements OnModuleInit {
         `❌ (update-cumulative-eff) Error updating cumulativeEff: ${error.message}`,
       );
     }
+  }
+
+  /**
+   * Handle stalled jobs in the queue.
+   * This is a critical error that indicates something is wrong with the job processing.
+   */
+  @OnGlobalQueueStalled()
+  onStalled(jobId: number) {
+    this.logger.error(
+      `🚨 CRITICAL: Operator Queue job ${jobId} has stalled! This may impact operator statistics.`,
+    );
+  }
+
+  /**
+   * Handle failed jobs in the queue.
+   */
+  @OnGlobalQueueFailed()
+  onFailed(jobId: number, err: Error) {
+    this.logger.error(
+      `❌ Operator Queue job ${jobId} has failed: ${err.message}`,
+    );
+    // Log the stack trace for debugging
+    this.logger.error(`Stack trace: ${err.stack}`);
   }
 }

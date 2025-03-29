@@ -44,7 +44,19 @@ import { HashReserveModule } from 'src/hash-reserve/hash-reserve.module';
       { name: DrillingSession.name, schema: DrillingSessionSchema },
       { name: Operator.name, schema: OperatorSchema },
     ]),
-    BullModule.registerQueue({ name: 'drilling-cycles' }), // Register Bull queue
+    BullModule.registerQueue({
+      name: 'drilling-cycles',
+      defaultJobOptions: {
+        attempts: 3, // Retry failed jobs 3 times
+        removeOnComplete: true, // Remove completed jobs
+        removeOnFail: false, // Keep failed jobs for debugging
+      },
+      settings: {
+        lockDuration: 180000, // 3 minutes lock time
+        stalledInterval: 60000, // Check for stalled jobs every minute
+        maxStalledCount: 1, // Only retry stalled jobs once
+      },
+    }), // Register Bull queue
   ],
   controllers: [DrillingCycleController],
   providers: [DrillingCycleService, DrillingCycleQueue],

@@ -30,6 +30,15 @@ import {
     ]),
     BullModule.registerQueue({
       name: 'operator-queue',
+      defaultJobOptions: {
+        attempts: 3, // Retry failed jobs 3 times
+        removeOnComplete: true, // Remove completed jobs
+        removeOnFail: false, // Keep failed jobs for debugging
+      },
+      settings: {
+        lockDuration: 300000, // 5 minutes lock time
+        stalledInterval: 180000, // Check for stalled jobs every 3 minutes
+      },
     }),
     PoolModule,
     PoolOperatorModule,

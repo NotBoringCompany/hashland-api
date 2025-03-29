@@ -1,4 +1,10 @@
-import { Processor, Process, InjectQueue } from '@nestjs/bull';
+import {
+  Processor,
+  Process,
+  InjectQueue,
+  OnGlobalQueueStalled,
+  OnGlobalQueueFailed,
+} from '@nestjs/bull';
 import { Queue } from 'bull';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DrillingCycleService } from './drilling-cycle.service';
@@ -78,7 +84,10 @@ export class DrillingCycleQueue implements OnModuleInit {
    * 1. Ends the current cycle (select extractor, distribute rewards, process fuel).
    * 2. Starts a new cycle.
    */
-  @Process('new-drilling-cycle')
+  @Process({
+    name: 'new-drilling-cycle',
+    concurrency: 1, // Ensure only one cycle processing job at a time
+  })
   async handleNewDrillingCycle() {
     if (!GAME_CONSTANTS.CYCLES.ENABLED) {
       this.logger.warn(
@@ -120,5 +129,28 @@ export class DrillingCycleQueue implements OnModuleInit {
       // Rethrow the error to let Bull handle the retry logic
       throw error;
     }
+  }
+
+  /**
+   * Handle stalled jobs in the queue.
+   * This is a critical error that indicates something is wrong with the job processing.
+   */
+  @OnGlobalQueueStalled()
+  onStalled(jobId: number) {
+    this.logger.error(
+      `🚨 CRITICAL: Drilling cycle job ${jobId} has stalled! This could affect game cycles.`,
+    );
+  }
+
+  /**
+   * Handle failed jobs in the queue.
+   */
+  @OnGlobalQueueFailed()
+  onFailed(jobId: number, err: Error) {
+    this.logger.error(
+      `❌ Drilling cycle job ${jobId} has failed: ${err.message}`,
+    );
+    // Log the stack trace for debugging
+    this.logger.error(`Stack trace: ${err.stack}`);
   }
 }
