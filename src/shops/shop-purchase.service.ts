@@ -70,6 +70,18 @@ export class ShopPurchaseService {
         );
       }
 
+      // Check if this tx hash was already used for a purchase
+      const existingPurchase = await this.shopPurchaseModel.exists({
+        'blockchainData.txHash': txHash,
+      });
+
+      if (existingPurchase) {
+        return new ApiResponse<null>(
+          403,
+          `(purchaseItem) Transaction hash already used for a purchase.`,
+        );
+      }
+
       // Check if the payment is valid
       let blockchainData: BlockchainData | null = null;
 
