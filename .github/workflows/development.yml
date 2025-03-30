@@ -43,6 +43,7 @@ jobs:
           echo "TON_X_API_KEY=${{ secrets.TON_X_API_KEY }}" >> .env
           echo "NODE_ENV=development" >> .env
           echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
+          echo "EVM_RECEIVER_ADDRESS=${{ secrets.EVM_RECEIVER_ADDRESS }}" >> .env
       
       - name: Deploy with docker-compose
         run: |
