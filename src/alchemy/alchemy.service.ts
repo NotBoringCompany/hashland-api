@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Alchemy, Network, TransactionResponse } from 'alchemy-sdk';
 import { Types } from 'mongoose';
+import { ConfigService } from '@nestjs/config';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
 import { formatUnits, parseEther } from 'viem';
@@ -8,12 +9,22 @@ import { formatUnits, parseEther } from 'viem';
 @Injectable()
 export class AlchemyService {
   private beraAlchemy: Alchemy;
+  private readonly evmReceiverAddress: string;
 
-  constructor() {
+  constructor(private configService: ConfigService) {
     this.beraAlchemy = new Alchemy({
-      apiKey: process.env.ALCHEMY_API_KEY,
+      apiKey: this.configService.get<string>('ALCHEMY_API_KEY'),
       network: Network.BERACHAIN_MAINNET,
     });
+    this.evmReceiverAddress = this.configService.get<string>(
+      'EVM_RECEIVER_ADDRESS',
+    );
+
+    if (!this.evmReceiverAddress) {
+      throw new Error(
+        'EVM_RECEIVER_ADDRESS is missing in environment variables',
+      );
+    }
   }
 
   /**
@@ -82,7 +93,7 @@ export class AlchemyService {
         // Check receiver. Ensure the transaction was sent to the correct address
         if (
           !tx.to ||
-          tx.to.toLowerCase() !== process.env.EVM_RECEIVER_ADDRESS.toLowerCase()
+          tx.to.toLowerCase() !== this.evmReceiverAddress.toLowerCase()
         ) {
           console.error(
             `❌ (verifyEVMTransaction) Transaction receiver does not match address.`,
