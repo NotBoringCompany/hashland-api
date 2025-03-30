@@ -7,6 +7,7 @@ import { PoolOperatorModule } from 'src/pools/pool-operator.module';
 import { ConfigModule } from '@nestjs/config';
 import { DrillModule } from 'src/drills/drill.module';
 import { BullModule } from '@nestjs/bull';
+import { OperatorQueue } from './operator.queue';
 import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
 import {
   OperatorWallet,
@@ -44,7 +45,7 @@ import {
     DrillModule,
   ],
   controllers: [OperatorController], // Expose API endpoints
-  providers: [OperatorService], // Business logic for Operators
+  providers: [OperatorService, OperatorQueue], // Business logic for Operators
   exports: [MongooseModule, OperatorService], // Allow usage in other modules
 })
 export class OperatorModule {}
