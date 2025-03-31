@@ -21,9 +21,7 @@ import Redis from 'ioredis';
         try {
           const redisUri = new URL(process.env.REDIS_URI);
 
-          logger.log(
-            `Redis connection details: host=${redisUri.hostname}, port=${redisUri.port}`,
-          );
+          logger.log(`Redis connection details: ${redisUri}`);
 
           const redis = new Redis({
             family: 0, // added family: 0 for IPv4 and IPv6 support
