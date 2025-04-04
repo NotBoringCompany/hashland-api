@@ -146,9 +146,19 @@ export class AlchemyService {
    */
   async getEligibleBERATokenBalances(address: string) {
     try {
-      const tokenMap: Record<string, string> = {
-        '0x549943e04f40284185054145c6E4e9568C1D3241': 'USDC',
-        '0x779Ded0c9e1022225f8E0630b35a9b54bE713736': 'USDT',
+      const tokenMap: Record<string, { symbol: string; decimals: number }> = {
+        '0x549943e04f40284185054145c6E4e9568C1D3241': {
+          symbol: 'USDC',
+          decimals: 6,
+        },
+        '0x779Ded0c9e1022225f8E0630b35a9b54bE713736': {
+          symbol: 'USDT',
+          decimals: 6,
+        },
+        '0xfcbd14dc51f0a4d49d5e53c2e0950e0bc26d0dce': {
+          symbol: 'HONEY',
+          decimals: 18,
+        },
       };
 
       const contractAddresses = Object.keys(tokenMap);
@@ -159,16 +169,25 @@ export class AlchemyService {
       ]);
 
       const formattedBalances = tokens.map(
-        ({ contractAddress, rawBalance }) => ({
-          token: tokenMap[contractAddress] ?? 'Unknown',
-          balance: (parseFloat(rawBalance) / 1e6).toFixed(2), // 6 decimals for USDC/USDT
-        }),
+        ({ contractAddress, rawBalance }) => {
+          const tokenInfo = tokenMap[contractAddress];
+          const decimals = tokenInfo?.decimals ?? 6; // fallback default
+          const symbol = tokenInfo?.symbol ?? 'Unknown';
+          const balance = (
+            parseFloat(rawBalance) / Math.pow(10, decimals)
+          ).toFixed(decimals === 6 ? 2 : 4);
+
+          return {
+            token: symbol,
+            balance,
+          };
+        },
       );
 
       return [
         {
           token: 'BERA',
-          balance: Number(formatUnits(beraBalance.toBigInt(), 18)).toFixed(4), // 18 decimals
+          balance: Number(formatUnits(beraBalance.toBigInt(), 18)).toFixed(4),
         },
         ...formattedBalances,
       ];
