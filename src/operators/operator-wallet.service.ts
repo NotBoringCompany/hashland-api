@@ -346,7 +346,7 @@ export class OperatorWalletService {
       // If the operator is connecting a second wallet.
       // If yes, we need to set a minimum asset equity check (in USD) to allow them to connect their wallet.
       if (existingWalletsInChain.length === 1) {
-        const minAssetEquity = 1000;
+        const minAssetEquity = 100;
 
         const secondWalletUSDBalance = await this.fetchTotalBalanceForWallets([
           {
