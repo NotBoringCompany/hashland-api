@@ -22,46 +22,12 @@ export class CreatePoolOperatorDto {
   poolId: string;
 }
 
-export class OperatorInfoDto {
-  @ApiProperty({
-    description: 'The operator ID',
-    example: '507f1f77bcf86cd799439011',
-  })
-  _id: string;
-
-  @ApiProperty({
-    description: 'The username of the operator',
-    example: 'hashdriller42',
-  })
-  username: string;
-
-  @ApiProperty({
-    description: 'The cumulative efficiency of the operator',
-    example: 12345,
-  })
-  cumulativeEff: number;
-
-  @ApiProperty({
-    description: 'The efficiency multiplier of the operator',
-    example: 1.25,
-  })
-  effMultiplier: number;
-}
-
-export class PoolOperatorWithInfoDto extends PoolOperator {
-  @ApiProperty({
-    description: 'The operator details',
-    type: OperatorInfoDto,
-  })
-  operator: OperatorInfoDto;
-}
-
 export class GetPoolOperatorsResponseDto {
   @ApiProperty({
     description: 'Array of pool operators with operator information',
-    type: [PoolOperatorWithInfoDto],
+    type: [PoolOperator],
   })
-  operators: Partial<PoolOperatorWithInfoDto[]>;
+  operators: Partial<PoolOperator[]>;
 
   @ApiProperty({
     description: 'Total count of pool operators',
