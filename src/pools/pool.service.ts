@@ -462,15 +462,14 @@ export class PoolService implements OnModuleInit {
       // Start building the query
       let operatorsQuery = this.poolOperatorModel
         .find({ pool: new Types.ObjectId(poolId) })
-        .select(projection)
-        .populate('operator', 'username cumulativeEff effMultiplier');
+        .select(projection);
 
       // Populate operator details if requested
       if (populate) {
         operatorsQuery = operatorsQuery.populate({
-          path: 'operatorId',
+          path: 'operator',
           select: 'username cumulativeEff effMultiplier',
-          model: 'Operators',
+          model: 'Operator',
           options: { lean: true },
         });
       }
