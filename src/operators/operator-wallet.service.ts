@@ -81,6 +81,8 @@ export class OperatorWalletService {
         })),
       );
 
+      console.log(`(updateAssetEquityForOperator) New equity: ${newEquity}`);
+
       // ✅ Step 3: Fetch operator document
       const operator = await this.operatorModel
         .findById(operatorId, { assetEquity: 1, cumulativeEff: 1 })
@@ -90,8 +92,16 @@ export class OperatorWalletService {
       // ✅ Step 4: Compute `effMultiplier`
       const newEffMultiplier = equityToEffMultiplier(newEquity);
 
+      console.log(
+        `(updateAssetEquityForOperator) New effMultiplier: ${newEffMultiplier}`,
+      );
+
       // ✅ Step 5: Update `actualEff` of **Basic Drill** & Compute `cumulativeEff`
       const newActualEff = equityToActualEff(newEquity);
+
+      console.log(
+        `(updateAssetEquityForOperator) New actualEff: ${newActualEff}`,
+      );
 
       const updatedDrill = await this.drillModel.findOneAndUpdate(
         { operatorId, version: DrillVersion.BASIC },
@@ -103,6 +113,10 @@ export class OperatorWalletService {
       const oldActualEff = updatedDrill ? updatedDrill.actualEff : 0;
       const effDifference = newActualEff - oldActualEff;
       const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
+
+      console.log(
+        `(updateAssetEquityForOperator) New cumulativeEff: ${newCumulativeEff}`,
+      );
 
       // ✅ Step 7: Update `assetEquity`, `effMultiplier` & `cumulativeEff` in Operator document
       await this.operatorModel.updateOne(
