@@ -154,6 +154,16 @@ export class Pool extends Document {
   })
   @Prop({ type: Date, default: null })
   lastEffUpdate: Date | null;
+
+  /**
+   * The total HASH rewards acquired by this pool throughout its lifetime
+   */
+  @ApiProperty({
+    description: 'Total HASH rewards acquired by this pool',
+    example: 10000.5,
+  })
+  @Prop({ type: Number, default: 0 })
+  totalRewards: number;
 }
 
 export const PoolSchema = SchemaFactory.createForClass(Pool);

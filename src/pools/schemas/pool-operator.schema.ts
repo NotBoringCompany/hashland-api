@@ -67,6 +67,16 @@ export class PoolOperator extends Document {
     example: '2024-03-19T12:00:00.000Z',
   })
   updatedAt: Date;
+
+  /**
+   * The total HASH rewards acquired by this operator from the pool
+   */
+  @ApiProperty({
+    description: 'Total HASH rewards acquired by this operator from the pool',
+    example: 2345.67,
+  })
+  @Prop({ type: Number, default: 0 })
+  totalRewards: number;
 }
 
 /**

@@ -431,6 +431,10 @@ export class DrillingCycleService {
       return [];
     }
 
+    // Track pools for reward updates
+    const poolRewards = new Map<string, number>();
+    const poolOperatorRewards = new Map<string, number>();
+
     if (extractorOperatorId === null) {
       // 🟡 **No Extractor Selected - Reserve Extractor's HASH**
       const extractorHashAllocation =
@@ -501,6 +505,9 @@ export class DrillingCycleService {
           return [];
         }
 
+        // Track total pool rewards
+        let totalPoolReward = 0;
+
         // ✅ Step 6: Get Active Pool Operators
         const activePoolOperators = await this.poolOperatorModel
           .find(
@@ -513,12 +520,12 @@ export class DrillingCycleService {
           .lean();
 
         const activePoolOperatorIds = new Set(
-          activePoolOperators.map((op) => op.operatorId),
+          activePoolOperators.map((op) => op.operatorId.toString()),
         );
 
         // ✅ Step 7: Compute Rewards Based on Weighted Eff (Only for Active Pool Operators)
         const weightedPoolOperators = operatorsWithLuck.filter((op) =>
-          activePoolOperatorIds.has(op.operatorId),
+          activePoolOperatorIds.has(op.operatorId.toString()),
         );
         const totalPoolEff = weightedPoolOperators.reduce(
           (sum, op) => sum + op.weightedEff,
@@ -538,11 +545,48 @@ export class DrillingCycleService {
         const activePoolReward =
           issuedHash * pool.rewardSystem.activePoolOperators;
 
+        // Update total pool reward
+        totalPoolReward = extractorReward + leaderReward + activePoolReward;
+        poolRewards.set(poolOperator.poolId.toString(), totalPoolReward);
+
+        // Track if extractor is in the same pool and add their reward
+        if (activePoolOperatorIds.has(extractorOperatorId.toString())) {
+          poolOperatorRewards.set(
+            `${extractorOperatorId.toString()}_${poolOperator.poolId.toString()}`,
+            extractorReward,
+          );
+        }
+
+        // Track leader reward if leader is in the same pool
+        if (
+          pool.leaderId &&
+          activePoolOperatorIds.has(pool.leaderId.toString())
+        ) {
+          const existingReward =
+            poolOperatorRewards.get(
+              `${pool.leaderId.toString()}_${poolOperator.poolId.toString()}`,
+            ) || 0;
+          poolOperatorRewards.set(
+            `${pool.leaderId.toString()}_${poolOperator.poolId.toString()}`,
+            existingReward + leaderReward,
+          );
+        }
+
         // ✅ Compute Weighted Pool Rewards
-        const weightedPoolRewards = weightedPoolOperators.map((operator) => ({
-          operatorId: operator.operatorId,
-          amount: (operator.weightedEff / totalPoolEff) * activePoolReward,
-        }));
+        const weightedPoolRewards = weightedPoolOperators.map((operator) => {
+          const opReward =
+            (operator.weightedEff / totalPoolEff) * activePoolReward;
+
+          // Track individual pool operator rewards
+          const poolOpKey = `${operator.operatorId.toString()}_${poolOperator.poolId.toString()}`;
+          const existingReward = poolOperatorRewards.get(poolOpKey) || 0;
+          poolOperatorRewards.set(poolOpKey, existingReward + opReward);
+
+          return {
+            operatorId: operator.operatorId,
+            amount: opReward,
+          };
+        });
 
         rewardData.push(
           { operatorId: extractorOperatorId, amount: extractorReward },
@@ -559,7 +603,12 @@ export class DrillingCycleService {
     // ✅ Step 8: Batch Issue Rewards
     await this.batchIssueHashRewards(rewardData);
 
-    // ✅ Step 9: Prepare reward shares with operator names
+    // ✅ Step 9: Update total rewards for pools and pool operators
+    if (poolRewards.size > 0 || poolOperatorRewards.size > 0) {
+      await this.updatePoolAndOperatorRewards(poolRewards, poolOperatorRewards);
+    }
+
+    // ✅ Step 10: Prepare reward shares with operator names
     for (const reward of rewardData) {
       rewardSharesWithNames.push({
         operatorId: reward.operatorId,
@@ -576,6 +625,64 @@ export class DrillingCycleService {
     );
 
     return rewardSharesWithNames;
+  }
+
+  /**
+   * Updates the total rewards for pools and pool operators in a single operation.
+   * This method efficiently updates the total rewards without causing circular dependencies.
+   */
+  private async updatePoolAndOperatorRewards(
+    poolRewards: Map<string, number>,
+    poolOperatorRewards: Map<string, number>,
+  ): Promise<void> {
+    try {
+      // Create bulkWrite operations for pools
+      const poolBulkOps = Array.from(poolRewards.entries()).map(
+        ([poolId, amount]) => ({
+          updateOne: {
+            filter: { _id: new Types.ObjectId(poolId) },
+            update: { $inc: { totalRewards: amount } },
+          },
+        }),
+      );
+
+      // Create bulkWrite operations for pool operators
+      const poolOperatorBulkOps = Array.from(poolOperatorRewards.entries()).map(
+        ([key, amount]) => {
+          const [operatorId, poolId] = key.split('_');
+          return {
+            updateOne: {
+              filter: {
+                operatorId: new Types.ObjectId(operatorId),
+                poolId: new Types.ObjectId(poolId),
+              },
+              update: { $inc: { totalRewards: amount } },
+            },
+          };
+        },
+      );
+
+      // Execute bulkWrite operations in parallel
+      if (poolBulkOps.length > 0) {
+        await this.poolModel.bulkWrite(poolBulkOps);
+        this.logger.log(
+          `✅ Updated total rewards for ${poolBulkOps.length} pools`,
+        );
+      }
+
+      if (poolOperatorBulkOps.length > 0) {
+        await this.poolOperatorModel.bulkWrite(poolOperatorBulkOps);
+        this.logger.log(
+          `✅ Updated total rewards for ${poolOperatorBulkOps.length} pool operators`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `❌ Error updating pool and operator rewards: ${error.message}`,
+        error.stack,
+      );
+      // Don't rethrow to avoid breaking the cycle processing
+    }
   }
 
   /**
