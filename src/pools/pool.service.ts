@@ -55,7 +55,7 @@ export class PoolService implements OnModuleInit {
     try {
       // ✅ Step 1: Fetch pool details + check if operator is already in a pool
       const [operatorInPool, pool] = await Promise.all([
-        this.poolOperatorModel.exists({ operatorId }),
+        this.poolOperatorModel.exists({ operator: operatorId }),
         this.poolModel.findOne({ _id: poolId }, { maxOperators: 1 }).lean(),
       ]);
 
@@ -72,7 +72,7 @@ export class PoolService implements OnModuleInit {
 
       // ✅ Step 2: Check if the pool is full
       const poolOperatorCount = await this.poolOperatorModel.countDocuments({
-        poolId,
+        pool: poolId,
       });
       if (poolOperatorCount >= pool.maxOperators) {
         return new ApiResponse<null>(400, `(joinPool) Pool is full.`);
@@ -83,8 +83,8 @@ export class PoolService implements OnModuleInit {
 
       // ✅ Step 3: Insert operator into the pool **atomically** (prevent race conditions)
       const result = await this.poolOperatorModel.updateOne(
-        { operatorId }, // Ensure operatorId is unique
-        { $setOnInsert: { operatorId, poolId } }, // Insert only if it doesn't exist
+        { operator: operatorId }, // Ensure operatorId is unique
+        { $setOnInsert: { operator: operatorId, pool: poolId } }, // Insert only if it doesn't exist
         { upsert: true }, // Insert if not exists
       );
 
@@ -461,8 +461,9 @@ export class PoolService implements OnModuleInit {
 
       // Start building the query
       let operatorsQuery = this.poolOperatorModel
-        .find({ poolId: new Types.ObjectId(poolId) })
-        .select(projection);
+        .find({ pool: new Types.ObjectId(poolId) })
+        .select(projection)
+        .populate('operator', 'username cumulativeEff effMultiplier');
 
       // Populate operator details if requested
       if (populate) {
@@ -478,7 +479,7 @@ export class PoolService implements OnModuleInit {
       const [totalCount, operators] = await Promise.all([
         // Count total documents for pagination
         this.poolOperatorModel.countDocuments({
-          poolId: new Types.ObjectId(poolId),
+          pool: new Types.ObjectId(poolId),
         }),
 
         // Get paginated results with optional projection and population
@@ -491,28 +492,11 @@ export class PoolService implements OnModuleInit {
       // Calculate total pages
       const totalPages = Math.ceil(totalCount / limit);
 
-      // Transform results to format populated operator data correctly
-      const transformedOperators = operators.map((poolOperator) => {
-        const result: any = { ...poolOperator };
-
-        // If populated, restructure to match the expected response format
-        if (
-          populate &&
-          poolOperator.operatorId &&
-          typeof poolOperator.operatorId === 'object'
-        ) {
-          result.operator = poolOperator.operatorId;
-          delete result.operatorId;
-        }
-
-        return result;
-      });
-
       return new ApiResponse(
         200,
         `(getPoolOperators) Successfully fetched operators for pool ${poolId}`,
         {
-          operators: transformedOperators,
+          operators,
           total: totalCount,
           page,
           limit,

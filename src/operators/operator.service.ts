@@ -139,7 +139,7 @@ export class OperatorService {
 
       // Fetch operator's pool ID if in a pool
       const poolId = await this.poolOperatorModel
-        .findOne({ operatorId }, { poolId: 1 })
+        .findOne({ operator: operatorId }, { pool: 1 })
         .lean();
 
       return new ApiResponse<{
@@ -151,7 +151,7 @@ export class OperatorService {
         operator,
         wallets,
         drills,
-        poolId: poolId?.poolId,
+        poolId: poolId?.pool,
       });
     } catch (err: any) {
       throw new Error(

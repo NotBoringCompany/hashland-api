@@ -110,7 +110,7 @@ export class LeaderboardService {
 
       // Fetch operator IDs from the pool
       const poolOperatorIds = await this.poolOperatorModel
-        .find({ poolId })
+        .find({ pool: poolId })
         .distinct('operatorId')
         .lean();
 

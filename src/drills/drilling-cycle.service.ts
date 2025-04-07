@@ -463,7 +463,7 @@ export class DrillingCycleService {
     } else {
       // ✅ Step 5: Check If Extractor is in a Pool
       const poolOperator = await this.poolOperatorModel
-        .findOne({ operatorId: extractorOperatorId })
+        .findOne({ operator: extractorOperatorId })
         .select('poolId')
         .lean();
       const isSoloOperator = !poolOperator;
@@ -495,7 +495,7 @@ export class DrillingCycleService {
       } else {
         // 🟢 **POOL OPERATOR REWARD LOGIC**
         const pool = await this.poolModel
-          .findById(poolOperator.poolId)
+          .findById(poolOperator.pool)
           .select('leaderId rewardSystem')
           .lean();
         if (!pool) {
@@ -512,15 +512,15 @@ export class DrillingCycleService {
         const activePoolOperators = await this.poolOperatorModel
           .find(
             {
-              poolId: poolOperator.poolId,
-              operatorId: { $in: allActiveOperatorIds },
+              pool: poolOperator.pool,
+              operator: { $in: allActiveOperatorIds },
             },
-            { operatorId: 1 },
+            { operator: 1 },
           )
           .lean();
 
         const activePoolOperatorIds = new Set(
-          activePoolOperators.map((op) => op.operatorId.toString()),
+          activePoolOperators.map((op) => op.operator.toString()),
         );
 
         // ✅ Step 7: Compute Rewards Based on Weighted Eff (Only for Active Pool Operators)
@@ -547,12 +547,12 @@ export class DrillingCycleService {
 
         // Update total pool reward
         totalPoolReward = extractorReward + leaderReward + activePoolReward;
-        poolRewards.set(poolOperator.poolId.toString(), totalPoolReward);
+        poolRewards.set(poolOperator.pool.toString(), totalPoolReward);
 
         // Track if extractor is in the same pool and add their reward
         if (activePoolOperatorIds.has(extractorOperatorId.toString())) {
           poolOperatorRewards.set(
-            `${extractorOperatorId.toString()}_${poolOperator.poolId.toString()}`,
+            `${extractorOperatorId.toString()}_${poolOperator.pool.toString()}`,
             extractorReward,
           );
         }
@@ -564,10 +564,10 @@ export class DrillingCycleService {
         ) {
           const existingReward =
             poolOperatorRewards.get(
-              `${pool.leaderId.toString()}_${poolOperator.poolId.toString()}`,
+              `${pool.leaderId.toString()}_${poolOperator.pool.toString()}`,
             ) || 0;
           poolOperatorRewards.set(
-            `${pool.leaderId.toString()}_${poolOperator.poolId.toString()}`,
+            `${pool.leaderId.toString()}_${poolOperator.pool.toString()}`,
             existingReward + leaderReward,
           );
         }
@@ -578,7 +578,7 @@ export class DrillingCycleService {
             (operator.weightedEff / totalPoolEff) * activePoolReward;
 
           // Track individual pool operator rewards
-          const poolOpKey = `${operator.operatorId.toString()}_${poolOperator.poolId.toString()}`;
+          const poolOpKey = `${operator.operatorId.toString()}_${poolOperator.pool.toString()}`;
           const existingReward = poolOperatorRewards.get(poolOpKey) || 0;
           poolOperatorRewards.set(poolOpKey, existingReward + opReward);
 

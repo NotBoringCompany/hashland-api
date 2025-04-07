@@ -38,7 +38,7 @@ export class PoolOperator extends Document {
     unique: true,
     index: true,
   })
-  operatorId: Types.ObjectId;
+  operator: Types.ObjectId;
 
   /**
    * The database ID of the pool the operator belongs to.
@@ -48,7 +48,7 @@ export class PoolOperator extends Document {
     example: '507f1f77bcf86cd799439012',
   })
   @Prop({ type: Types.ObjectId, required: true, ref: 'Pools', index: true })
-  poolId: Types.ObjectId;
+  pool: Types.ObjectId;
 
   /**
    * The timestamp when the pool operator was created
