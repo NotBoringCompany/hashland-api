@@ -313,51 +313,6 @@ export class OperatorWalletService {
     }
   }
 
-  // /**
-  //  * Fetches the latest TON/USD exchange rate from a cached Redis value.
-  //  */
-  // async fetchTonToUsdRate(): Promise<number> {
-  //   try {
-  //     const cacheKey = 'ton-usd-rate';
-  //     const lockKey = 'ton-usd-rate:lock';
-  //     const expiryInSeconds = 300;
-
-  //     // Check cache first
-  //     const cachedRate = await this.redisService.get(cacheKey);
-  //     if (cachedRate) return parseFloat(cachedRate);
-
-  //     // Check if another request is already fetching the price
-  //     const lock = await this.redisService.get(lockKey);
-  //     if (lock) {
-  //       // Wait and retry (polling mechanism, can be optimized further)
-  //       await new Promise((resolve) => setTimeout(resolve, 1000));
-  //       return this.fetchTonToUsdRate(); // Retry fetching
-  //     }
-
-  //     // Set lock to prevent duplicate API calls
-  //     await this.redisService.set(lockKey, '1', 5); // Lock expires in 5 seconds
-
-  //     // Fetch from API if cache is expired
-  //     const response = await axios.get(this.tonPriceApi);
-  //     const tonToUsdRate = response.data?.price
-  //       ? parseFloat(response.data.price)
-  //       : 10;
-
-  //     // Store new value and remove the lock
-  //     await this.redisService.set(
-  //       cacheKey,
-  //       tonToUsdRate.toString(),
-  //       expiryInSeconds,
-  //     );
-  //     await this.redisService.set(lockKey, '', 1); // Unlock
-
-  //     return tonToUsdRate;
-  //   } catch (error) {
-  //     this.logger.error(`❌ Error fetching TON price: ${error.message}`);
-  //     return 1;
-  //   }
-  // }
-
   /**
    * Connect a wallet to an operator
    * @param operatorId - The operator's ID
@@ -375,24 +330,52 @@ export class OperatorWalletService {
         throw new NotFoundException('(connectWallet) Operator not found');
       }
 
-      // Check if operator already has a connected wallet in the same chain
-      const existingWalletInChain = await this.operatorWalletModel.exists({
+      // Allow up to 2 connected wallets per chain.
+      // We will check if the operator already has one or more wallets in the same chain.
+      const existingWalletsInChain = await this.operatorWalletModel.find({
         operatorId,
         chain: walletData.chain,
       });
 
-      if (!!existingWalletInChain) {
+      if (existingWalletsInChain.length >= 2) {
         throw new UnauthorizedException(
-          '(connectWallet) Operator already has a connected wallet in this chain',
+          '(connectWallet) Operator already has maximum connected wallets in this chain',
         );
       }
 
-      // Check if wallet is already connected to this operator
+      // If the operator is connecting a second wallet.
+      // If yes, we need to set a minimum asset equity check (in USD) to allow them to connect their wallet.
+      if (existingWalletsInChain.length === 1) {
+        const minAssetEquity = 100;
+
+        const secondWalletUSDBalance = await this.fetchTotalBalanceForWallets([
+          {
+            address: walletData.address,
+            chain: walletData.chain as AllowedChain, // Explicitly cast to AllowedChain
+          },
+        ]);
+
+        if (secondWalletUSDBalance < minAssetEquity) {
+          throw new UnauthorizedException(
+            `(connectWallet) Operator must have at least $${minAssetEquity} in their second wallet to connect it.`,
+          );
+        }
+      }
+
+      // Check if wallet is already connected to this operator for this chain
       const existingWallet = await this.operatorWalletModel.findOne({
-        operatorId,
         address: walletData.address,
         chain: walletData.chain,
       });
+
+      if (
+        existingWallet &&
+        existingWallet.operatorId.toString() !== operatorId.toString()
+      ) {
+        throw new UnauthorizedException(
+          '(connectWallet) Wallet already connected to another operator',
+        );
+      }
 
       // Validate wallet ownership first, before making any updates
       let isValid = false;
