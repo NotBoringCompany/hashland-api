@@ -468,7 +468,8 @@ export class PoolService implements OnModuleInit {
       if (populate) {
         operatorsQuery = operatorsQuery.populate({
           path: 'operator',
-          select: 'username cumulativeEff effMultiplier',
+          select:
+            'username cumulativeEff effMultiplier totalEarnedHASH assetEquity',
           model: 'Operator',
           options: { lean: true },
         });
