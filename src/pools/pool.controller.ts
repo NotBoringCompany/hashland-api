@@ -135,6 +135,7 @@ export class PoolController {
       query.page || 1,
       query.limit || 20,
       projectionObj,
+      query.populate !== false, // Default to true if not specified
     );
   }
 }

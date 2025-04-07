@@ -422,6 +422,7 @@ export class PoolService implements OnModuleInit {
     page: number = 1,
     limit: number = 20,
     projection?: string | Record<string, 1 | 0>,
+    populate: boolean = true,
   ): Promise<
     ApiResponse<{
       operators: Partial<PoolOperator[]>;
@@ -448,12 +449,29 @@ export class PoolService implements OnModuleInit {
       }
 
       // Check if pool exists
-      const poolExists = await this.poolModel.exists({ _id: poolId });
+      const poolExists = await this.poolModel.exists({
+        _id: new Types.ObjectId(poolId),
+      });
       if (!poolExists) {
         return new ApiResponse(
           404,
           `(getPoolOperators) Pool with ID ${poolId} not found`,
         );
+      }
+
+      // Start building the query
+      let operatorsQuery = this.poolOperatorModel
+        .find({ poolId: new Types.ObjectId(poolId) })
+        .select(projection);
+
+      // Populate operator details if requested
+      if (populate) {
+        operatorsQuery = operatorsQuery.populate({
+          path: 'operatorId',
+          select: 'username cumulativeEff effMultiplier',
+          model: 'Operators',
+          options: { lean: true },
+        });
       }
 
       // Execute count and find in parallel for efficiency
@@ -463,10 +481,8 @@ export class PoolService implements OnModuleInit {
           poolId: new Types.ObjectId(poolId),
         }),
 
-        // Get paginated results with optional projection
-        this.poolOperatorModel
-          .find({ poolId: new Types.ObjectId(poolId) })
-          .select(projection)
+        // Get paginated results with optional projection and population
+        operatorsQuery
           .skip((page - 1) * limit)
           .limit(limit)
           .lean(),
@@ -475,11 +491,28 @@ export class PoolService implements OnModuleInit {
       // Calculate total pages
       const totalPages = Math.ceil(totalCount / limit);
 
+      // Transform results to format populated operator data correctly
+      const transformedOperators = operators.map((poolOperator) => {
+        const result: any = { ...poolOperator };
+
+        // If populated, restructure to match the expected response format
+        if (
+          populate &&
+          poolOperator.operatorId &&
+          typeof poolOperator.operatorId === 'object'
+        ) {
+          result.operator = poolOperator.operatorId;
+          delete result.operatorId;
+        }
+
+        return result;
+      });
+
       return new ApiResponse(
         200,
         `(getPoolOperators) Successfully fetched operators for pool ${poolId}`,
         {
-          operators,
+          operators: transformedOperators,
           total: totalCount,
           page,
           limit,
