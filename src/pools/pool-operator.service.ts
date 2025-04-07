@@ -4,6 +4,7 @@ import { PoolOperator } from './schemas/pool-operator.schema';
 import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { PoolService } from './pool.service';
 
 @Injectable()
 export class PoolOperatorService {
@@ -11,6 +12,7 @@ export class PoolOperatorService {
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private readonly poolModel: Model<Pool>,
+    private readonly poolService: PoolService,
   ) {}
 
   /**
@@ -25,7 +27,7 @@ export class PoolOperatorService {
     try {
       // ✅ Step 1: Fetch pool details + check if operator is already in a pool
       const [operatorInPool, pool] = await Promise.all([
-        this.poolOperatorModel.exists({ operatorId }),
+        this.poolOperatorModel.exists({ operator: operatorId }),
         this.poolModel.findOne({ _id: poolId }, { maxOperators: 1 }).lean(),
       ]);
 
@@ -45,7 +47,7 @@ export class PoolOperatorService {
 
       // ✅ Step 2: Check if the pool is full
       const poolOperatorCount = await this.poolOperatorModel.countDocuments({
-        poolId,
+        pool: poolId,
       });
       if (poolOperatorCount >= pool.maxOperators) {
         return new ApiResponse<null>(400, `(joinPool) Pool is full.`);
@@ -56,8 +58,8 @@ export class PoolOperatorService {
 
       // ✅ Step 3: Insert operator into the pool **atomically** (prevent race conditions)
       const result = await this.poolOperatorModel.updateOne(
-        { operatorId }, // Ensure operatorId is unique
-        { $setOnInsert: { operatorId, poolId } }, // Insert only if it doesn't exist
+        { operator: operatorId }, // Ensure operatorId is unique
+        { $setOnInsert: { operator: operatorId, pool: poolId } }, // Insert only if it doesn't exist
         { upsert: true }, // Insert if not exists
       );
 
@@ -65,6 +67,16 @@ export class PoolOperatorService {
         return new ApiResponse<null>(
           400,
           `(createPoolOperator) Operator already joined this pool.`,
+        );
+      }
+
+      // ✅ Step 4: Update pool's estimated efficiency
+      try {
+        await this.poolService.updatePoolEstimatedEff(poolId);
+      } catch (effError) {
+        // Log but don't fail the operation if efficiency update fails
+        console.error(
+          `Error updating pool efficiency after join: ${effError.message}`,
         );
       }
 
@@ -93,8 +105,33 @@ export class PoolOperatorService {
     try {
       // TO DO: Pool prerequisites check (e.g. if tgChannelId exists, the user needs to leave the channel first).
 
-      // NOTE: Because operators can only be in one pool at a time, we can just delete the entry if found.
-      await this.poolOperatorModel.findOneAndDelete({ operatorId });
+      // Get pool ID before removing the operator (needed for updating efficiency)
+      const poolOperator = await this.poolOperatorModel.findOne(
+        { operator: operatorId },
+        { pool: 1 },
+      );
+
+      if (!poolOperator) {
+        return new ApiResponse<null>(
+          404,
+          `(removeOperatorFromPool) Operator is not in any pool.`,
+        );
+      }
+
+      const poolId = poolOperator.pool;
+
+      // Remove operator from pool
+      await this.poolOperatorModel.findOneAndDelete({ operator: operatorId });
+
+      // Update pool's estimated efficiency
+      try {
+        await this.poolService.updatePoolEstimatedEff(poolId);
+      } catch (effError) {
+        // Log but don't fail the operation if efficiency update fails
+        console.error(
+          `Error updating pool efficiency after leave: ${effError.message}`,
+        );
+      }
 
       return new ApiResponse<null>(
         200,

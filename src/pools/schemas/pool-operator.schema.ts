@@ -38,7 +38,7 @@ export class PoolOperator extends Document {
     unique: true,
     index: true,
   })
-  operatorId: Types.ObjectId;
+  operator: Types.ObjectId;
 
   /**
    * The database ID of the pool the operator belongs to.
@@ -48,7 +48,7 @@ export class PoolOperator extends Document {
     example: '507f1f77bcf86cd799439012',
   })
   @Prop({ type: Types.ObjectId, required: true, ref: 'Pools', index: true })
-  poolId: Types.ObjectId;
+  pool: Types.ObjectId;
 
   /**
    * The timestamp when the pool operator was created
@@ -67,6 +67,16 @@ export class PoolOperator extends Document {
     example: '2024-03-19T12:00:00.000Z',
   })
   updatedAt: Date;
+
+  /**
+   * The total HASH rewards acquired by this operator from the pool
+   */
+  @ApiProperty({
+    description: 'Total HASH rewards acquired by this operator from the pool',
+    example: 2345.67,
+  })
+  @Prop({ type: Number, default: 0 })
+  totalRewards: number;
 }
 
 /**

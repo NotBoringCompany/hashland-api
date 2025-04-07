@@ -139,7 +139,7 @@ export class OperatorService {
 
       // Fetch operator's pool ID if in a pool
       const poolId = await this.poolOperatorModel
-        .findOne({ operatorId }, { poolId: 1 })
+        .findOne({ operator: operatorId }, { pool: 1 })
         .lean();
 
       return new ApiResponse<{
@@ -151,7 +151,7 @@ export class OperatorService {
         operator,
         wallets,
         drills,
-        poolId: poolId?.poolId,
+        poolId: poolId?.pool,
       });
     } catch (err: any) {
       throw new Error(
@@ -203,6 +203,47 @@ export class OperatorService {
       this.logger.log(
         `✅ (updateCumulativeEff) Processed batch ${i / batchSize + 1}/${Math.ceil(bulkUpdates.length / batchSize)}`,
       );
+    }
+
+    // ✅ Step 4: Get operators that are in pools
+    const operatorIdsInPools = await this.poolOperatorModel.aggregate([
+      {
+        $group: {
+          _id: '$poolId',
+          operatorIds: { $push: '$operatorId' },
+        },
+      },
+    ]);
+
+    // ✅ Step 5: If there are operators in pools, update pool estimated efficiency
+    if (operatorIdsInPools.length > 0) {
+      this.logger.log(
+        `Updating estimated efficiency for ${operatorIdsInPools.length} pools...`,
+      );
+
+      try {
+        // Process in batches to avoid overloading the system
+        const poolBatchSize = 5;
+        for (let i = 0; i < operatorIdsInPools.length; i += poolBatchSize) {
+          const batchPromises = operatorIdsInPools
+            .slice(i, i + poolBatchSize)
+            .map((pool) =>
+              this.poolService.updatePoolEstimatedEff(pool._id, true),
+            );
+
+          await Promise.all(batchPromises);
+
+          this.logger.log(
+            `Processed pool estimatedEff update batch ${Math.floor(i / poolBatchSize) + 1}/${Math.ceil(operatorIdsInPools.length / poolBatchSize)}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error updating pool estimated efficiency: ${error.message}`,
+          error.stack,
+        );
+        // Continue execution as this is a non-critical operation
+      }
     }
 
     const endTime = performance.now();
@@ -316,41 +357,70 @@ export class OperatorService {
   }
 
   /**
-   * Finds or creates an operator using Telegram authentication data.
+   * Finds an existing operator by Telegram ID or creates a new one if none exists.
+   * The operator will be associated with a random public pool and granted a basic drill.
    *
    * Also assigns the operator to a random public pool if still applicable.
-   * @param authData - Telegram authentication data
+   * @param authData - Authentication data (Telegram or Wallet)
    * @returns The operator's data (or null if not found)
    */
   async findOrCreateOperator(
     authData: {
       id: string;
       username?: string;
+      walletAddress?: string;
+      walletChain?: string;
       // Optional projection
     },
     projection?: Record<string, number>,
   ): Promise<Operator | null> {
-    this.logger.log(
-      `🔍 (findOrCreateOperator) Searching for operator with Telegram ID: ${authData.id}`,
-    );
-
-    let operator = await this.operatorModel.findOneAndUpdate(
-      { 'tgProfile.tgId': authData.id },
-      authData.username
-        ? { $set: { 'tgProfile.tgUsername': authData.username } }
-        : {},
-      { new: true, projection },
-    );
-
-    if (operator) {
+    if (authData.walletAddress) {
+      // This is a wallet-based authentication
       this.logger.log(
-        `✅ (findOrCreateOperator) Found existing operator: ${operator.username}`,
+        `🔍 (findOrCreateOperator) Searching for operator with wallet address: ${authData.walletAddress}`,
       );
-      return operator;
+
+      // Try to find by wallet profile first
+      const operator = await this.operatorModel.findOne(
+        { 'walletProfile.address': authData.walletAddress },
+        projection,
+      );
+
+      if (operator) {
+        this.logger.log(
+          `✅ (findOrCreateOperator) Found existing operator by wallet: ${operator.username}`,
+        );
+        return operator;
+      }
+    } else {
+      // This is a Telegram-based authentication
+      this.logger.log(
+        `🔍 (findOrCreateOperator) Searching for operator with Telegram ID: ${authData.id}`,
+      );
+
+      const operator = await this.operatorModel.findOneAndUpdate(
+        { 'tgProfile.tgId': authData.id },
+        authData.username
+          ? { $set: { 'tgProfile.tgUsername': authData.username } }
+          : {},
+        { new: true, projection },
+      );
+
+      if (operator) {
+        this.logger.log(
+          `✅ (findOrCreateOperator) Found existing operator: ${operator.username}`,
+        );
+        return operator;
+      }
     }
 
     // If no operator exists, create a new one.
-    const baseUsername = authData.username || `tg_${authData.id}`;
+    const baseUsername =
+      authData.username ||
+      (authData.walletAddress
+        ? `wallet_${authData.walletAddress.substring(0, 8).toLowerCase()}`
+        : `tg_${authData.id}`);
+
     let username = baseUsername;
     let counter = 1;
 
@@ -359,19 +429,32 @@ export class OperatorService {
       counter++;
     }
 
-    operator = await this.operatorModel.create({
+    const operatorData: any = {
       username,
       assetEquity: 0,
-      cumulativeEff: 0,
+      cumulativeEff: GAME_CONSTANTS.DRILLS.BASIC_DRILL_STARTING_ACTUAL_EFF,
       effMultiplier: 1,
       maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       totalEarnedHASH: 0,
-      tgProfile: {
+    };
+
+    // Add the appropriate profile based on authentication method
+    if (authData.walletAddress && authData.walletChain) {
+      operatorData.walletProfile = {
+        address: authData.walletAddress,
+        chain: authData.walletChain,
+      };
+      operatorData.tgProfile = null;
+    } else {
+      operatorData.tgProfile = {
         tgId: authData.id,
         tgUsername: authData.username || `user_${authData.id}`,
-      },
-    });
+      };
+      operatorData.walletProfile = null;
+    }
+
+    const operator = await this.operatorModel.create(operatorData);
 
     // Pick a random pool to join
     const poolId = this.poolService.fetchRandomPublicPoolId();

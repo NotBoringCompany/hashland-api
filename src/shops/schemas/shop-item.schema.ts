@@ -68,6 +68,10 @@ export class ShopItem extends Document {
   })
   @Prop({
     required: true,
+    type: {
+      ton: { type: Number, required: true },
+      bera: { type: Number, required: true },
+    },
     default: {
       ton: 0,
       bera: 0,

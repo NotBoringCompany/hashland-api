@@ -51,6 +51,11 @@ export class ShopPurchaseService {
   ): Promise<
     ApiResponse<{
       shopPurchaseId: string;
+      operatorId: string;
+      itemPurchased: string;
+      totalCost: number;
+      currency: string;
+      createdAt: Date;
     } | null>
   > {
     try {
@@ -125,11 +130,16 @@ export class ShopPurchaseService {
         purchaseAllowedResponse.data.shopItemEffects,
       );
 
-      return new ApiResponse<{ shopPurchaseId: string }>(
+      return new ApiResponse(
         200,
         `(purchaseItem) Item purchased successfully.`,
         {
           shopPurchaseId: String(shopPurchase._id),
+          operatorId: String(shopPurchase.operatorId),
+          itemPurchased: shopPurchase.itemPurchased,
+          totalCost: shopPurchase.totalCost,
+          currency: shopPurchase.currency,
+          createdAt: shopPurchase.createdAt,
         },
       );
     } catch (err: any) {
@@ -280,7 +290,7 @@ export class ShopPurchaseService {
       const shopItem = await this.shopItemModel
         .findOne(query, {
           item: 1,
-          ...(showShopItemEffects && { itemEffect: 1 }),
+          ...(showShopItemEffects && { itemEffects: 1 }),
           ...(showShopItemPrice && { purchaseCost: 1 }),
         })
         .lean();

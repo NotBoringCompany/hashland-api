@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
+import { ApiResponse } from '../response.dto';
 
 export class PurchaseItemDto {
   @ApiProperty({
@@ -55,13 +56,58 @@ export class PurchaseItemDto {
   txHash: string;
 }
 
-export class PurchaseItemResponseDto {
+/**
+ * Represents the data structure for a shop purchase response
+ */
+export class ShopPurchaseResponseDto {
   @ApiProperty({
     description: 'The database ID of the shop purchase',
     example: '507f1f77bcf86cd799439013',
   })
   shopPurchaseId: string;
+
+  @ApiProperty({
+    description: 'The database ID of the operator who made the purchase',
+    example: '507f1f77bcf86cd799439011',
+    required: false,
+  })
+  operatorId?: string;
+
+  @ApiProperty({
+    description: 'The name of the item purchased',
+    example: 'REPLENISH_FUEL',
+    required: false,
+  })
+  itemPurchased?: string;
+
+  @ApiProperty({
+    description: 'The cost of the purchase',
+    example: 0.95,
+    required: false,
+  })
+  totalCost?: number;
+
+  @ApiProperty({
+    description: 'The currency used for the purchase',
+    example: 'TON',
+    required: false,
+  })
+  currency?: string;
+
+  @ApiProperty({
+    description: 'When the purchase was made',
+    example: '2023-07-15T12:34:56.789Z',
+    required: false,
+  })
+  createdAt?: Date;
 }
+
+/**
+ * API Response for the purchase item endpoint
+ */
+export class PurchaseItemResponseDto extends ApiResponse.withType(
+  ShopPurchaseResponseDto,
+) {}
 
 export class CheckPurchaseAllowedDto {
   @ApiProperty({
@@ -104,7 +150,10 @@ export class CheckPurchaseAllowedDto {
   showShopItemPrice?: boolean;
 }
 
-export class CheckPurchaseAllowedResponseDto {
+/**
+ * Represents the data structure for the check purchase allowed response
+ */
+export class CheckPurchaseAllowedDataDto {
   @ApiProperty({
     description: 'Whether the purchase is allowed',
     example: true,
@@ -139,3 +188,10 @@ export class CheckPurchaseAllowedResponseDto {
     bera: number;
   };
 }
+
+/**
+ * API Response for the check purchase allowed endpoint
+ */
+export class CheckPurchaseAllowedResponseDto extends ApiResponse.withType(
+  CheckPurchaseAllowedDataDto,
+) {}

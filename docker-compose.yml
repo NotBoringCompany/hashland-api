@@ -16,6 +16,7 @@ services:
       - PORT=8080
       - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongo:27017/main?authSource=admin
       - REDIS_URI=redis://redis:6379
+      - REDIS_PRIMARY_ONLY=true
       - DATABASE_NAME=main
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION=24h
@@ -49,6 +50,7 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    command: redis-server --appendonly yes --replica-read-only no
 
 volumes:
   mongo-data:

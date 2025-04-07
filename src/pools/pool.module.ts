@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PoolService } from './pool.service';
 import { Pool, PoolSchema } from './schemas/pool.schema';
-import { PoolController } from './pool.controller.';
+import { PoolController } from './pool.controller';
 import {
   PoolOperator,
   PoolOperatorSchema,

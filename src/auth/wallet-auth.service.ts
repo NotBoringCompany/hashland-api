@@ -73,23 +73,46 @@ export class WalletAuthService {
       }
 
       // Find existing operator wallet
-      const wallet = await this.operatorWalletModel.findOne({
+      let wallet = await this.operatorWalletModel.findOne({
         address: walletLoginData.address,
         chain: walletLoginData.chain,
       });
 
-      if (!wallet) {
-        this.logger.warn(`Wallet not found: ${walletLoginData.address}`);
-        throw new UnauthorizedException('Wallet not linked to any operator');
-      }
+      let operator: Operator | null;
 
-      // Find the operator
-      const operator = await this.operatorModel.findById(wallet.operatorId);
-      if (!operator) {
-        this.logger.warn(
-          `Operator not found for wallet: ${walletLoginData.address}`,
+      if (!wallet) {
+        this.logger.log(
+          `Wallet not found, creating new operator for: ${walletLoginData.address}`,
         );
-        throw new UnauthorizedException('Operator not found');
+
+        // Generate a username based on the wallet address
+        const username = `user_${walletLoginData.address.substring(0, 8).toLowerCase()}`;
+
+        // Create a new operator
+        operator = await this.operatorService.findOrCreateOperator({
+          id: walletLoginData.address.substring(0, 8),
+          username,
+          walletAddress: walletLoginData.address,
+          walletChain: walletLoginData.chain,
+        });
+
+        // Create wallet record
+        wallet = await this.operatorWalletModel.create({
+          operatorId: operator._id,
+          address: walletLoginData.address,
+          chain: walletLoginData.chain,
+          signature: walletLoginData.signature,
+          signatureMessage: walletLoginData.message,
+        });
+      } else {
+        // Find the operator
+        operator = await this.operatorModel.findById(wallet.operatorId);
+        if (!operator) {
+          this.logger.warn(
+            `Operator not found for wallet: ${walletLoginData.address}`,
+          );
+          throw new UnauthorizedException('Operator not found');
+        }
       }
 
       // Update asset equity
