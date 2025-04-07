@@ -128,7 +128,7 @@ export class DrillService {
       { $match: { extractorAllowed: true } }, // ✅ Filter drills that are allowed
       {
         $lookup: {
-          from: 'operators', // ✅ Join with the Operator collection
+          from: 'Operators', // ✅ Join with the Operator collection
           localField: 'operatorId',
           foreignField: '_id',
           as: 'operatorData',
