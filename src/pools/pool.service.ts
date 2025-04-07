@@ -413,4 +413,86 @@ export class PoolService implements OnModuleInit {
       );
     }
   }
+
+  /**
+   * Get operators for a specific pool with pagination.
+   */
+  async getPoolOperators(
+    poolId: string,
+    page: number = 1,
+    limit: number = 20,
+    projection?: string | Record<string, 1 | 0>,
+  ): Promise<
+    ApiResponse<{
+      operators: Partial<PoolOperator[]>;
+      total: number;
+      page: number;
+      limit: number;
+      pages: number;
+    }>
+  > {
+    try {
+      // Validate pagination parameters
+      if (page < 1) {
+        return new ApiResponse(
+          400,
+          `(getPoolOperators) Invalid page number: ${page}`,
+        );
+      }
+
+      if (limit < 1 || limit > 100) {
+        return new ApiResponse(
+          400,
+          `(getPoolOperators) Invalid limit: ${limit}`,
+        );
+      }
+
+      // Check if pool exists
+      const poolExists = await this.poolModel.exists({ _id: poolId });
+      if (!poolExists) {
+        return new ApiResponse(
+          404,
+          `(getPoolOperators) Pool with ID ${poolId} not found`,
+        );
+      }
+
+      // Execute count and find in parallel for efficiency
+      const [totalCount, operators] = await Promise.all([
+        // Count total documents for pagination
+        this.poolOperatorModel.countDocuments({
+          poolId: new Types.ObjectId(poolId),
+        }),
+
+        // Get paginated results with optional projection
+        this.poolOperatorModel
+          .find({ poolId: new Types.ObjectId(poolId) })
+          .select(projection)
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .lean(),
+      ]);
+
+      // Calculate total pages
+      const totalPages = Math.ceil(totalCount / limit);
+
+      return new ApiResponse(
+        200,
+        `(getPoolOperators) Successfully fetched operators for pool ${poolId}`,
+        {
+          operators,
+          total: totalCount,
+          page,
+          limit,
+          pages: totalPages,
+        },
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse(
+          500,
+          `(getPoolOperators) Error fetching pool operators: ${err.message}`,
+        ),
+      );
+    }
+  }
 }

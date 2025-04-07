@@ -10,6 +10,11 @@ import { PoolService } from './pool.service';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse as AppApiResponse } from 'src/common/dto/response.dto';
 import { GetAllPoolsResponseDto } from 'src/common/dto/pools/pool.dto';
+import {
+  GetPoolOperatorsQueryDto,
+  GetPoolOperatorsResponseDto,
+} from 'src/common/dto/pools/pool-operator.dto';
+import { PoolOperator } from './schemas/pool-operator.schema';
 
 @ApiTags('Pools')
 @Controller('pools') // Base route: `/pools`
@@ -80,5 +85,56 @@ export class PoolController {
       : undefined;
 
     return this.poolService.getPoolById(id, projectionObj);
+  }
+
+  @ApiOperation({
+    summary: 'Get operators for a specific pool',
+    description:
+      'Fetches a paginated list of operators that have joined a specific pool',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The ID of the pool',
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved pool operators',
+    type: GetPoolOperatorsResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid pagination parameters',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Pool not found',
+  })
+  @Get(':id/operators')
+  async getPoolOperators(
+    @Param('id') id: string,
+    @Query() query: GetPoolOperatorsQueryDto,
+  ): Promise<
+    AppApiResponse<{
+      operators: Partial<PoolOperator[]>;
+      total: number;
+      page: number;
+      limit: number;
+      pages: number;
+    }>
+  > {
+    // Convert query string to Mongoose projection object if provided
+    const projectionObj = query.projection
+      ? query.projection
+          .split(',')
+          .reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
+      : undefined;
+
+    return this.poolService.getPoolOperators(
+      id,
+      query.page || 1,
+      query.limit || 20,
+      projectionObj,
+    );
   }
 }
