@@ -132,6 +132,28 @@ export class Pool extends Document {
     example: '2024-03-19T12:00:00.000Z',
   })
   updatedAt: Date;
+
+  /**
+   * The estimated total efficiency (Eff) of all operators in this pool.
+   * This is calculated by summing the weightedEff (cumulativeEff * effMultiplier) of all operators in the pool.
+   */
+  @ApiProperty({
+    description: 'The estimated total efficiency of all operators in this pool',
+    example: 125000,
+  })
+  @Prop({ type: Number, default: 0 })
+  estimatedEff: number;
+
+  /**
+   * The timestamp when the estimated efficiency was last updated.
+   * Updated periodically (every 6 hours) to avoid frequent recalculations.
+   */
+  @ApiProperty({
+    description: 'Timestamp when the estimated efficiency was last updated',
+    example: '2024-03-19T12:00:00.000Z',
+  })
+  @Prop({ type: Date, default: null })
+  lastEffUpdate: Date | null;
 }
 
 export const PoolSchema = SchemaFactory.createForClass(Pool);

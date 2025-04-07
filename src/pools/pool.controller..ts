@@ -1,5 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PoolService } from './pool.service';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse as AppApiResponse } from 'src/common/dto/response.dto';
@@ -38,5 +44,41 @@ export class PoolController {
       : undefined;
 
     return this.poolService.getAllPools(projectionObj);
+  }
+
+  @ApiOperation({
+    summary: 'Get a pool by ID',
+    description:
+      'Fetches a specific pool by its ID with optional field projection',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The ID of the pool to fetch',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'projection',
+    description: 'Comma-separated list of fields to include in the response',
+    required: false,
+    type: String,
+    example: 'name,maxOperators',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved pool',
+  })
+  @Get(':id')
+  async getPoolById(
+    @Param('id') id: string,
+    @Query('projection') projection?: string,
+  ): Promise<AppApiResponse<{ pool: Pool | null }>> {
+    // Convert query string to Mongoose projection object
+    const projectionObj = projection
+      ? projection
+          .split(',')
+          .reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
+      : undefined;
+
+    return this.poolService.getPoolById(id, projectionObj);
   }
 }

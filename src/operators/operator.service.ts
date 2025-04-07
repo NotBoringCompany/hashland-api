@@ -205,6 +205,47 @@ export class OperatorService {
       );
     }
 
+    // ✅ Step 4: Get operators that are in pools
+    const operatorIdsInPools = await this.poolOperatorModel.aggregate([
+      {
+        $group: {
+          _id: '$poolId',
+          operatorIds: { $push: '$operatorId' },
+        },
+      },
+    ]);
+
+    // ✅ Step 5: If there are operators in pools, update pool estimated efficiency
+    if (operatorIdsInPools.length > 0) {
+      this.logger.log(
+        `Updating estimated efficiency for ${operatorIdsInPools.length} pools...`,
+      );
+
+      try {
+        // Process in batches to avoid overloading the system
+        const poolBatchSize = 5;
+        for (let i = 0; i < operatorIdsInPools.length; i += poolBatchSize) {
+          const batchPromises = operatorIdsInPools
+            .slice(i, i + poolBatchSize)
+            .map((pool) =>
+              this.poolService.updatePoolEstimatedEff(pool._id, true),
+            );
+
+          await Promise.all(batchPromises);
+
+          this.logger.log(
+            `Processed pool estimatedEff update batch ${Math.floor(i / poolBatchSize) + 1}/${Math.ceil(operatorIdsInPools.length / poolBatchSize)}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error updating pool estimated efficiency: ${error.message}`,
+          error.stack,
+        );
+        // Continue execution as this is a non-critical operation
+      }
+    }
+
     const endTime = performance.now();
     this.logger.log(
       `✅ (updateCumulativeEff) Updated cumulativeEff for ${operatorEffData.length} operators in ${(endTime - startTime).toFixed(2)}ms.`,

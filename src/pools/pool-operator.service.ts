@@ -4,6 +4,7 @@ import { PoolOperator } from './schemas/pool-operator.schema';
 import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { PoolService } from './pool.service';
 
 @Injectable()
 export class PoolOperatorService {
@@ -11,6 +12,7 @@ export class PoolOperatorService {
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private readonly poolModel: Model<Pool>,
+    private readonly poolService: PoolService,
   ) {}
 
   /**
@@ -68,6 +70,16 @@ export class PoolOperatorService {
         );
       }
 
+      // ✅ Step 4: Update pool's estimated efficiency
+      try {
+        await this.poolService.updatePoolEstimatedEff(poolId);
+      } catch (effError) {
+        // Log but don't fail the operation if efficiency update fails
+        console.error(
+          `Error updating pool efficiency after join: ${effError.message}`,
+        );
+      }
+
       return new ApiResponse<null>(
         200,
         `(createPoolOperator) Operator successfully joined pool.`,
@@ -93,8 +105,33 @@ export class PoolOperatorService {
     try {
       // TO DO: Pool prerequisites check (e.g. if tgChannelId exists, the user needs to leave the channel first).
 
-      // NOTE: Because operators can only be in one pool at a time, we can just delete the entry if found.
+      // Get pool ID before removing the operator (needed for updating efficiency)
+      const poolOperator = await this.poolOperatorModel.findOne(
+        { operatorId },
+        { poolId: 1 },
+      );
+
+      if (!poolOperator) {
+        return new ApiResponse<null>(
+          404,
+          `(removeOperatorFromPool) Operator is not in any pool.`,
+        );
+      }
+
+      const poolId = poolOperator.poolId;
+
+      // Remove operator from pool
       await this.poolOperatorModel.findOneAndDelete({ operatorId });
+
+      // Update pool's estimated efficiency
+      try {
+        await this.poolService.updatePoolEstimatedEff(poolId);
+      } catch (effError) {
+        // Log but don't fail the operation if efficiency update fails
+        console.error(
+          `Error updating pool efficiency after leave: ${effError.message}`,
+        );
+      }
 
       return new ApiResponse<null>(
         200,

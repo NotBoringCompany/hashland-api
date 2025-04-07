@@ -2,20 +2,46 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
+  Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolOperator } from './schemas/pool-operator.schema';
+import { RedisService } from 'src/common/redis.service';
 
 @Injectable()
-export class PoolService {
+export class PoolService implements OnModuleInit {
+  private readonly logger = new Logger(PoolService.name);
+  private readonly redisCachePrefix = 'pool:estimatedEff:';
+  private readonly effCacheDuration = 6 * 60 * 60; // 6 hours in seconds
+
   constructor(
     @InjectModel(Pool.name) private poolModel: Model<Pool>,
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
+    private readonly redisService: RedisService,
   ) {}
+
+  /**
+   * Initialize pools' estimated efficiency on module initialization
+   */
+  async onModuleInit() {
+    try {
+      this.logger.log('Initializing pool estimated efficiency values...');
+      await this.updateAllPoolsEstimatedEff();
+      this.logger.log(
+        'Pool estimated efficiency values initialized successfully',
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to initialize pool estimated efficiency: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
 
   /**
    * Join a pool. Ensures:
@@ -223,5 +249,168 @@ export class PoolService {
 
     // randomize which pool to fetch
     return poolIds[Math.floor(Math.random() * poolIds.length)].poolId;
+  }
+
+  /**
+   * Updates the estimated efficiency (estimatedEff) for a specific pool.
+   * Calculates the sum of weightedEff (cumulativeEff * effMultiplier) for all operators in the pool.
+   * Uses a more efficient aggregation pipeline for performance.
+   *
+   * @param poolId The ID of the pool to update
+   * @param forceUpdate Whether to force an update even if cache is still valid
+   * @returns The updated estimatedEff value
+   */
+  async updatePoolEstimatedEff(
+    poolId: string | Types.ObjectId,
+    forceUpdate: boolean = false,
+  ): Promise<number> {
+    try {
+      const poolIdObj =
+        typeof poolId === 'string' ? new Types.ObjectId(poolId) : poolId;
+      // Try to get from cache first
+      const cacheKey = `${this.redisCachePrefix}${poolId}`;
+      const cachedEff = await this.redisService.get(cacheKey);
+
+      // Check if pool exists
+      const pool = await this.poolModel.findById(poolId, { lastEffUpdate: 1 });
+      if (!pool) {
+        throw new NotFoundException(
+          `(updatePoolEstimatedEff) Pool with ID ${poolId} not found`,
+        );
+      }
+
+      // If cache is valid and not forcing update, return cached value
+      if (cachedEff && !forceUpdate && pool.lastEffUpdate) {
+        const lastUpdate = pool.lastEffUpdate.getTime();
+        const now = Date.now();
+        const hoursSinceLastUpdate = (now - lastUpdate) / (1000 * 60 * 60);
+
+        if (hoursSinceLastUpdate < 6) {
+          return parseFloat(cachedEff);
+        }
+      }
+
+      // Use aggregation to efficiently calculate the weighted efficiency in a single query
+      const aggregationResult = await this.poolOperatorModel.aggregate([
+        // Step 1: Match operators in this pool
+        { $match: { poolId: poolIdObj } },
+
+        // Step 2: Lookup operator details
+        {
+          $lookup: {
+            from: 'Operators',
+            localField: 'operatorId',
+            foreignField: '_id',
+            as: 'operator',
+          },
+        },
+
+        // Step 3: Unwind the operator array
+        { $unwind: { path: '$operator', preserveNullAndEmptyArrays: false } },
+
+        // Step 4: Calculate weighted efficiency for each operator
+        {
+          $project: {
+            weightedEff: {
+              $multiply: ['$operator.cumulativeEff', '$operator.effMultiplier'],
+            },
+          },
+        },
+
+        // Step 5: Sum up all weighted efficiencies
+        {
+          $group: {
+            _id: null,
+            totalWeightedEff: { $sum: '$weightedEff' },
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      // Set default values if no results
+      let totalWeightedEff = 0;
+      let operatorCount = 0;
+
+      if (aggregationResult.length > 0) {
+        totalWeightedEff = aggregationResult[0].totalWeightedEff || 0;
+        operatorCount = aggregationResult[0].count || 0;
+      }
+
+      // Update pool record
+      await this.poolModel.findByIdAndUpdate(poolId, {
+        estimatedEff: totalWeightedEff,
+        lastEffUpdate: new Date(),
+      });
+
+      // Store in Redis cache
+      await this.redisService.set(
+        cacheKey,
+        totalWeightedEff.toString(),
+        this.effCacheDuration,
+      );
+
+      this.logger.log(
+        `Updated estimatedEff for pool ${poolId}: ${totalWeightedEff} from ${operatorCount} operators`,
+      );
+      return totalWeightedEff;
+    } catch (error) {
+      this.logger.error(
+        `Error updating pool estimatedEff: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(updatePoolEstimatedEff) Error: ${error.message}`,
+        ),
+      );
+    }
+  }
+
+  /**
+   * Updates the estimated efficiency for all pools in the system.
+   * Uses batch processing for efficiency.
+   */
+  async updateAllPoolsEstimatedEff(): Promise<void> {
+    try {
+      const startTime = performance.now();
+      this.logger.log('Starting update of all pools estimated efficiency...');
+
+      // Get all pool IDs
+      const pools = await this.poolModel.find({}, { _id: 1 }).lean();
+
+      if (pools.length === 0) {
+        this.logger.log('No pools found to update');
+        return;
+      }
+
+      // Process in batches of 10 pools
+      const batchSize = 10;
+      for (let i = 0; i < pools.length; i += batchSize) {
+        const batch = pools.slice(i, i + batchSize);
+        await Promise.all(
+          batch.map((pool) => this.updatePoolEstimatedEff(pool._id, true)),
+        );
+        this.logger.log(
+          `Processed batch ${Math.ceil((i + 1) / batchSize)}/${Math.ceil(pools.length / batchSize)}`,
+        );
+      }
+
+      const endTime = performance.now();
+      this.logger.log(
+        `Updated estimatedEff for all ${pools.length} pools in ${(endTime - startTime).toFixed(2)}ms`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error updating all pools estimatedEff: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(updateAllPoolsEstimatedEff) Error: ${error.message}`,
+        ),
+      );
+    }
   }
 }
