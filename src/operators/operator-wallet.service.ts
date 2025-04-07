@@ -81,7 +81,9 @@ export class OperatorWalletService {
         })),
       );
 
-      console.log(`(updateAssetEquityForOperator) New equity: ${newEquity}`);
+      this.logger.debug(
+        `(updateAssetEquityForOperator) New equity: ${newEquity}`,
+      );
 
       // ✅ Step 3: Fetch operator document
       const operator = await this.operatorModel
@@ -92,7 +94,7 @@ export class OperatorWalletService {
       // ✅ Step 4: Compute `effMultiplier`
       const newEffMultiplier = equityToEffMultiplier(newEquity);
 
-      console.log(
+      this.logger.debug(
         `(updateAssetEquityForOperator) New effMultiplier: ${newEffMultiplier}`,
       );
 
@@ -114,7 +116,7 @@ export class OperatorWalletService {
       const effDifference = newActualEff - oldActualEff;
       const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
 
-      console.log(
+      this.logger.debug(
         `(updateAssetEquityForOperator) New cumulativeEff: ${newCumulativeEff}`,
       );
 
@@ -130,7 +132,7 @@ export class OperatorWalletService {
         },
       );
 
-      this.logger.log(
+      this.logger.debug(
         `✅ (updateAssetEquityForOperator) Updated asset equity & effMultiplier for operator ${operatorId}.`,
       );
     } catch (error) {
@@ -859,3 +861,4 @@ export class OperatorWalletService {
     }
   }
 }
+
