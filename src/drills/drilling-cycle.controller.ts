@@ -67,9 +67,9 @@ export class DrillingCycleController {
    * Gets a cycle's extended data, such as the extractor-related data and reward share data.
    */
   @UseGuards(JwtAuthGuard)
-  @Get(':cycle-number/extended')
+  @Get(':cycleNumber/extended')
   async getCycleExtendedData(
-    @Param('cycle-number') cycleNumber: number,
+    @Param('cycleNumber') cycleNumber: number,
     @Request() req,
   ): Promise<
     ApiResponse<{
