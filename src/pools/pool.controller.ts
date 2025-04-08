@@ -1,10 +1,18 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import {
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { PoolService } from './pool.service';
 import { Pool } from './schemas/pool.schema';
@@ -13,8 +21,11 @@ import { GetAllPoolsResponseDto } from 'src/common/dto/pools/pool.dto';
 import {
   GetPoolOperatorsQueryDto,
   GetPoolOperatorsResponseDto,
+  GetPoolOperatorResponseDto,
 } from 'src/common/dto/pools/pool-operator.dto';
 import { PoolOperator } from './schemas/pool-operator.schema';
+import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
+import { Types } from 'mongoose';
 
 @ApiTags('Pools')
 @Controller('pools') // Base route: `/pools`
@@ -136,6 +147,60 @@ export class PoolController {
       query.limit || 20,
       projectionObj,
       query.populate !== false, // Default to true if not specified
+    );
+  }
+
+  @ApiOperation({
+    summary: 'Get current user pool operator details',
+    description:
+      'Fetches the details of the authenticated user in the specified pool',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'The ID of the pool',
+    type: String,
+  })
+  @ApiQuery({
+    name: 'projection',
+    description: 'Comma-separated list of fields to include in the response',
+    required: false,
+    type: String,
+    example: 'operator,totalRewards',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved pool operator details',
+    type: GetPoolOperatorResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Pool or operator not found',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/operators/me')
+  async getOwnPoolOperator(
+    @Param('id') poolId: string,
+    @Query('projection') projection?: string,
+    @Request() req?: any,
+  ): Promise<AppApiResponse<{ operator: Partial<PoolOperator> | null }>> {
+    const operatorId = new Types.ObjectId(req.user.operatorId);
+
+    // Convert query string to Mongoose projection object if provided
+    const projectionObj = projection
+      ? projection
+          .split(',')
+          .reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
+      : undefined;
+
+    return this.poolService.getPoolOperatorByOperatorId(
+      poolId,
+      operatorId,
+      projectionObj,
     );
   }
 }

@@ -99,3 +99,12 @@ export class GetPoolOperatorsQueryDto {
   @Type(() => Boolean)
   populate?: boolean;
 }
+
+export class GetPoolOperatorResponseDto {
+  @ApiProperty({
+    description: 'Pool operator details for the authenticated user',
+    type: PoolOperator,
+    nullable: true,
+  })
+  operator: Partial<PoolOperator> | null;
+}

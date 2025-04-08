@@ -512,4 +512,73 @@ export class PoolService implements OnModuleInit {
       );
     }
   }
+
+  /**
+   * Get a specific operator in a pool by operator ID.
+   * Used for retrieving the authenticated user's pool operator details.
+   */
+  async getPoolOperatorByOperatorId(
+    poolId: string,
+    operatorId: Types.ObjectId,
+    projection?: Record<string, 1 | 0>,
+  ): Promise<ApiResponse<{ operator: Partial<PoolOperator> | null }>> {
+    try {
+      // Check if pool exists
+      const poolExists = await this.poolModel.exists({
+        _id: new Types.ObjectId(poolId),
+      });
+
+      if (!poolExists) {
+        return new ApiResponse(
+          404,
+          `(getPoolOperatorByOperatorId) Pool with ID ${poolId} not found`,
+          { operator: null },
+        );
+      }
+
+      // Find the pool operator
+      let query = this.poolOperatorModel.findOne({
+        pool: new Types.ObjectId(poolId),
+        operator: operatorId,
+      });
+
+      // Apply projection if provided
+      if (projection) {
+        query = query.select(projection);
+      }
+
+      // Populate operator details
+      query = query.populate({
+        path: 'operator',
+        select:
+          'username cumulativeEff effMultiplier totalEarnedHASH assetEquity',
+        model: 'Operator',
+        options: { lean: true },
+      });
+
+      const poolOperator = await query.lean();
+
+      if (!poolOperator) {
+        return new ApiResponse(
+          404,
+          `(getPoolOperatorByOperatorId) Operator is not a member of this pool`,
+          { operator: null },
+        );
+      }
+
+      return new ApiResponse(
+        200,
+        `(getPoolOperatorByOperatorId) Successfully fetched operator details for pool ${poolId}`,
+        { operator: poolOperator },
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse(
+          500,
+          `(getPoolOperatorByOperatorId) Error fetching pool operator: ${err.message}`,
+          { operator: null },
+        ),
+      );
+    }
+  }
 }
