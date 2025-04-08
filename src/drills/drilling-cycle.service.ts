@@ -352,7 +352,7 @@ export class DrillingCycleService {
 
         // ✅ Ensure operator meets minimum equity threshold
         if (currentEquity >= minThreshold) {
-          finalExtractorOperatorId = extractorData.drillId; // ✅ Extractor is valid, add the extractor operator.
+          finalExtractorOperatorId = extractorData.drillOperatorId; // ✅ Extractor is valid, add the extractor operator.
         } else {
           this.logger.warn(
             `(endCurrentCycle) Extractor operator ${extractorOperatorId} has dropped below the asset equity threshold. Skipping extractor for this cycle.`,
