@@ -115,14 +115,14 @@ export class OperatorWalletService {
       const oldActualEff = updatedDrill ? updatedDrill.actualEff : 0;
 
       console.log(
-        `(updateAssetEquityForOperator) Old actualEff: ${oldActualEff}`,
+        `(updateAssetEquityForOperator) Old actualEff: ${oldActualEff}.`,
       );
 
       const effDifference = newActualEff - oldActualEff;
       const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
 
       this.logger.debug(
-        `(updateAssetEquityForOperator) New cumulativeEff: ${newCumulativeEff}`,
+        `(updateAssetEquityForOperator) New cumulativeEff: ${newCumulativeEff}.`,
       );
 
       // ✅ Step 7: Update `assetEquity`, `effMultiplier` & `cumulativeEff` in Operator document
