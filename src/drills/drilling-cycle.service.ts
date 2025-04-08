@@ -392,7 +392,7 @@ export class DrillingCycleService {
       amount: reward.amount,
     }));
 
-    console.log(
+    this.logger.debug(
       `(endCurrentCycle) Reward Share Docs:`,
       JSON.stringify(rewardShareDocs, null, 2),
     );
@@ -690,6 +690,10 @@ export class DrillingCycleService {
         amount: reward.amount,
       });
     }
+
+    this.logger.debug(
+      `Reward Shares: ${JSON.stringify(rewardShares, null, 2)}`,
+    );
 
     const end = performance.now();
     this.logger.log(
