@@ -105,20 +105,25 @@ export class OperatorWalletService {
         `(updateAssetEquityForOperator) New actualEff: ${newActualEff}`,
       );
 
-      const updatedDrill = await this.drillModel.findOneAndUpdate(
+      const drillToUpdate = await this.drillModel.findOneAndUpdate(
         { operatorId, version: DrillVersion.BASIC },
         { $set: { actualEff: newActualEff } },
-        { new: true, projection: { actualEff: 1 } }, // Return the updated `actualEff`
+        { new: false, projection: { actualEff: 1 } }, // Return the old `actualEff` (with `new: false`)
       );
 
       // ✅ Step 6: Compute `cumulativeEff`
-      const oldActualEff = updatedDrill ? updatedDrill.actualEff : 0;
+      const oldActualEff = drillToUpdate?.actualEff ?? 0;
 
-      console.log(
+      this.logger.debug(
         `(updateAssetEquityForOperator) Old actualEff: ${oldActualEff}.`,
       );
 
       const effDifference = newActualEff - oldActualEff;
+
+      this.logger.debug(
+        `(updateAssetEquityForOperator) Eff difference: ${effDifference}.`,
+      );
+
       const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
 
       this.logger.debug(
