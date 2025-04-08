@@ -88,16 +88,6 @@ export class DrillingCycleService {
 
       const extractorOperatorUsername = extractorOperator?.username || null;
 
-      // // Get the operator's reward share from the cycle
-      // const rewardShare = await this.drillingCycleRewardShareModel.findOne({
-      //   cycleNumber,
-      //   operatorId
-      // }, {
-      //   amount: 1
-      // }).lean();
-
-      // const ownRewardShare = rewardShare?.amount || 0;
-
       // Get the operator and the extractor operator's reward share
       const [operatorRewardShare, extractorRewardShare] = await Promise.all([
         this.drillingCycleRewardShareModel
@@ -401,6 +391,11 @@ export class DrillingCycleService {
       operatorId: reward.operatorId,
       amount: reward.amount,
     }));
+
+    console.log(
+      `(endCurrentCycle) Reward Share Docs:`,
+      JSON.stringify(rewardShareDocs, null, 2),
+    );
 
     await this.drillingCycleRewardShareModel.insertMany(rewardShareDocs);
 
