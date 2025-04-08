@@ -683,11 +683,24 @@ export class DrillingCycleService {
       await this.updatePoolAndOperatorRewards(poolRewards, poolOperatorRewards);
     }
 
-    // ✅ Step 10: Prepare reward shares with operator names
+    // ✅ Step 10: Group rewards by operator ID and remove null entries
+    const groupedRewardMap = new Map<string, number>();
+
+    // Group rewardData by operatorId and sum the amounts
     for (const reward of rewardData) {
+      // Skip null or undefined operatorId
+      if (!reward.operatorId) continue;
+
+      const operatorIdString = reward.operatorId.toString();
+      const currentTotal = groupedRewardMap.get(operatorIdString) || 0;
+      groupedRewardMap.set(operatorIdString, currentTotal + reward.amount);
+    }
+
+    // Convert the grouped map to rewardShares
+    for (const [operatorIdString, amount] of groupedRewardMap.entries()) {
       rewardShares.push({
-        operatorId: reward.operatorId,
-        amount: reward.amount,
+        operatorId: new Types.ObjectId(operatorIdString),
+        amount,
       });
     }
 
