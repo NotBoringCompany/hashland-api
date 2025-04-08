@@ -1,8 +1,8 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -359,8 +359,9 @@ export class OperatorWalletService {
       });
 
       if (existingWalletsInChain.length >= 2) {
-        throw new UnauthorizedException(
+        throw new HttpException(
           '(connectWallet) Operator already has maximum connected wallets in this chain',
+          400,
         );
       }
 
@@ -377,8 +378,9 @@ export class OperatorWalletService {
         ]);
 
         if (secondWalletUSDBalance < minAssetEquity) {
-          throw new UnauthorizedException(
+          throw new HttpException(
             `(connectWallet) Operator must have at least $${minAssetEquity} in their second wallet to connect it.`,
+            400,
           );
         }
       }
@@ -393,8 +395,9 @@ export class OperatorWalletService {
         existingWallet &&
         existingWallet.operatorId.toString() !== operatorId.toString()
       ) {
-        throw new UnauthorizedException(
+        throw new HttpException(
           '(connectWallet) Wallet already connected to another operator',
+          400,
         );
       }
 
@@ -423,8 +426,9 @@ export class OperatorWalletService {
       }
 
       if (!isValid) {
-        throw new UnauthorizedException(
+        throw new HttpException(
           '(connectWallet) Invalid wallet signature or proof.',
+          400,
         );
       }
 
