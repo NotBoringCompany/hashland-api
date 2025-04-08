@@ -190,7 +190,7 @@ export class DrillingGatewayService {
     this.drillingGateway.server.emit('new-cycle', drillingCycle);
 
     this.logger.log(
-      `💰 Broadcasted new cycle #${drillingCycle.cycleNumber} with ${drillingCycle.rewardShares?.length || 0} operators and total weighted efficiency of ${drillingCycle.totalWeightedEff || 0}`,
+      `💰 Broadcasted new cycle #${drillingCycle.cycleNumber} with ${drillingCycle.activeOperators} active operators and total weighted efficiency of ${drillingCycle.totalWeightedEff || 0}`,
     );
   }
 }

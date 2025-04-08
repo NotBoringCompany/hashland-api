@@ -1,9 +1,19 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  Param,
+  Request,
+} from '@nestjs/common';
 import { DrillingCycleService } from './drilling-cycle.service';
 import { RedisService } from 'src/common/redis.service';
 import { DrillingGateway } from 'src/gateway/drilling.gateway';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
+import { ApiResponse } from 'src/common/dto/response.dto';
 
 // Health check response types for type safety
 interface ComponentStatus {
@@ -51,6 +61,28 @@ export class DrillingCycleController {
   @Get('cycle-number')
   async getCurrentCycleNumber() {
     return this.drillingCycleService.getCurrentCycleNumber();
+  }
+
+  /**
+   * Gets a cycle's extended data, such as the extractor-related data and reward share data.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get(':cycle-number/extended')
+  async getCycleExtendedData(
+    @Param('cycle-number') cycleNumber: number,
+    @Request() req,
+  ): Promise<
+    ApiResponse<{
+      extractorOperatorUsername: string | null;
+      extractorOperatorRewardShare: number;
+      ownRewardShare: number;
+    } | null>
+  > {
+    const operatorId = req.user.operatorId;
+    return this.drillingCycleService.getCycleExtendedData(
+      cycleNumber,
+      operatorId,
+    );
   }
 
   /**

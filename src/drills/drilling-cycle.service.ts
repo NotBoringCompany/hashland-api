@@ -22,6 +22,7 @@ import { DrillingGateway } from 'src/gateway/drilling.gateway';
 import { OperatorWalletService } from 'src/operators/operator-wallet.service';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { HashReserveService } from 'src/hash-reserve/hash-reserve.service';
+import { DrillingCycleRewardShare } from './schemas/drilling-crs.schema';
 @Injectable()
 export class DrillingCycleService {
   private readonly logger = new Logger(DrillingCycleService.name);
@@ -37,6 +38,8 @@ export class DrillingCycleService {
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private poolModel: Model<Pool>,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    @InjectModel(DrillingCycleRewardShare.name)
+    private drillingCycleRewardShareModel: Model<DrillingCycleRewardShare>,
     private readonly operatorWalletService: OperatorWalletService,
     private readonly redisService: RedisService,
     private readonly drillingSessionService: DrillingSessionService,
@@ -46,6 +49,85 @@ export class DrillingCycleService {
     private readonly drillingGateway: DrillingGateway,
     private readonly hashReserveService: HashReserveService,
   ) {}
+
+  /**
+   * Gets a cycle's extended data, such as the extractor-related data and reward share data.
+   */
+  async getCycleExtendedData(
+    cycleNumber: number,
+    operatorId: Types.ObjectId,
+  ): Promise<
+    ApiResponse<{
+      extractorOperatorUsername: string | null;
+      extractorOperatorRewardShare: number;
+      ownRewardShare: number;
+    }>
+  > {
+    try {
+      // Get the cycle data only related to the extractor
+      const cycle = await this.drillingCycleModel
+        .findOne(
+          { cycleNumber },
+          {
+            extractorOperatorId: 1,
+          },
+        )
+        .lean();
+
+      if (!cycle) {
+        this.logger.warn(`⚠️ Cycle #${cycleNumber} not found in MongoDB.`);
+        return new ApiResponse(404, 'Cycle not found', null);
+      }
+
+      // Get the extractor operator's username
+      const extractorOperator = await this.operatorModel
+        .findOne({
+          _id: cycle.extractorOperatorId,
+        })
+        .lean();
+
+      const extractorOperatorUsername = extractorOperator?.username || null;
+
+      // // Get the operator's reward share from the cycle
+      // const rewardShare = await this.drillingCycleRewardShareModel.findOne({
+      //   cycleNumber,
+      //   operatorId
+      // }, {
+      //   amount: 1
+      // }).lean();
+
+      // const ownRewardShare = rewardShare?.amount || 0;
+
+      // Get the operator and the extractor operator's reward share
+      const [operatorRewardShare, extractorRewardShare] = await Promise.all([
+        this.drillingCycleRewardShareModel
+          .findOne({ cycleNumber, operatorId }, { amount: 1 })
+          .lean(),
+        this.drillingCycleRewardShareModel
+          .findOne(
+            { cycleNumber, operatorId: cycle.extractorOperatorId },
+            { amount: 1 },
+          )
+          .lean(),
+      ]);
+
+      const ownRewardShare = operatorRewardShare?.amount || 0;
+      const extractorOperatorRewardShare = extractorRewardShare?.amount || 0;
+
+      return new ApiResponse(200, 'Cycle data fetched successfully', {
+        extractorOperatorUsername,
+        extractorOperatorRewardShare,
+        ownRewardShare,
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `❌ Error fetching cycle reward data for operator ${operatorId}: ${err.message}`,
+      );
+      throw new InternalServerErrorException(
+        new ApiResponse(500, 'Internal Server Error', err.message),
+      );
+    }
+  }
 
   /**
    * Initializes the cycle number in Redis if not already set.
@@ -238,7 +320,6 @@ export class DrillingCycleService {
     // ✅ Step 2: Select extractor
     const extractorData = await this.drillService.selectExtractor();
     let finalExtractorOperatorId: Types.ObjectId | null = null;
-    let extractorName: string | null = null;
     // Store the total weighted efficiency from extractor selection
     const totalWeightedEff = extractorData?.totalWeightedEff || 0;
 
@@ -262,7 +343,6 @@ export class DrillingCycleService {
           `(endCurrentCycle) Extractor operator ${extractorOperatorId} not found. Skipping extractor.`,
         );
       } else {
-        extractorName = extractorOperator.username || 'Unknown Extractor';
         const storedAssetEquity = extractorOperator.assetEquity;
         const minThreshold =
           GAME_CONSTANTS.EXTRACTOR.OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD *
@@ -310,12 +390,19 @@ export class DrillingCycleService {
       {
         extractorId: extractorData?.drillId || null, // ✅ Store null if no extractor is chosen
         extractorOperatorId: finalExtractorOperatorId,
-        extractorOperatorName: extractorName,
-        rewardShares,
         totalWeightedEff,
       },
       { new: true },
     );
+
+    // We will create a batch operation to create the reward share documents to `DrillingCycleRewardShares`.
+    const rewardShareDocs = rewardShares.map((reward) => ({
+      cycleNumber,
+      operatorId: reward.operatorId,
+      amount: reward.amount,
+    }));
+
+    await this.drillingCycleRewardShareModel.insertMany(rewardShareDocs);
 
     // Check if the cycle document was found and updated
     if (!latestCycle) {
@@ -342,7 +429,6 @@ export class DrillingCycleService {
     }
 
     // ✅ Step 7: Send WebSocket notification about the latest cycle
-    // Store the rewards in Redis for history
     await this.drillingGateway.storeLatestCycleInRedis(latestCycle);
 
     // Send WebSocket notification
@@ -360,14 +446,11 @@ export class DrillingCycleService {
   async distributeCycleRewards(
     extractorOperatorId: Types.ObjectId | null, // ✅ Extractor operator ID can be null
     issuedHash: number,
-  ): Promise<
-    { operatorId: Types.ObjectId; operatorName: string; amount: number }[]
-  > {
+  ): Promise<{ operatorId: Types.ObjectId; amount: number }[]> {
     const now = performance.now();
     const rewardData: { operatorId: Types.ObjectId; amount: number }[] = [];
-    const rewardSharesWithNames: {
+    const rewardShares: {
       operatorId: Types.ObjectId;
-      operatorName: string;
       amount: number;
     }[] = [];
 
@@ -395,14 +478,6 @@ export class DrillingCycleService {
       );
       return [];
     }
-
-    // Create a map of operator IDs to names for quick lookup
-    const operatorNameMap = new Map(
-      activeOperators.map((op) => [
-        op._id.toString(),
-        op.username || 'Unknown Operator',
-      ]),
-    );
 
     // ✅ Step 3: Apply Luck Factor & Compute Weighted Eff
     const operatorsWithLuck = activeOperators.map((operator) => {
@@ -610,11 +685,8 @@ export class DrillingCycleService {
 
     // ✅ Step 10: Prepare reward shares with operator names
     for (const reward of rewardData) {
-      rewardSharesWithNames.push({
+      rewardShares.push({
         operatorId: reward.operatorId,
-        operatorName:
-          operatorNameMap.get(reward.operatorId.toString()) ||
-          'Unknown Operator',
         amount: reward.amount,
       });
     }
@@ -624,7 +696,7 @@ export class DrillingCycleService {
       `✅ (distributeCycleRewards) Rewards distributed in ${(end - now).toFixed(2)}ms.`,
     );
 
-    return rewardSharesWithNames;
+    return rewardShares;
   }
 
   /**

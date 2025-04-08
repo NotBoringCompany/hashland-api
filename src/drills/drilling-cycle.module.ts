@@ -26,6 +26,10 @@ import {
 import { DrillingCycleQueue } from './drilling-cycle.queue';
 import { OperatorWalletModule } from 'src/operators/operator-wallet.module';
 import { HashReserveModule } from 'src/hash-reserve/hash-reserve.module';
+import {
+  DrillingCycleRewardShare,
+  DrillingCycleRewardShareSchema,
+} from './schemas/drilling-crs.schema';
 
 @Module({
   imports: [
@@ -43,6 +47,10 @@ import { HashReserveModule } from 'src/hash-reserve/hash-reserve.module';
       { name: DrillingCycle.name, schema: DrillingCycleSchema },
       { name: DrillingSession.name, schema: DrillingSessionSchema },
       { name: Operator.name, schema: OperatorSchema },
+      {
+        name: DrillingCycleRewardShare.name,
+        schema: DrillingCycleRewardShareSchema,
+      },
     ]),
     BullModule.registerQueue({
       name: 'drilling-cycles',
