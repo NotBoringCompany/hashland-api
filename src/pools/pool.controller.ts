@@ -43,6 +43,12 @@ export class PoolController {
     type: String,
     example: 'name,maxOperators',
   })
+  @ApiQuery({
+    name: 'updateStaleEff',
+    description: 'Whether to update stale efficiency values (default: true)',
+    required: false,
+    type: Boolean,
+  })
   @ApiResponse({
     status: 200,
     description: 'Successfully retrieved pools',
@@ -51,6 +57,7 @@ export class PoolController {
   @Get()
   async getAllPools(
     @Query('projection') projection?: string,
+    @Query('updateStaleEff') updateStaleEff?: string,
   ): Promise<AppApiResponse<{ pools: Partial<Pool[]> }>> {
     // Convert query string to Mongoose projection object
     const projectionObj = projection
@@ -59,7 +66,11 @@ export class PoolController {
           .reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
       : undefined;
 
-    return this.poolService.getAllPools(projectionObj);
+    // Parse the updateStaleEff parameter
+    const shouldUpdateStaleEff =
+      updateStaleEff === undefined ? true : updateStaleEff === 'true';
+
+    return this.poolService.getAllPools(projectionObj, shouldUpdateStaleEff);
   }
 
   @ApiOperation({
@@ -79,6 +90,12 @@ export class PoolController {
     type: String,
     example: 'name,maxOperators',
   })
+  @ApiQuery({
+    name: 'updateStaleEff',
+    description: 'Whether to update stale efficiency value (default: true)',
+    required: false,
+    type: Boolean,
+  })
   @ApiResponse({
     status: 200,
     description: 'Successfully retrieved pool',
@@ -87,6 +104,7 @@ export class PoolController {
   async getPoolById(
     @Param('id') id: string,
     @Query('projection') projection?: string,
+    @Query('updateStaleEff') updateStaleEff?: string,
   ): Promise<AppApiResponse<{ pool: Pool | null }>> {
     // Convert query string to Mongoose projection object
     const projectionObj = projection
@@ -95,7 +113,15 @@ export class PoolController {
           .reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
       : undefined;
 
-    return this.poolService.getPoolById(id, projectionObj);
+    // Parse the updateStaleEff parameter
+    const shouldUpdateStaleEff =
+      updateStaleEff === undefined ? true : updateStaleEff === 'true';
+
+    return this.poolService.getPoolById(
+      id,
+      projectionObj,
+      shouldUpdateStaleEff,
+    );
   }
 
   @ApiOperation({

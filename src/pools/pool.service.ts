@@ -11,6 +11,7 @@ import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolOperator } from './schemas/pool-operator.schema';
 import { RedisService } from 'src/common/redis.service';
+import { performance } from 'perf_hooks';
 
 @Injectable()
 export class PoolService implements OnModuleInit {
@@ -158,11 +159,43 @@ export class PoolService implements OnModuleInit {
 
   /**
    * Fetch all pools. Optional projection to filter out fields.
+   * Ensures efficiency values are up-to-date.
    */
   async getAllPools(
     projection?: string | Record<string, 1 | 0>,
+    updateStaleEff: boolean = true,
   ): Promise<ApiResponse<{ pools: Partial<Pool[]> }>> {
     try {
+      // First fetch pools with timestamps to check which ones need updates
+      const poolsWithTimestamps = await this.poolModel
+        .find({}, { _id: 1, lastEffUpdate: 1, estimatedEff: 1 })
+        .lean();
+
+      // Check for pools with stale efficiency data (> 6 hours old)
+      if (updateStaleEff) {
+        const now = Date.now();
+        const staleThreshold = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+
+        const stalePoolPromises = poolsWithTimestamps
+          .filter((pool) => {
+            // If no last update or update is older than threshold
+            return (
+              !pool.lastEffUpdate ||
+              now - new Date(pool.lastEffUpdate).getTime() > staleThreshold
+            );
+          })
+          .map((pool) => this.updatePoolEstimatedEff(pool._id, false));
+
+        // Update stale pools in parallel
+        if (stalePoolPromises.length > 0) {
+          this.logger.log(
+            `Updating efficiency for ${stalePoolPromises.length} stale pools`,
+          );
+          await Promise.all(stalePoolPromises);
+        }
+      }
+
+      // Now fetch the pools with the updated data and requested projection
       const pools = await this.poolModel.find().select(projection).lean();
 
       return new ApiResponse<{ pools: Partial<Pool[]> }>(
@@ -182,18 +215,20 @@ export class PoolService implements OnModuleInit {
 
   /**
    * Get a pool by its ID.
+   * Ensures the pool's efficiency value is up-to-date.
    */
   async getPoolById(
     poolId: string,
     projection?: string | Record<string, 1 | 0>,
+    updateStaleEff: boolean = true,
   ): Promise<ApiResponse<{ pool: Pool | null }>> {
     try {
-      const pool = await this.poolModel
-        .findById(poolId)
-        .select(projection)
+      // First check if the pool exists and get its last update time
+      const poolWithTimestamp = await this.poolModel
+        .findById(poolId, { lastEffUpdate: 1 })
         .lean();
 
-      if (!pool) {
+      if (!poolWithTimestamp) {
         throw new NotFoundException(
           new ApiResponse<null>(
             404,
@@ -201,6 +236,27 @@ export class PoolService implements OnModuleInit {
           ),
         );
       }
+
+      // Update efficiency if it's stale or missing
+      if (updateStaleEff) {
+        const now = Date.now();
+        const staleThreshold = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+
+        if (
+          !poolWithTimestamp.lastEffUpdate ||
+          now - new Date(poolWithTimestamp.lastEffUpdate).getTime() >
+            staleThreshold
+        ) {
+          this.logger.log(`Updating stale efficiency for pool ${poolId}`);
+          await this.updatePoolEstimatedEff(poolId, false);
+        }
+      }
+
+      // Now fetch the pool with the updated efficiency and requested projection
+      const pool = await this.poolModel
+        .findById(poolId)
+        .select(projection)
+        .lean();
 
       return new ApiResponse<{ pool: Pool | null }>(
         200,
@@ -293,13 +349,13 @@ export class PoolService implements OnModuleInit {
       // Use aggregation to efficiently calculate the weighted efficiency in a single query
       const aggregationResult = await this.poolOperatorModel.aggregate([
         // Step 1: Match operators in this pool
-        { $match: { poolId: poolIdObj } },
+        { $match: { pool: poolIdObj } },
 
         // Step 2: Lookup operator details
         {
           $lookup: {
             from: 'Operators',
-            localField: 'operatorId',
+            localField: 'operator',
             foreignField: '_id',
             as: 'operator',
           },
