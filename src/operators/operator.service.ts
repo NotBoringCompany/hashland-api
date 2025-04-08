@@ -432,7 +432,7 @@ export class OperatorService {
     const operatorData: any = {
       username,
       assetEquity: 0,
-      cumulativeEff: GAME_CONSTANTS.DRILLS.BASIC_DRILL_STARTING_ACTUAL_EFF,
+      cumulativeEff: 0,
       effMultiplier: 1,
       maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
@@ -482,7 +482,7 @@ export class OperatorService {
         DrillConfig.BASIC,
         false,
         1,
-        GAME_CONSTANTS.DRILLS.BASIC_DRILL_STARTING_ACTUAL_EFF,
+        0,
       )
       .catch((err: any) => {
         this.logger.warn(

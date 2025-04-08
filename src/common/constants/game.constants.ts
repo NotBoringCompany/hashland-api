@@ -31,10 +31,6 @@ export const GAME_CONSTANTS = {
      */
     BASE_PREMIUM_DRILLS_ALLOWED: 5,
     /**
-     * The starting `actualEff` of a basic drill given to an operator upon registering.
-     */
-    BASIC_DRILL_STARTING_ACTUAL_EFF: 500,
-    /**
      * The prerequisites for purchasing a Bulwark drill from the shop.
      */
     BULWARK_DRILL_PURCHASE_PREREQUISITES: {
