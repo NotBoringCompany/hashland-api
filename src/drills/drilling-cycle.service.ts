@@ -505,12 +505,17 @@ export class DrillingCycleService {
     const poolRewards = new Map<string, number>();
     const poolOperatorRewards = new Map<string, number>();
 
+    // Get the amount to send to the hash reserve
+    let toSendToHashReserve = 0;
+
     if (extractorOperatorId === null) {
       // 🟡 **No Extractor Selected - Reserve Extractor's HASH**
       const extractorHashAllocation =
         issuedHash *
         GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.extractorOperator;
-      await this.hashReserveService.addToHASHReserve(extractorHashAllocation);
+
+      // Add the extractor's $HASH allocation to the reserve
+      toSendToHashReserve += extractorHashAllocation;
 
       // Active operator reward share
       const activeOperatorsReward =
@@ -628,6 +633,14 @@ export class DrillingCycleService {
           );
         }
 
+        // If pool leader is null, add the leader reward to the HASH reserve
+        if (!pool.leaderId) {
+          toSendToHashReserve += leaderReward;
+          this.logger.debug(
+            `(distributeCycleRewards) Pool leader is null, adding ${leaderReward} HASH to reserve`,
+          );
+        }
+
         // Track leader reward if leader is in the same pool
         if (
           pool.leaderId &&
@@ -707,6 +720,15 @@ export class DrillingCycleService {
     this.logger.debug(
       `Reward Shares: ${JSON.stringify(rewardShares, null, 2)}`,
     );
+
+    // Step 11: Send to Hash Reserve
+    this.logger.debug(
+      `(distributeCycleRewards) Adding ${toSendToHashReserve} $HASH to the Hash Reserve.`,
+    );
+
+    if (toSendToHashReserve > 0) {
+      await this.hashReserveService.addToHASHReserve(toSendToHashReserve);
+    }
 
     const end = performance.now();
     this.logger.log(
