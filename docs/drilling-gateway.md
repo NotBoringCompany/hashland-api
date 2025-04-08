@@ -95,7 +95,7 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
     - `issuedHASH`: The total amount of HASH issued in the current cycle
     - `operatorEffData`: Data about operator efficiency and drilling difficulty
 
-13. **new-cycle**: Sent when rewards are distributed at the end of a drilling cycle
+13. **new-cycle**: Sent when a new drilling cycle is created
     - `_id`: The database ID of the drilling cycle
     - `cycleNumber`: The current cycle number
     - `startTime`: The start time of the drilling cycle
@@ -105,12 +105,15 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
     - `difficulty`: An arbitrary difficulty value that determines how hard it is to extract $HASH during this cycle
     - `issuedHASH`: The total amount of $HASH that was issued during this cycle
     - `extractorOperatorId`: The database ID of the operator who owns the extractor drill
-    - `extractorOperatorName`: The name of the operator who owns the extractor drill
-    - `rewardShares`: The detailed reward shares for all operators who received rewards in this cycle
     - `totalWeightedEff`: The total weighted efficiency from all operators in this cycle
 
-14. **latest-cycle**: Sent in response to a get-latest-cycle request
+14. **cycle-reward**: Sent to operators who earned rewards in a specific cycle
+    - `cycleNumber`: The cycle number for which the reward was earned
+    - `operatorReward`: The amount of $HASH earned by the operator in this cycle
+
+15. **latest-cycle**: Sent in response to a get-latest-cycle request
     - Array of the latest 5 drilling cycles, each with the same structure as the new-cycle event
+    - When requested by an authenticated operator, includes an additional `operatorReward` field with the operator's personal reward for each cycle
 
 ## Usage Example
 
@@ -166,46 +169,34 @@ socket.on('drilling-update', (data) => console.log('Real-time update:', data));
 
 // Listen for new cycle
 socket.on('new-cycle', (data) => {
-  console.log('Cycle rewards for cycle #' + data.cycleNumber);
-  console.log('Extractor operator:', data.extractorOperatorName || 'No extractor');
+  console.log('New cycle created:', data.cycleNumber);
+  console.log('Cycle start time:', new Date(data.startTime).toLocaleString());
+  console.log('Extractor operator ID:', data.extractorOperatorId || 'No extractor');
   console.log('Total issued HASH:', data.issuedHASH);
   console.log('Total weighted efficiency:', data.totalWeightedEff);
-  
-  // Find my reward share
-  const myOperatorId = 'your-operator-id';
-  const myShare = data.rewardShares.find(share => share.operatorId === myOperatorId);
-  if (myShare) {
-    console.log('My reward:', myShare.amount + ' HASH');
-  }
-  
-  // Display top earners
-  const topEarners = [...data.rewardShares]
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 3);
-  console.log('Top earners:');
-  topEarners.forEach((share, index) => {
-    console.log(`${index + 1}. ${share.operatorName}: ${share.amount} HASH`);
-  });
+});
+
+// Listen for personal cycle rewards
+socket.on('cycle-reward', (data) => {
+  console.log(`You earned ${data.operatorReward} HASH in cycle #${data.cycleNumber}!`);
+  // Update UI to show personal reward
+  updateRewardDisplay(data.operatorReward);
 });
 
 // Listen for recent cycle history
 socket.on('latest-cycle', (cycles) => {
   console.log('Recent cycle rewards:');
-  cycles.forEach((cycle, index) => {
+  cycles.forEach((cycle) => {
     console.log(`Cycle #${cycle.cycleNumber} (${new Date(cycle.startTime).toLocaleString()})`);
-    console.log(`Extractor operator: ${cycle.extractorOperatorName || 'No extractor'}`);
+    console.log(`Extractor operator ID: ${cycle.extractorOperatorId || 'No extractor'}`);
     console.log(`Total issued HASH: ${cycle.issuedHASH}`);
     
-    // Find my reward share in each cycle
-    const myOperatorId = 'your-operator-id';
-    const myShare = cycle.rewardShares.find(share => share.operatorId === myOperatorId);
-    if (myShare) {
-      console.log(`My reward: ${myShare.amount} HASH`);
+    // If this is an authenticated request, operatorReward will be included
+    if (cycle.operatorReward !== undefined) {
+      console.log(`My reward: ${cycle.operatorReward} HASH`);
     }
     
-    if (index < cycles.length - 1) {
-      console.log('-------------------');
-    }
+    console.log('-------------------');
   });
 });
 

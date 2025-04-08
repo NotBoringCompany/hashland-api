@@ -426,8 +426,8 @@ export class DrillingCycleService {
     // ✅ Step 7: Send WebSocket notification about the latest cycle
     await this.drillingGateway.storeLatestCycleInRedis(latestCycle);
 
-    // Send WebSocket notification
-    await this.drillingGatewayService.notifyNewCycle(latestCycle);
+    // Send WebSocket notification with reward shares for each operator
+    await this.drillingGatewayService.notifyNewCycle(latestCycle, rewardShares);
 
     const endTime = performance.now();
     this.logger.log(

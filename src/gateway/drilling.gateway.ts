@@ -12,7 +12,7 @@ import {
   DrillingSessionStatus,
 } from 'src/drills/drilling-session.service';
 import { OperatorService } from 'src/operators/operator.service';
-import { Types } from 'mongoose';
+import { Types, Model } from 'mongoose';
 import { RedisService } from 'src/common/redis.service';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -27,6 +27,8 @@ import {
   FuelStatusResponse,
 } from './drilling.gateway.types';
 import { DrillingCycle } from 'src/drills/schemas/drilling-cycle.schema';
+import { InjectModel } from '@nestjs/mongoose';
+import { DrillingCycleRewardShare } from 'src/drills/schemas/drilling-crs.schema';
 
 /**
  * WebSocket Gateway for handling real-time drilling updates.
@@ -82,6 +84,8 @@ export class DrillingGateway
     private readonly operatorService: OperatorService,
     private readonly redisService: RedisService,
     private readonly jwtService: JwtService,
+    @InjectModel(DrillingCycleRewardShare.name)
+    private rewardShareModel: Model<DrillingCycleRewardShare>,
   ) {}
 
   /**
@@ -367,6 +371,14 @@ export class DrillingGateway
    */
   getOnlineOperatorCount(): number {
     return this.onlineOperators.size;
+  }
+
+  /**
+   * Get all connected operator IDs.
+   * @returns Array of connected operator IDs
+   */
+  getConnectedOperatorIds(): string[] {
+    return Array.from(this.onlineOperators);
   }
 
   /**
@@ -838,13 +850,14 @@ export class DrillingGateway
 
       // Get recent rewards from Redis with proper error handling
       try {
-        const latestCycle = await this.getLatestCycles();
+        // Pass the operator ID to get personalized reward info
+        const latestCycle = await this.getLatestCycles(operatorId);
 
         // Send the rewards to the client
         client.emit('latest-cycle', latestCycle);
 
         this.logger.log(
-          `📊 Sent latest cycle to operator ${operatorId} on socket ${client.id}`,
+          `📊 Sent latest cycle with reward info to operator ${operatorId} on socket ${client.id}`,
         );
       } catch (redisError) {
         this.logger.error(
@@ -865,10 +878,12 @@ export class DrillingGateway
   /**
    * Retrieves the latest 5 drilling cycles from Redis.
    *
-   * @returns Array of the latest 5 drilling cycles
+   * @param operatorId The operator ID to fetch reward shares for
+   * @returns Array of the latest 5 drilling cycles with operator reward shares
    */
-  async getLatestCycles(): Promise<DrillingCycle[]> {
+  async getLatestCycles(operatorId?: string): Promise<any[]> {
     try {
+      // Fetch the latest cycles
       const recentCyclesStr = await this.redisService.get(
         this.redisRecentCycleRewardsKey,
       );
@@ -877,13 +892,69 @@ export class DrillingGateway
         return [];
       }
 
-      return JSON.parse(recentCyclesStr);
+      const cycles: DrillingCycle[] = JSON.parse(recentCyclesStr);
+
+      // If no operatorId provided, return cycles without reward shares
+      if (!operatorId) {
+        return cycles;
+      }
+
+      // For each cycle, find the reward share from the database
+      const cycleNumbers = cycles.map((cycle) => cycle.cycleNumber);
+
+      // Get all reward shares for this operator and these cycles in one query
+      const rewardShares = await this.fetchRewardSharesFromDB(
+        new Types.ObjectId(operatorId),
+        cycleNumbers,
+      );
+
+      // Map of cycle number to reward amount for quick lookup
+      const cycleRewardMap = new Map<number, number>();
+      for (const share of rewardShares) {
+        cycleRewardMap.set(share.cycleNumber, share.amount);
+      }
+
+      // Add the rewards to each cycle
+      const results = cycles.map((cycle) => {
+        return {
+          ...cycle,
+          operatorReward: cycleRewardMap.get(cycle.cycleNumber) || 0,
+        };
+      });
+
+      return results;
     } catch (error) {
       this.logger.error(
         `❌ Error retrieving recent drilling cycles from Redis: ${error.message}`,
       );
       this.logger.error(error.stack);
       // Return empty array instead of failing
+      return [];
+    }
+  }
+
+  /**
+   * Fetches reward shares for a specific operator and array of cycle numbers
+   */
+  private async fetchRewardSharesFromDB(
+    operatorId: Types.ObjectId,
+    cycleNumbers: number[],
+  ): Promise<Array<{ cycleNumber: number; amount: number }>> {
+    try {
+      // Use the injected model to query for reward shares
+      const rewardShares = await this.rewardShareModel
+        .find(
+          {
+            operatorId: operatorId,
+            cycleNumber: { $in: cycleNumbers },
+          },
+          { cycleNumber: 1, amount: 1, _id: 0 },
+        )
+        .lean();
+
+      return rewardShares;
+    } catch (error) {
+      this.logger.error(`Error fetching reward shares: ${error.message}`);
       return [];
     }
   }
