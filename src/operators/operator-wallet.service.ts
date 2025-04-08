@@ -101,7 +101,7 @@ export class OperatorWalletService {
       // ✅ Step 5: Update `actualEff` of **Basic Drill** & Compute `cumulativeEff`
       const newActualEff = equityToActualEff(newEquity);
 
-      console.log(
+      this.logger.debug(
         `(updateAssetEquityForOperator) New actualEff: ${newActualEff}`,
       );
 
@@ -870,4 +870,3 @@ export class OperatorWalletService {
     }
   }
 }
-
