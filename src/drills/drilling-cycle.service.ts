@@ -653,8 +653,8 @@ export class DrillingCycleService {
           return {
             updateOne: {
               filter: {
-                operatorId: new Types.ObjectId(operatorId),
-                poolId: new Types.ObjectId(poolId),
+                operator: new Types.ObjectId(operatorId),
+                pool: new Types.ObjectId(poolId),
               },
               update: { $inc: { totalRewards: amount } },
             },
