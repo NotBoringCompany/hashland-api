@@ -113,6 +113,11 @@ export class OperatorWalletService {
 
       // ✅ Step 6: Compute `cumulativeEff`
       const oldActualEff = updatedDrill ? updatedDrill.actualEff : 0;
+
+      console.log(
+        `(updateAssetEquityForOperator) Old actualEff: ${oldActualEff}`,
+      );
+
       const effDifference = newActualEff - oldActualEff;
       const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
 
@@ -861,3 +866,4 @@ export class OperatorWalletService {
     }
   }
 }
+
