@@ -539,7 +539,7 @@ export class DrillingCycleService {
       // ✅ Step 5: Check If Extractor is in a Pool
       const poolOperator = await this.poolOperatorModel
         .findOne({ operator: extractorOperatorId })
-        .select('poolId')
+        .select('pool')
         .lean();
       const isSoloOperator = !poolOperator;
 
@@ -626,9 +626,10 @@ export class DrillingCycleService {
 
         // Track if extractor is in the same pool and add their reward
         if (activePoolOperatorIds.has(extractorOperatorId.toString())) {
-          poolOperatorRewards.set(
-            `${extractorOperatorId.toString()}_${poolOperator.pool.toString()}`,
-            extractorReward,
+          const poolOpKey = `${extractorOperatorId.toString()}_${poolOperator.pool.toString()}`;
+          poolOperatorRewards.set(poolOpKey, extractorReward);
+          this.logger.debug(
+            `Added extractor reward ${extractorReward} HASH to ${poolOpKey}`,
           );
         }
 
@@ -637,13 +638,12 @@ export class DrillingCycleService {
           pool.leaderId &&
           activePoolOperatorIds.has(pool.leaderId.toString())
         ) {
-          const existingReward =
-            poolOperatorRewards.get(
-              `${pool.leaderId.toString()}_${poolOperator.pool.toString()}`,
-            ) || 0;
-          poolOperatorRewards.set(
-            `${pool.leaderId.toString()}_${poolOperator.pool.toString()}`,
-            existingReward + leaderReward,
+          const poolOpKey = `${pool.leaderId.toString()}_${poolOperator.pool.toString()}`;
+          const existingReward = poolOperatorRewards.get(poolOpKey) || 0;
+          const newReward = existingReward + leaderReward;
+          poolOperatorRewards.set(poolOpKey, newReward);
+          this.logger.debug(
+            `Added leader reward ${leaderReward} HASH to ${poolOpKey}, total: ${newReward}`,
           );
         }
 
@@ -655,7 +655,12 @@ export class DrillingCycleService {
           // Track individual pool operator rewards
           const poolOpKey = `${operator.operatorId.toString()}_${poolOperator.pool.toString()}`;
           const existingReward = poolOperatorRewards.get(poolOpKey) || 0;
-          poolOperatorRewards.set(poolOpKey, existingReward + opReward);
+          const newReward = existingReward + opReward;
+
+          poolOperatorRewards.set(poolOpKey, newReward);
+          this.logger.debug(
+            `Added pool weighted reward ${opReward.toFixed(4)} HASH to ${poolOpKey}, total: ${newReward.toFixed(4)}`,
+          );
 
           return {
             operatorId: operator.operatorId,
@@ -708,6 +713,14 @@ export class DrillingCycleService {
     poolOperatorRewards: Map<string, number>,
   ): Promise<void> {
     try {
+      // Log the rewards for debugging
+      this.logger.debug(
+        `Updating pool rewards: ${JSON.stringify(Array.from(poolRewards.entries()))}`,
+      );
+      this.logger.debug(
+        `Updating pool operator rewards: ${JSON.stringify(Array.from(poolOperatorRewards.entries()))}`,
+      );
+
       // Create bulkWrite operations for pools
       const poolBulkOps = Array.from(poolRewards.entries()).map(
         ([poolId, amount]) => ({
@@ -725,8 +738,8 @@ export class DrillingCycleService {
           return {
             updateOne: {
               filter: {
-                operatorId: new Types.ObjectId(operatorId),
-                poolId: new Types.ObjectId(poolId),
+                operator: new Types.ObjectId(operatorId),
+                pool: new Types.ObjectId(poolId),
               },
               update: { $inc: { totalRewards: amount } },
             },
@@ -735,19 +748,30 @@ export class DrillingCycleService {
       );
 
       // Execute bulkWrite operations in parallel
+      const updatePromises = [];
+
       if (poolBulkOps.length > 0) {
-        await this.poolModel.bulkWrite(poolBulkOps);
+        updatePromises.push(this.poolModel.bulkWrite(poolBulkOps));
         this.logger.log(
-          `✅ Updated total rewards for ${poolBulkOps.length} pools`,
+          `⏳ Updating total rewards for ${poolBulkOps.length} pools`,
         );
       }
 
       if (poolOperatorBulkOps.length > 0) {
-        await this.poolOperatorModel.bulkWrite(poolOperatorBulkOps);
+        updatePromises.push(
+          this.poolOperatorModel.bulkWrite(poolOperatorBulkOps),
+        );
         this.logger.log(
-          `✅ Updated total rewards for ${poolOperatorBulkOps.length} pool operators`,
+          `⏳ Updating total rewards for ${poolOperatorBulkOps.length} pool operators`,
         );
       }
+
+      // Wait for all updates to complete
+      await Promise.all(updatePromises);
+
+      this.logger.log(
+        `✅ Successfully updated rewards for ${poolBulkOps.length} pools and ${poolOperatorBulkOps.length} pool operators`,
+      );
     } catch (error) {
       this.logger.error(
         `❌ Error updating pool and operator rewards: ${error.message}`,
