@@ -321,6 +321,14 @@ export class PoolService implements OnModuleInit {
     forceUpdate: boolean = false,
   ): Promise<number> {
     try {
+      // Early return if poolId is null
+      if (!poolId) {
+        this.logger.warn(
+          `Skipping pool efficiency update - poolId is null or undefined`,
+        );
+        return 0;
+      }
+
       const poolIdObj =
         typeof poolId === 'string' ? new Types.ObjectId(poolId) : poolId;
       // Try to get from cache first
