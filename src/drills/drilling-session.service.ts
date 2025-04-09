@@ -530,7 +530,9 @@ export class DrillingSessionService {
     const activeSessions = await this.redisService.get(
       this.redisActiveSessionsKey,
     );
-    return activeSessions ? parseInt(activeSessions, 10) : 0;
+    // Ensure we never return a negative value, as that would be invalid
+    const count = activeSessions ? parseInt(activeSessions, 10) : 0;
+    return Math.max(0, count);
   }
 
   /**
@@ -540,7 +542,9 @@ export class DrillingSessionService {
     const waitingSessions = await this.redisService.get(
       this.redisWaitingSessionsKey,
     );
-    return waitingSessions ? parseInt(waitingSessions, 10) : 0;
+    // Ensure we never return a negative value, as that would be invalid
+    const count = waitingSessions ? parseInt(waitingSessions, 10) : 0;
+    return Math.max(0, count);
   }
 
   /**
@@ -550,7 +554,9 @@ export class DrillingSessionService {
     const stoppingSessions = await this.redisService.get(
       this.redisStoppingSessionsKey,
     );
-    return stoppingSessions ? parseInt(stoppingSessions, 10) : 0;
+    // Ensure we never return a negative value, as that would be invalid
+    const count = stoppingSessions ? parseInt(stoppingSessions, 10) : 0;
+    return Math.max(0, count);
   }
 
   /**
@@ -644,6 +650,85 @@ export class DrillingSessionService {
         `Error getting session for ${operatorId}: ${err.message}`,
       );
       return null;
+    }
+  }
+
+  /**
+   * Recalibrates session counters in Redis by counting the actual number of sessions
+   * in each status. This helps fix counter drift that may occur due to race conditions.
+   */
+  async recalibrateSessionCounters(): Promise<void> {
+    try {
+      this.logger.log('🔄 Recalibrating Redis session counters...');
+
+      // Get all session keys
+      const sessionKeys = await this.redisService.scanKeys(
+        `${this.redisSessionKeyPrefix}*`,
+      );
+
+      if (!sessionKeys.length) {
+        // If no sessions, set all counters to 0
+        await Promise.all([
+          this.redisService.set(this.redisActiveSessionsKey, '0'),
+          this.redisService.set(this.redisWaitingSessionsKey, '0'),
+          this.redisService.set(this.redisStoppingSessionsKey, '0'),
+        ]);
+        this.logger.log('✅ Counters reset to 0 - no sessions found');
+        return;
+      }
+
+      // Get all sessions in batch
+      const sessionsData = await this.redisService.mget(sessionKeys);
+
+      // Count sessions by status
+      let activeCount = 0;
+      let waitingCount = 0;
+      let stoppingCount = 0;
+
+      for (const sessionData of sessionsData) {
+        if (!sessionData) continue;
+
+        const session = JSON.parse(sessionData) as RedisDrillingSession;
+
+        if (session.endTime) continue; // Skip ended sessions
+
+        switch (session.status) {
+          case DrillingSessionStatus.ACTIVE:
+            activeCount++;
+            break;
+          case DrillingSessionStatus.WAITING:
+            waitingCount++;
+            break;
+          case DrillingSessionStatus.STOPPING:
+            stoppingCount++;
+            break;
+        }
+      }
+
+      // Update all counters to match actual counts
+      await Promise.all([
+        this.redisService.set(
+          this.redisActiveSessionsKey,
+          activeCount.toString(),
+        ),
+        this.redisService.set(
+          this.redisWaitingSessionsKey,
+          waitingCount.toString(),
+        ),
+        this.redisService.set(
+          this.redisStoppingSessionsKey,
+          stoppingCount.toString(),
+        ),
+      ]);
+
+      this.logger.log(
+        `✅ Counters recalibrated: active=${activeCount}, waiting=${waitingCount}, stopping=${stoppingCount}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `❌ Error recalibrating session counters: ${error.message}`,
+      );
+      // Don't rethrow to avoid breaking calling methods
     }
   }
 }

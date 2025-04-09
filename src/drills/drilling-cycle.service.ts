@@ -232,6 +232,9 @@ export class DrillingCycleService {
         );
       }
 
+      // Recalibrate session counters to ensure accurate counts
+      await this.drillingSessionService.recalibrateSessionCounters();
+
       // Get total active operators after activation
       const activeOperators =
         await this.drillingSessionService.fetchActiveDrillingSessionsCount();
@@ -407,6 +410,9 @@ export class DrillingCycleService {
 
       return;
     }
+
+    // Recalibrate session counters to ensure accuracy
+    await this.drillingSessionService.recalibrateSessionCounters();
 
     // ✅ Step 6: Complete any stopping sessions
     const completionResult =
