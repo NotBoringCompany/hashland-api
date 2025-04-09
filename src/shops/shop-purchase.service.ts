@@ -137,10 +137,18 @@ export class ShopPurchaseService {
       );
 
       // Grant the effects of the shop item to the operator
-      await this.grantShopItemEffect(
+      await this.grantShopItemEffects(
         operatorId,
         purchaseAllowedResponse.data.shopItemEffects,
-      );
+      ).catch((err: any) => {
+        this.logger.error(
+          `(purchaseItem) Error granting shop item effect: ${err.message}`,
+        );
+
+        throw new InternalServerErrorException(
+          `(purchaseItem) Error granting shop item effect: ${err.message}`,
+        );
+      });
 
       this.logger.debug(
         `(purchaseItem) Shop item effects granted to operator ${operatorId}.`,
@@ -167,10 +175,10 @@ export class ShopPurchaseService {
   }
 
   /**
-   * Grants the operator the effect of a shop item. For example,
+   * Grants the operator the effects of a shop item. For example,
    * if the shop item is a drill, we would create a new drill for the operator and update the cumulative EFF of the operator.
    */
-  async grantShopItemEffect(
+  async grantShopItemEffects(
     operatorId: Types.ObjectId,
     shopItemEffects: ShopItemEffects,
   ): Promise<void> {
