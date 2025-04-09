@@ -105,6 +105,7 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
     - `difficulty`: An arbitrary difficulty value that determines how hard it is to extract $HASH during this cycle
     - `issuedHASH`: The total amount of $HASH that was issued during this cycle
     - `extractorOperatorId`: The database ID of the operator who owns the extractor drill
+    - `extractorOperatorUsername`: The username of the operator who owns the extractor drill (if available)
     - `totalWeightedEff`: The total weighted efficiency from all operators in this cycle
 
 14. **cycle-reward**: Sent to operators who earned rewards in a specific cycle
@@ -171,7 +172,7 @@ socket.on('drilling-update', (data) => console.log('Real-time update:', data));
 socket.on('new-cycle', (data) => {
   console.log('New cycle created:', data.cycleNumber);
   console.log('Cycle start time:', new Date(data.startTime).toLocaleString());
-  console.log('Extractor operator ID:', data.extractorOperatorId || 'No extractor');
+  console.log('Extractor operator:', data.extractorOperatorUsername || 'No extractor');
   console.log('Total issued HASH:', data.issuedHASH);
   console.log('Total weighted efficiency:', data.totalWeightedEff);
 });
@@ -188,7 +189,7 @@ socket.on('latest-cycle', (cycles) => {
   console.log('Recent cycle rewards:');
   cycles.forEach((cycle) => {
     console.log(`Cycle #${cycle.cycleNumber} (${new Date(cycle.startTime).toLocaleString()})`);
-    console.log(`Extractor operator ID: ${cycle.extractorOperatorId || 'No extractor'}`);
+    console.log(`Extractor operator: ${cycle.extractorOperatorUsername || 'No extractor'}`);
     console.log(`Total issued HASH: ${cycle.issuedHASH}`);
     
     // If this is an authenticated request, operatorReward will be included
