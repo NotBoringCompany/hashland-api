@@ -175,9 +175,15 @@ export class DrillingGatewayService {
   }
 
   /**
-   * Notifies all active operators about the latest driling cycle.
+   * Notifies all active operators about the latest drilling cycle.
+   *
+   * @param drillingCycle The latest drilling cycle data
+   * @param rewardShares Optional array of reward shares for each operator
    */
-  async notifyNewCycle(drillingCycle: DrillingCycle | null) {
+  async notifyNewCycle(
+    drillingCycle: DrillingCycle | null,
+    rewardShares?: Array<{ operatorId: Types.ObjectId; amount: number }>,
+  ) {
     // Ensure we have a valid cycle before broadcasting
     if (!drillingCycle || !drillingCycle.cycleNumber) {
       this.logger.warn(
@@ -186,8 +192,57 @@ export class DrillingGatewayService {
       return;
     }
 
-    // Broadcast to all connected clients
+    // First, broadcast the base cycle data to everyone
     this.drillingGateway.server.emit('new-cycle', drillingCycle);
+
+    // Process reward shares if available
+    if (rewardShares && rewardShares.length > 0) {
+      const operatorRewards = new Map<string, number>();
+
+      // Create a map of operator IDs to reward amounts
+      for (const share of rewardShares) {
+        if (share.operatorId) {
+          operatorRewards.set(share.operatorId.toString(), share.amount);
+        }
+      }
+
+      // Get connected operator IDs
+      const socketOperators = this.drillingGateway.getConnectedOperatorIds();
+      let processedCount = 0;
+
+      // Send reward info to each operator
+      for (const operatorId of socketOperators) {
+        const operatorReward = operatorRewards.get(operatorId) || 0;
+
+        // Only send if operator actually has a reward
+        if (operatorReward > 0) {
+          const socketIds =
+            this.drillingGateway.getAllSocketsForOperator(operatorId);
+
+          // Create a minimal payload with just the reward info
+          const rewardData = {
+            cycleNumber: drillingCycle.cycleNumber,
+            operatorReward,
+          };
+
+          // Send to all operator's devices
+          for (const socketId of socketIds) {
+            if (this.drillingGateway.server.sockets.sockets.has(socketId)) {
+              this.drillingGateway.server
+                .to(socketId)
+                .emit('cycle-reward', rewardData);
+            }
+          }
+          processedCount++;
+        }
+      }
+
+      if (processedCount > 0) {
+        this.logger.log(
+          `💸 Sent personalized rewards to ${processedCount} operators for cycle #${drillingCycle.cycleNumber}`,
+        );
+      }
+    }
 
     this.logger.log(
       `💰 Broadcasted new cycle #${drillingCycle.cycleNumber} with ${drillingCycle.activeOperators} active operators and total weighted efficiency of ${drillingCycle.totalWeightedEff || 0}`,
