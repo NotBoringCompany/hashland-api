@@ -455,6 +455,9 @@ export class DrillingCycleService {
       amount: number;
     }[] = [];
 
+    // Get the amount to send to the hash reserve
+    let toSendToHashReserve = 0;
+
     // ✅ Step 1: Fetch All Active Operators' IDs
     const allActiveOperatorIds =
       await this.drillingSessionService.fetchActiveDrillingSessionOperatorIds();
@@ -507,9 +510,6 @@ export class DrillingCycleService {
     // Track pools for reward updates
     const poolRewards = new Map<string, number>();
     const poolOperatorRewards = new Map<string, number>();
-
-    // Get the amount to send to the hash reserve
-    let toSendToHashReserve = 0;
 
     if (extractorOperatorId === null) {
       // 🟡 **No Extractor Selected - Reserve Extractor's HASH**
@@ -692,6 +692,17 @@ export class DrillingCycleService {
 
         // Add all poolRewardsToAdd along with the weighted pool rewards
         rewardData.push(...poolRewardsToAdd, ...weightedPoolRewards);
+
+        // Loop through the reward data again and check how much HASH is sent compared to the `issuedHash`.
+        // If the total is less than the issuedHash, add the difference to the reserve.
+        const totalRewardData = rewardData.reduce(
+          (sum, reward) => sum + reward.amount,
+          0,
+        );
+
+        this.logger.debug(
+          `(distributeCycleRewards) Total HASH rewarded to operators: ${totalRewardData}, issuedHash: ${issuedHash}`,
+        );
 
         this.logger.log(
           `✅ (distributeCycleRewards) POOL rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH. ${pool.leaderId ? `Leader received ${leaderReward} $HASH.` : 'No leader found, reward sent to reserve.'}`,
