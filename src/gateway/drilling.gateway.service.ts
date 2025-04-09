@@ -195,6 +195,8 @@ export class DrillingGatewayService {
     // First, broadcast the base cycle data to everyone
     this.drillingGateway.server.emit('new-cycle', drillingCycle);
 
+    this.logger.debug('(notifyNewCycle) rewardShares', rewardShares);
+
     // Process reward shares if available
     if (rewardShares && rewardShares.length > 0) {
       const operatorRewards = new Map<string, number>();
@@ -205,6 +207,8 @@ export class DrillingGatewayService {
           operatorRewards.set(share.operatorId.toString(), share.amount);
         }
       }
+
+      this.logger.debug('(notifyNewCycle) operatorRewards', operatorRewards);
 
       // Get connected operator IDs
       const socketOperators = this.drillingGateway.getConnectedOperatorIds();
