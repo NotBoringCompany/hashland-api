@@ -456,7 +456,6 @@ export class DrillingCycleService {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No active operators found for reward distribution.`,
       );
-      return [];
     }
 
     // ✅ Step 2: Fetch Active Operators' Data (Cumulative Eff, Eff Multiplier)
@@ -471,7 +470,6 @@ export class DrillingCycleService {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No valid active operators.`,
       );
-      return [];
     }
 
     // ✅ Step 3: Apply Luck Factor & Compute Weighted Eff
@@ -498,7 +496,6 @@ export class DrillingCycleService {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No valid weighted EFF for reward distribution.`,
       );
-      return [];
     }
 
     // Track pools for reward updates
@@ -577,7 +574,6 @@ export class DrillingCycleService {
           this.logger.error(
             `(distributeCycleRewards) Pool not found for extractor operator: ${extractorOperatorId}`,
           );
-          return [];
         }
 
         // Track total pool rewards
@@ -611,7 +607,6 @@ export class DrillingCycleService {
           this.logger.warn(
             `⚠️ (distributeCycleRewards) No valid weighted EFF for pool reward distribution.`,
           );
-          return [];
         }
 
         const extractorReward =
