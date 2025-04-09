@@ -671,14 +671,24 @@ export class DrillingCycleService {
           };
         });
 
-        rewardData.push(
-          { operatorId: extractorOperatorId, amount: extractorReward },
-          { operatorId: pool.leaderId, amount: leaderReward },
-          ...weightedPoolRewards,
-        );
+        // Create an array to hold all rewards that should be added to rewardData
+        const poolRewardsToAdd = [
+          { operatorId: extractorOperatorId, amount: extractorReward }, // Extractor Reward
+        ];
+
+        // Only add leader reward if leaderId exists
+        if (pool.leaderId) {
+          poolRewardsToAdd.push({
+            operatorId: pool.leaderId,
+            amount: leaderReward,
+          });
+        }
+
+        // Add all poolRewardsToAdd along with the weighted pool rewards
+        rewardData.push(...poolRewardsToAdd, ...weightedPoolRewards);
 
         this.logger.log(
-          `✅ (distributeCycleRewards) POOL rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH. Leader received ${leaderReward} $HASH.`,
+          `✅ (distributeCycleRewards) POOL rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH. ${pool.leaderId ? `Leader received ${leaderReward} $HASH.` : 'No leader found, reward sent to reserve.'}`,
         );
       }
     }
@@ -694,22 +704,49 @@ export class DrillingCycleService {
     // ✅ Step 10: Group rewards by operator ID and remove null entries
     const groupedRewardMap = new Map<string, number>();
 
+    // Count how many invalid rewards we filtered out
+    let skippedRewards = 0;
+
     // Group rewardData by operatorId and sum the amounts
     for (const reward of rewardData) {
       // Skip null or undefined operatorId
-      if (!reward.operatorId) continue;
+      if (!reward.operatorId) {
+        skippedRewards++;
+        continue;
+      }
 
-      const operatorIdString = reward.operatorId.toString();
-      const currentTotal = groupedRewardMap.get(operatorIdString) || 0;
-      groupedRewardMap.set(operatorIdString, currentTotal + reward.amount);
+      try {
+        const operatorIdString = reward.operatorId.toString();
+        const currentTotal = groupedRewardMap.get(operatorIdString) || 0;
+        groupedRewardMap.set(operatorIdString, currentTotal + reward.amount);
+      } catch (error) {
+        this.logger.error(
+          `❌ Error processing reward: ${error.message}`,
+          error,
+        );
+        skippedRewards++;
+        // Continue with other rewards
+      }
+    }
+
+    if (skippedRewards > 0) {
+      this.logger.warn(`⚠️ Skipped ${skippedRewards} invalid rewards`);
     }
 
     // Convert the grouped map to rewardShares
     for (const [operatorIdString, amount] of groupedRewardMap.entries()) {
-      rewardShares.push({
-        operatorId: new Types.ObjectId(operatorIdString),
-        amount,
-      });
+      try {
+        rewardShares.push({
+          operatorId: new Types.ObjectId(operatorIdString),
+          amount,
+        });
+      } catch (error) {
+        this.logger.error(
+          `❌ Error creating reward share: ${error.message}`,
+          error,
+        );
+        // Continue with other reward shares
+      }
     }
 
     this.logger.debug(
@@ -751,19 +788,27 @@ export class DrillingCycleService {
       );
 
       // Create bulkWrite operations for pools
-      const poolBulkOps = Array.from(poolRewards.entries()).map(
-        ([poolId, amount]) => ({
+      const poolBulkOps = Array.from(poolRewards.entries())
+        .filter(([poolId]) => poolId != null) // Filter out null pool IDs
+        .map(([poolId, amount]) => ({
           updateOne: {
             filter: { _id: new Types.ObjectId(poolId) },
             update: { $inc: { totalRewards: amount } },
           },
-        }),
-      );
+        }));
 
       // Create bulkWrite operations for pool operators
-      const poolOperatorBulkOps = Array.from(poolOperatorRewards.entries()).map(
-        ([key, amount]) => {
-          const [operatorId, poolId] = key.split('_');
+      const poolOperatorBulkOps = Array.from(poolOperatorRewards.entries())
+        .filter(([key]) => key != null && key.includes('_')) // Ensure key has the expected format
+        .map(([key, amount]) => {
+          const parts = key.split('_');
+          // Verify that we have both operatorId and poolId from the key
+          if (parts.length !== 2 || !parts[0] || !parts[1]) {
+            this.logger.warn(`⚠️ Invalid pool operator key format: ${key}`);
+            return null;
+          }
+
+          const [operatorId, poolId] = parts;
           return {
             updateOne: {
               filter: {
@@ -773,8 +818,8 @@ export class DrillingCycleService {
               update: { $inc: { totalRewards: amount } },
             },
           };
-        },
-      );
+        })
+        .filter((op) => op !== null); // Filter out any null operations
 
       // Execute bulkWrite operations in parallel
       const updatePromises = [];
@@ -818,6 +863,24 @@ export class DrillingCycleService {
   ) {
     if (!rewardData.length) return;
 
+    // Filter out any null or undefined operatorIds to prevent errors
+    const validRewardData = rewardData.filter(
+      (reward) => reward.operatorId != null,
+    );
+
+    if (validRewardData.length !== rewardData.length) {
+      this.logger.warn(
+        `⚠️ (batchIssueHashRewards) Filtered out ${rewardData.length - validRewardData.length} invalid rewards with null operatorIds`,
+      );
+
+      if (validRewardData.length === 0) {
+        this.logger.warn(
+          `⚠️ (batchIssueHashRewards) No valid rewards to process after filtering`,
+        );
+        return;
+      }
+    }
+
     // Measure execution time
     const start = performance.now();
 
@@ -825,7 +888,7 @@ export class DrillingCycleService {
     const batchPromises = [];
 
     // First, we need to determine which operators have active sessions
-    const operatorIds = rewardData.map((reward) => reward.operatorId);
+    const operatorIds = validRewardData.map((reward) => reward.operatorId);
 
     // Find operators with active sessions (ACTIVE or STOPPING status)
     const activeSessionsResult = await this.drillingSessionModel
@@ -847,7 +910,7 @@ export class DrillingCycleService {
     const activeOperatorRewards = [];
     const passiveOperatorRewards = [];
 
-    for (const reward of rewardData) {
+    for (const reward of validRewardData) {
       const operatorIdStr = reward.operatorId.toString();
 
       if (operatorsWithActiveSessions.has(operatorIdStr)) {
@@ -906,7 +969,7 @@ export class DrillingCycleService {
     const end = performance.now();
 
     this.logger.log(
-      `✅ (batchIssueHashRewards) Issued ${rewardData.length} rewards in ${
+      `✅ (batchIssueHashRewards) Issued ${validRewardData.length} rewards in ${
         end - start
       }ms. (${activeOperatorRewards.length} active, ${passiveOperatorRewards.length} passive).`,
     );
