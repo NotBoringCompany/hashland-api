@@ -298,17 +298,6 @@ export class DrillingSessionService {
         earnedHASHMap.set(operatorId.toString(), session.earnedHASH);
       });
 
-      // Update operator total HASH earned
-      const hashUpdatePromises = stoppingSessions.map(
-        ({ operatorId, session }) =>
-          this.operatorService.incrementTotalHASHEarned(
-            operatorId,
-            session.earnedHASH,
-          ),
-      );
-
-      await Promise.all(hashUpdatePromises);
-
       // Delete sessions from Redis
       const deletePromises = stoppingSessions.map(({ key }) =>
         this.redisService.del(key),
