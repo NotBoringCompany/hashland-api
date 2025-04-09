@@ -14,6 +14,7 @@ import {
 } from 'src/operators/schemas/operator.schema';
 import { ShopPurchaseController } from './shop-purchase.controller';
 import { AlchemyModule } from 'src/alchemy/alchemy.module';
+import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AlchemyModule } from 'src/alchemy/alchemy.module';
     ]), // Register ShopPurchase schema
     TonModule,
     AlchemyModule,
+    DrillingGatewayModule,
   ],
   controllers: [ShopPurchaseController], // Expose API endpoints
   providers: [ShopPurchaseService], // Business logic for ShopService

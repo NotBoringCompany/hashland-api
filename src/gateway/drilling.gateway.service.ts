@@ -149,10 +149,31 @@ export class DrillingGatewayService {
       const socketIds =
         this.drillingGateway.getAllSocketsForOperator(operatorIdStr);
 
-      const message =
-        changeType === 'depleted'
-          ? `Your fuel has been depleted by ${changeAmount} units.`
-          : `Your fuel has been replenished by ${changeAmount} units.`;
+      // Skip if no connected sockets for this operator
+      if (socketIds.length === 0) {
+        this.logger.debug(
+          `⏭️ No connected sockets for operator ${operatorIdStr} to notify about fuel ${changeType}`,
+        );
+        continue;
+      }
+
+      // Create appropriate message based on change type
+      let message = '';
+      let eventTitle = '';
+
+      if (changeType === 'depleted') {
+        message = `Your fuel has been depleted by ${changeAmount} units.`;
+        eventTitle = 'Fuel Depleted';
+      } else {
+        // Handle both replenishment and max fuel increase
+        if (changeAmount > update.maxFuel * 0.5) {
+          message = `Your fuel capacity has been increased by ${changeAmount} units.`;
+          eventTitle = 'Fuel Capacity Increased';
+        } else {
+          message = `Your fuel has been replenished by ${changeAmount} units.`;
+          eventTitle = 'Fuel Replenished';
+        }
+      }
 
       const fuelUpdateMessage = {
         currentFuel: update.currentFuel,
@@ -160,8 +181,10 @@ export class DrillingGatewayService {
         changeAmount,
         changeType,
         message,
+        eventTitle,
       };
 
+      // Send notification to all connected sockets for this operator
       for (const socketId of socketIds) {
         if (this.drillingGateway.server.sockets.sockets.has(socketId)) {
           this.drillingGateway.server

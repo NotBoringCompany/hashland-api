@@ -702,8 +702,10 @@ export class OperatorService {
 
     // Execute operations in parallel
     await Promise.all([
-      // Batch cache fuel values in Redis
-      this.batchCacheFuelValues(operatorFuelData),
+      // Cache fuel values in Redis (handle each operator individually)
+      ...operatorFuelData.map((data) =>
+        this.cacheFuelValues(data.operatorId, data.currentFuel, data.maxFuel),
+      ),
 
       // Execute bulk write if there are operations
       bulkWriteOperations.length > 0
@@ -774,33 +776,43 @@ export class OperatorService {
       // Calculate new fuel value (capped at max fuel)
       const newFuel = Math.min(maxFuel, currentFuel + fuelGained);
 
-      // Add to fuel data for batch caching
-      operatorFuelData.push({
-        operatorId: operator._id,
-        currentFuel: newFuel,
-        maxFuel,
-      });
+      // Only include operators whose fuel actually changed
+      if (newFuel > currentFuel) {
+        // Add to fuel data for batch caching
+        operatorFuelData.push({
+          operatorId: operator._id,
+          currentFuel: newFuel,
+          maxFuel,
+        });
 
-      // Add to bulk write operations
-      bulkWriteOperations.push({
-        updateOne: {
-          filter: { _id: operator._id },
-          update: { $set: { currentFuel: newFuel } },
-        },
-      });
+        // Add to bulk write operations
+        bulkWriteOperations.push({
+          updateOne: {
+            filter: { _id: operator._id },
+            update: { $set: { currentFuel: newFuel } },
+          },
+        });
 
-      // Add to notification list - all operators get notified for real-time updates
-      updatedOperators.push({
-        operatorId: operator._id,
-        currentFuel: newFuel,
-        maxFuel,
-      });
+        // Add to notification list - all operators get notified for real-time updates
+        updatedOperators.push({
+          operatorId: operator._id,
+          currentFuel: newFuel,
+          maxFuel,
+        });
+      }
+    }
+
+    // Skip if there are no operators to update
+    if (updatedOperators.length === 0) {
+      return [];
     }
 
     // Execute operations in parallel
     await Promise.all([
-      // Batch cache fuel values in Redis
-      this.batchCacheFuelValues(operatorFuelData),
+      // Cache fuel values in Redis (handle each operator individually)
+      ...operatorFuelData.map((data) =>
+        this.cacheFuelValues(data.operatorId, data.currentFuel, data.maxFuel),
+      ),
 
       // Execute bulk write if there are operations
       bulkWriteOperations.length > 0

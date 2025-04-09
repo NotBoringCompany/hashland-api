@@ -17,6 +17,8 @@ import { DrillConfig } from 'src/common/enums/drill.enum';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
 import { AlchemyService } from 'src/alchemy/alchemy.service';
+import { RedisService } from 'src/common/redis.service';
+import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
 
 @Injectable()
 export class ShopPurchaseService {
@@ -33,6 +35,8 @@ export class ShopPurchaseService {
     private readonly operatorModel: Model<Operator>,
     private readonly tonService: TonService,
     private readonly alchemyService: AlchemyService,
+    private readonly redisService: RedisService,
+    private readonly drillingGatewayService: DrillingGatewayService,
   ) {}
 
   /**
@@ -209,15 +213,35 @@ export class ShopPurchaseService {
         });
       }
 
+      // First get current operator info to calculate new fuel values
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { currentFuel: 1, maxFuel: 1 })
+        .lean();
+
+      if (!operator) {
+        throw new Error(`Operator with ID ${operatorId} not found`);
+      }
+
+      let newMaxFuel = operator.maxFuel;
+      let newCurrentFuel = operator.currentFuel;
+      let maxFuelIncreased = false;
+      let fuelReplenished = false;
+      let maxFuelIncreaseAmount = 0;
+      let fuelReplenishedAmount = 0;
+
       // ✅ Step 2: Increase maxFuel if applicable
       if (
         shopItemEffects.maxFuelIncrease &&
         shopItemEffects.maxFuelIncrease > 0
       ) {
+        maxFuelIncreaseAmount = shopItemEffects.maxFuelIncrease;
+        newMaxFuel += maxFuelIncreaseAmount;
+        maxFuelIncreased = true;
+
         bulkOperations.push({
           updateOne: {
             filter: { _id: operatorId },
-            update: { $inc: { maxFuel: shopItemEffects.maxFuelIncrease } },
+            update: { $inc: { maxFuel: maxFuelIncreaseAmount } },
           },
         });
       }
@@ -227,38 +251,75 @@ export class ShopPurchaseService {
         shopItemEffects.replenishFuelRatio &&
         shopItemEffects.replenishFuelRatio > 0
       ) {
-        bulkOperations.push({
-          updateOne: {
-            filter: { _id: operatorId },
-            update: [
-              {
-                $set: {
-                  currentFuel: {
-                    $min: [
-                      {
-                        $add: [
-                          '$currentFuel',
-                          {
-                            $multiply: [
-                              '$maxFuel',
-                              shopItemEffects.replenishFuelRatio,
-                            ],
-                          },
-                        ],
-                      },
-                      '$maxFuel',
-                    ],
-                  },
-                },
-              },
-            ],
-          },
-        });
+        const fuelToAdd = newMaxFuel * shopItemEffects.replenishFuelRatio;
+        const oldFuel = newCurrentFuel;
+        newCurrentFuel = Math.min(newCurrentFuel + fuelToAdd, newMaxFuel);
+        fuelReplenishedAmount = newCurrentFuel - oldFuel;
+        fuelReplenished = fuelReplenishedAmount > 0;
+
+        if (fuelReplenished) {
+          bulkOperations.push({
+            updateOne: {
+              filter: { _id: operatorId },
+              update: { $set: { currentFuel: newCurrentFuel } },
+            },
+          });
+        }
       }
 
       // ✅ Step 4: Execute bulk updates if there are operations to perform
       if (bulkOperations.length > 0) {
         await this.operatorModel.bulkWrite(bulkOperations);
+      }
+
+      // ✅ Step 5: Update Redis cache for fuel values if they changed
+      if (maxFuelIncreased || fuelReplenished) {
+        const operatorFuelCacheKey = `operator:${operatorId.toString()}:fuel`;
+        await this.redisService.set(
+          operatorFuelCacheKey,
+          JSON.stringify({ currentFuel: newCurrentFuel, maxFuel: newMaxFuel }),
+          3600, // 1 hour expiry
+        );
+
+        // Create notification data
+        const operatorUpdate = {
+          operatorId,
+          currentFuel: newCurrentFuel,
+          maxFuel: newMaxFuel,
+        };
+
+        // Notify for fuel replenishment if applicable
+        if (fuelReplenished) {
+          this.logger.log(
+            `✅ (grantShopItemEffect) Fuel replenished for operator ${operatorId}: +${fuelReplenishedAmount} units (${newCurrentFuel}/${newMaxFuel})`,
+          );
+
+          // Send websocket notification for fuel replenishment
+          await this.drillingGatewayService.notifyFuelUpdates(
+            [operatorUpdate],
+            fuelReplenishedAmount,
+            'replenished',
+          );
+        }
+
+        // Notify for max fuel increase if applicable
+        if (
+          maxFuelIncreased &&
+          (!fuelReplenished || maxFuelIncreaseAmount > fuelReplenishedAmount)
+        ) {
+          this.logger.log(
+            `✅ (grantShopItemEffect) Max fuel increased for operator ${operatorId}: +${maxFuelIncreaseAmount} units (${newCurrentFuel}/${newMaxFuel})`,
+          );
+
+          // Send websocket notification for max fuel increase
+          // Only notify about max fuel increase if we haven't already notified for replenishment
+          // or if the max fuel increase is more significant than the replenishment
+          await this.drillingGatewayService.notifyFuelUpdates(
+            [operatorUpdate],
+            maxFuelIncreaseAmount,
+            'replenished',
+          );
+        }
       }
 
       this.logger.log(
