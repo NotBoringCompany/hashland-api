@@ -395,11 +395,6 @@ export class DrillingCycleService {
       amount: reward.amount,
     }));
 
-    this.logger.debug(
-      `(endCurrentCycle) Reward Share Docs:`,
-      JSON.stringify(rewardShareDocs, null, 2),
-    );
-
     await this.drillingCycleRewardShareModel.insertMany(rewardShareDocs);
 
     // Check if the cycle document was found and updated
@@ -739,10 +734,6 @@ export class DrillingCycleService {
       }
     }
 
-    this.logger.debug(
-      `Reward Shares: ${JSON.stringify(rewardShares, null, 2)}`,
-    );
-
     // Step 11: Send to Hash Reserve if there are any unissued rewards
     // Loop through the reward data again and check how much HASH is sent compared to the `issuedHash`.
     // If the total is less than the issuedHash, add the difference to the reserve.
@@ -763,6 +754,8 @@ export class DrillingCycleService {
       this.logger.debug(
         `(distributeCycleRewards) Sending ${toSendToHashReserve} $HASH to the Hash Reserve.`,
       );
+
+      await this.hashReserveService.addToHASHReserve(toSendToHashReserve);
     }
 
     const end = performance.now();
