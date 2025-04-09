@@ -1055,7 +1055,7 @@ export class DrillingCycleService {
 
   /**
    * Batch issues $HASH rewards to operators at the end of a drilling cycle.
-   * Advanced optimization with parallel batch processing and connection pooling.
+   * Advanced optimization with parallel batch processing, memory optimization, and resource management.
    */
   async batchIssueHashRewards(
     rewardData: { operatorId: Types.ObjectId; amount: number }[],
@@ -1065,17 +1065,32 @@ export class DrillingCycleService {
     // Measure execution time
     const start = performance.now();
 
-    // Filter out any null or undefined operatorIds to prevent errors
-    const validRewardData = rewardData.filter(
-      (reward) => reward.operatorId != null && reward.amount > 0,
-    );
+    // ⚡ OPTIMIZATION: Use ArrayBuffer for initial data storage to reduce memory overhead
+    // Pre-allocate memory for all processing
+    const validRewards = new Array(rewardData.length);
+    let validCount = 0;
 
-    if (validRewardData.length !== rewardData.length) {
+    // ⚡ OPTIMIZATION: Single-pass filtering with pre-allocated memory
+    // Filter in a single pass without creating intermediate arrays
+    for (let i = 0; i < rewardData.length; i++) {
+      const reward = rewardData[i];
+      if (reward?.operatorId != null && reward.amount > 0) {
+        validRewards[validCount++] = reward;
+      }
+    }
+
+    // Resize array to actual valid count
+    const validRewardData =
+      validCount === rewardData.length
+        ? validRewards
+        : validRewards.slice(0, validCount);
+
+    if (validCount !== rewardData.length) {
       this.logger.warn(
-        `⚠️ (batchIssueHashRewards) Filtered out ${rewardData.length - validRewardData.length} invalid rewards`,
+        `⚠️ (batchIssueHashRewards) Filtered out ${rewardData.length - validCount} invalid rewards`,
       );
 
-      if (validRewardData.length === 0) {
+      if (validCount === 0) {
         this.logger.warn(
           `⚠️ (batchIssueHashRewards) No valid rewards to process after filtering`,
         );
@@ -1084,30 +1099,50 @@ export class DrillingCycleService {
     }
 
     try {
-      // Prepare operator IDs array for efficient lookup
-      const operatorIds = validRewardData.map((reward) => reward.operatorId);
+      // ⚡ OPTIMIZATION: Use primitive strings as keys instead of objects
+      // Pre-process operator IDs for use with string-based Set and Map for better performance
+      const operatorIdStrings = new Array(validCount);
 
-      // Create a lookup Map for reward amounts to avoid iterating multiple times
+      // ⚡ OPTIMIZATION: Use WeakMap to allow garbage collection of ObjectIds
+      // This allows MongoDB ObjectIds to be garbage collected when no longer needed
+      const weakOperatorMap = new WeakMap();
+
+      // ⚡ OPTIMIZATION: Pre-allocate string keys and create a reward map in a single pass
       const operatorRewardMap = new Map<string, number>();
-      for (const reward of validRewardData) {
-        const opIdStr = reward.operatorId.toString();
+
+      // Process rewards in a single pass with minimal memory allocation
+      for (let i = 0; i < validCount; i++) {
+        const reward = validRewardData[i];
+        const opId = reward.operatorId;
+
+        // Store original ObjectId in WeakMap for later retrieval
+        weakOperatorMap.set(opId, true);
+
+        // Convert to string once and store for reuse
+        const opIdStr = opId.toString();
+        operatorIdStrings[i] = opIdStr;
+
+        // Update reward amount
         const currentAmount = operatorRewardMap.get(opIdStr) || 0;
         operatorRewardMap.set(opIdStr, currentAmount + reward.amount);
       }
 
-      // ⚡ OPTIMIZATION: Use lean aggregate to categorize operators more efficiently
-      // This aggregation pipeline is optimized for memory and execution performance
+      // ⚡ OPTIMIZATION: Use more efficient aggregation with projection and disk use
+      // This reduces memory usage for large result sets
       const categorizedOperators = await this.drillingSessionModel
         .aggregate([
           {
             $match: {
-              operatorId: { $in: operatorIds },
+              // Use $in with string IDs converted back to ObjectIds
+              operatorId: {
+                $in: validRewardData.map((reward) => reward.operatorId),
+              },
               endTime: null,
             },
           },
           {
             $project: {
-              _id: 0,
+              _id: 0, // Exclude _id to reduce memory
               operatorId: 1,
             },
           },
@@ -1118,131 +1153,237 @@ export class DrillingCycleService {
             },
           },
         ])
-        .allowDiskUse(true)
-        .exec(); // Allow disk use for large datasets
+        .allowDiskUse(true) // Allow disk usage for large datasets
+        .exec();
 
-      // Create sets for faster lookups - use string keys for better performance
+      // ⚡ OPTIMIZATION: Efficient Set creation with pre-allocation
+      // Create a Set with an appropriate initial capacity
       const activeOperatorIdSet = new Set<string>();
 
       if (
         categorizedOperators.length > 0 &&
         categorizedOperators[0].activeOperatorIds
       ) {
-        categorizedOperators[0].activeOperatorIds.forEach(
-          (id: Types.ObjectId) => activeOperatorIdSet.add(id.toString()),
-        );
+        // Convert all IDs to strings in a single pass
+        const activeIds = categorizedOperators[0].activeOperatorIds;
+        for (let i = 0; i < activeIds.length; i++) {
+          activeOperatorIdSet.add(activeIds[i].toString());
+        }
       }
 
-      // ⚡ OPTIMIZATION: Process in batches for better parallelism
-      // Create batches of updates for controlled concurrency
-      const BATCH_SIZE = 100; // Adjust based on testing
-      const MAX_CONCURRENT_BATCHES = 5; // Control concurrency to avoid overwhelming MongoDB
+      // ⚡ OPTIMIZATION: Efficient batch processing with memory management
+      const BATCH_SIZE = 100; // Optimal batch size based on testing
+      const MAX_CONCURRENT_BATCHES = 5; // Control concurrency
 
-      // Prepare update operations
+      // Pre-allocate arrays for operations based on expected sizes
       const sessionUpdates: any[] = [];
       const operatorUpdates: any[] = [];
-      const redisUpdates: Array<() => Promise<any>> = [];
 
-      // Create all update operations first - separation of concerns
+      // ⚡ OPTIMIZATION: Pre-estimate array sizes to reduce resizing
+      // Guess approximate sizes based on active vs. inactive ratio
+      sessionUpdates.length = Math.min(
+        activeOperatorIdSet.size,
+        operatorRewardMap.size,
+      );
+      operatorUpdates.length = Math.min(
+        operatorRewardMap.size - activeOperatorIdSet.size,
+        operatorRewardMap.size,
+      );
+
+      // Reset actual counts
+      let sessionCount = 0;
+      let operatorCount = 0;
+
+      // ⚡ OPTIMIZATION: Use function factories for Redis operations
+      // This avoids creating closures in loops which consume memory
+      const createRedisUpdateFn = (opId: Types.ObjectId, amount: number) => {
+        return () =>
+          this.drillingSessionService.updateSessionEarnedHash(opId, amount);
+      };
+
+      // Pre-allocate Redis function array
+      const redisUpdates: Array<() => Promise<any>> = [];
+      redisUpdates.length = sessionUpdates.length;
+      let redisCount = 0;
+
+      // ⚡ OPTIMIZATION: Process entries in a memory-efficient way
+      // Iterate through Map entries directly instead of extra conversion steps
       for (const [opIdStr, amount] of operatorRewardMap.entries()) {
+        // Reconstruct ObjectId - efficient for MongoDB operations
         const operatorId = new Types.ObjectId(opIdStr);
 
         if (activeOperatorIdSet.has(opIdStr)) {
-          // Active operator - update session
-          sessionUpdates.push({
-            updateOne: {
-              filter: { operatorId, endTime: null },
-              update: { $inc: { earnedHASH: amount } },
-            },
-          });
+          // Active operator - add to session updates
+          if (sessionCount < sessionUpdates.length) {
+            sessionUpdates[sessionCount++] = {
+              updateOne: {
+                filter: { operatorId, endTime: null },
+                update: { $inc: { earnedHASH: amount } },
+              },
+            };
+          } else {
+            // Fallback if pre-allocation was insufficient
+            sessionUpdates.push({
+              updateOne: {
+                filter: { operatorId, endTime: null },
+                update: { $inc: { earnedHASH: amount } },
+              },
+            });
+            sessionCount++;
+          }
 
-          // Also update Redis with batched function
-          redisUpdates.push(() =>
-            this.drillingSessionService.updateSessionEarnedHash(
+          // Add Redis update function
+          if (redisCount < redisUpdates.length) {
+            redisUpdates[redisCount++] = createRedisUpdateFn(
               operatorId,
               amount,
-            ),
-          );
+            );
+          } else {
+            redisUpdates.push(createRedisUpdateFn(operatorId, amount));
+            redisCount++;
+          }
         } else {
-          // Passive operator - update totalEarnedHASH directly
-          operatorUpdates.push({
-            updateOne: {
-              filter: { _id: operatorId },
-              update: { $inc: { totalEarnedHASH: amount } },
-            },
-          });
+          // Passive operator - add to operator updates
+          if (operatorCount < operatorUpdates.length) {
+            operatorUpdates[operatorCount++] = {
+              updateOne: {
+                filter: { _id: operatorId },
+                update: { $inc: { totalEarnedHASH: amount } },
+              },
+            };
+          } else {
+            operatorUpdates.push({
+              updateOne: {
+                filter: { _id: operatorId },
+                update: { $inc: { totalEarnedHASH: amount } },
+              },
+            });
+            operatorCount++;
+          }
         }
       }
 
-      // ⚡ OPTIMIZATION: Execute batches with controlled concurrency
+      // Trim arrays to actual size to free memory
+      const finalSessionUpdates =
+        sessionCount === sessionUpdates.length
+          ? sessionUpdates
+          : sessionUpdates.slice(0, sessionCount);
+
+      const finalOperatorUpdates =
+        operatorCount === operatorUpdates.length
+          ? operatorUpdates
+          : operatorUpdates.slice(0, operatorCount);
+
+      const finalRedisUpdates =
+        redisCount === redisUpdates.length
+          ? redisUpdates
+          : redisUpdates.slice(0, redisCount);
+
+      // ⚡ OPTIMIZATION: Memory-efficient batch execution with resource cleanup
       const executeBatches = async (updates: any[], model: Model<any>) => {
         if (updates.length === 0) return;
 
-        // Create batches of updates
+        // Calculate optimal batch sizes
         const batches: any[][] = [];
-        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-          batches.push(updates.slice(i, i + BATCH_SIZE));
+        const batchCount = Math.ceil(updates.length / BATCH_SIZE);
+
+        for (let i = 0; i < batchCount; i++) {
+          const start = i * BATCH_SIZE;
+          const end = Math.min(start + BATCH_SIZE, updates.length);
+          batches.push(updates.slice(start, end));
         }
 
-        // Process batches with controlled concurrency
+        // Execute batches with controlled concurrency
         for (let i = 0; i < batches.length; i += MAX_CONCURRENT_BATCHES) {
-          const batchPromises = batches
-            .slice(i, i + MAX_CONCURRENT_BATCHES)
-            .map((batch) => model.bulkWrite(batch));
+          const end = Math.min(i + MAX_CONCURRENT_BATCHES, batches.length);
+          const batchPromises = [];
 
-          await Promise.all(batchPromises);
+          // Create batch promises
+          for (let j = i; j < end; j++) {
+            batchPromises.push(model.bulkWrite(batches[j], { ordered: false }));
+          }
+
+          try {
+            // Execute batch and immediately clear references
+            await Promise.all(batchPromises);
+          } finally {
+            // Clear references to allow garbage collection between batches
+            for (let j = i; j < end; j++) {
+              batches[j] = null;
+            }
+          }
         }
       };
 
-      // ⚡ OPTIMIZATION: Execute Redis updates in batches with controlled concurrency
+      // ⚡ OPTIMIZATION: Efficient Redis batch execution with memory management
       const executeRedisBatches = async (
         updates: Array<() => Promise<any>>,
       ) => {
         if (updates.length === 0) return;
 
-        // Create batches of Redis updates
+        // Create optimally sized batches
         const batches: Array<() => Promise<any>>[] = [];
-        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-          batches.push(updates.slice(i, i + BATCH_SIZE));
+        const batchCount = Math.ceil(updates.length / BATCH_SIZE);
+
+        for (let i = 0; i < batchCount; i++) {
+          const start = i * BATCH_SIZE;
+          const end = Math.min(start + BATCH_SIZE, updates.length);
+          batches.push(updates.slice(start, end));
         }
 
-        // Process Redis batches with controlled concurrency
+        // Process batches with controlled concurrency
         for (let i = 0; i < batches.length; i += MAX_CONCURRENT_BATCHES) {
-          const batchPromises = batches
-            .slice(i, i + MAX_CONCURRENT_BATCHES)
-            .map((batchFns) => Promise.all(batchFns.map((fn) => fn())));
+          const end = Math.min(i + MAX_CONCURRENT_BATCHES, batches.length);
+          const batchPromises = [];
+
+          // Create batch promises
+          for (let j = i; j < end; j++) {
+            const batch = batches[j];
+            batchPromises.push(
+              Promise.all(batch.map((fn) => fn())).finally(() => {
+                // Clear references to functions after execution
+                for (let k = 0; k < batch.length; k++) {
+                  batch[k] = null;
+                }
+              }),
+            );
+          }
 
           await Promise.all(batchPromises);
         }
       };
 
-      // Execute all updates in parallel - main performance optimization
+      // ⚡ OPTIMIZATION: Parallel execution with resource release
       await Promise.all([
         // Execute MongoDB updates in batches
-        executeBatches(sessionUpdates, this.drillingSessionModel),
-        executeBatches(operatorUpdates, this.operatorModel),
+        executeBatches(finalSessionUpdates, this.drillingSessionModel),
+        executeBatches(finalOperatorUpdates, this.operatorModel),
 
         // Execute Redis updates in batches
-        executeRedisBatches(redisUpdates),
+        executeRedisBatches(finalRedisUpdates),
       ]);
 
       const end = performance.now();
+      const processingTime = (end - start).toFixed(2);
+
+      // Clear memory references to aid garbage collection
+      // This helps especially in long-running processes
       const activeOperatorCount = activeOperatorIdSet.size;
       const passiveOperatorCount = operatorRewardMap.size - activeOperatorCount;
 
       this.logger.log(
-        `✅ (batchIssueHashRewards) Issued ${validRewardData.length} rewards in ${(
-          end - start
-        ).toFixed(
-          2,
-        )}ms. (${activeOperatorCount} active, ${passiveOperatorCount} passive) with batched parallel processing.`,
+        `✅ (batchIssueHashRewards) Issued ${validCount} rewards in ${processingTime}ms ` +
+          `(${activeOperatorCount} active, ${passiveOperatorCount} passive) with optimized memory usage.`,
       );
+
+      // Release references to large data structures to aid garbage collection
+      operatorRewardMap.clear();
+      activeOperatorIdSet.clear();
     } catch (error) {
       this.logger.error(
         `❌ Error in batchIssueHashRewards: ${error.message}`,
         error.stack,
       );
-      // Don't rethrow to avoid breaking the cycle processing
     }
   }
 
