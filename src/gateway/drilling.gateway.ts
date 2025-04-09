@@ -894,13 +894,54 @@ export class DrillingGateway
 
       const cycles: DrillingCycle[] = JSON.parse(recentCyclesStr);
 
-      // If no operatorId provided, return cycles without reward shares
+      // Define interface for enhanced cycle data
+      interface EnhancedCycle extends Record<string, any> {
+        cycleNumber: number;
+        extractorOperatorUsername?: string;
+        operatorReward?: number;
+      }
+
+      // Fetch extractor operator usernames for all cycles
+      const cyclesWithUsernames = await Promise.all(
+        cycles.map(async (cycle) => {
+          // Create a plain object copy we can extend
+          const cycleObj: EnhancedCycle = {
+            ...JSON.parse(JSON.stringify(cycle)),
+            cycleNumber: cycle.cycleNumber,
+          };
+
+          if (cycle.extractorOperatorId) {
+            try {
+              // Fetch the operator's username
+              const operator = await this.operatorService.findById(
+                cycle.extractorOperatorId,
+                { username: 1 },
+              );
+
+              if (operator && operator.username) {
+                cycleObj.extractorOperatorUsername = operator.username;
+              }
+            } catch (error) {
+              this.logger.warn(
+                `Failed to fetch extractor username for cycle ${cycle.cycleNumber}: ${error.message}`,
+              );
+              // Continue without username if lookup fails
+            }
+          }
+
+          return cycleObj;
+        }),
+      );
+
+      // If no operatorId provided, return cycles with usernames
       if (!operatorId) {
-        return cycles;
+        return cyclesWithUsernames;
       }
 
       // For each cycle, find the reward share from the database
-      const cycleNumbers = cycles.map((cycle) => cycle.cycleNumber);
+      const cycleNumbers = cyclesWithUsernames.map(
+        (cycle) => cycle.cycleNumber,
+      );
 
       // Get all reward shares for this operator and these cycles in one query
       const rewardShares = await this.fetchRewardSharesFromDB(
@@ -915,11 +956,9 @@ export class DrillingGateway
       }
 
       // Add the rewards to each cycle
-      const results = cycles.map((cycle) => {
-        return {
-          ...cycle,
-          operatorReward: cycleRewardMap.get(cycle.cycleNumber) || 0,
-        };
+      const results = cyclesWithUsernames.map((cycle) => {
+        cycle.operatorReward = cycleRewardMap.get(cycle.cycleNumber) || 0;
+        return cycle;
       });
 
       return results;

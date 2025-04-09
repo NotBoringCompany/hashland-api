@@ -5,6 +5,7 @@ import { DrillService } from 'src/drills/drill.service';
 import { DrillingSessionStatus } from 'src/drills/drilling-session.service';
 import { Types } from 'mongoose';
 import { DrillingCycle } from 'src/drills/schemas/drilling-cycle.schema';
+import { OperatorService } from 'src/operators/operator.service';
 
 /**
  * Service for handling WebSocket interactions with the drilling gateway.
@@ -17,6 +18,7 @@ export class DrillingGatewayService {
     private readonly drillingGateway: DrillingGateway,
     private readonly redisService: RedisService,
     private readonly drillService: DrillService,
+    private readonly operatorService: OperatorService,
   ) {}
 
   /**
@@ -192,8 +194,33 @@ export class DrillingGatewayService {
       return;
     }
 
+    // Get the extractor operator username if available
+    // Convert to a plain JavaScript object to add custom properties
+    const cycleData = JSON.parse(JSON.stringify(drillingCycle));
+
+    if (drillingCycle.extractorOperatorId) {
+      try {
+        // Fetch the operator's username
+        const operator = await this.operatorService.findById(
+          drillingCycle.extractorOperatorId,
+          { username: 1 },
+        );
+
+        if (operator && operator.username) {
+          cycleData.extractorOperatorUsername = operator.username;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to fetch extractor operator username: ${error.message}`,
+        );
+        // Continue with the broadcast even if username lookup fails
+      }
+    }
+
     // First, broadcast the base cycle data to everyone
-    this.drillingGateway.server.emit('new-cycle', drillingCycle);
+    this.drillingGateway.server.emit('new-cycle', cycleData);
+
+    this.logger.debug('(notifyNewCycle) rewardShares', rewardShares);
 
     // Process reward shares if available
     if (rewardShares && rewardShares.length > 0) {
@@ -205,6 +232,8 @@ export class DrillingGatewayService {
           operatorRewards.set(share.operatorId.toString(), share.amount);
         }
       }
+
+      this.logger.debug('(notifyNewCycle) operatorRewards', operatorRewards);
 
       // Get connected operator IDs
       const socketOperators = this.drillingGateway.getConnectedOperatorIds();
