@@ -743,24 +743,27 @@ export class DrillingCycleService {
       `Reward Shares: ${JSON.stringify(rewardShares, null, 2)}`,
     );
 
-    // Step 11: Send to Hash Reserve
+    // Step 11: Send to Hash Reserve if there are any unissued rewards
     // Loop through the reward data again and check how much HASH is sent compared to the `issuedHash`.
     // If the total is less than the issuedHash, add the difference to the reserve.
-    const totalRewardData = rewardData.reduce(
+    const totalIssuedHash = rewardData.reduce(
       (sum, reward) => sum + reward.amount,
       0,
     );
 
-    this.logger.error(
-      `(distributeCycleRewards) Total HASH rewarded to operators: ${totalRewardData}, issuedHash: ${issuedHash}`,
+    this.logger.debug(
+      `(distributeCycleRewards) Total HASH rewarded to operators: ${totalIssuedHash}, issuedHash: ${issuedHash}`,
     );
-    // this.logger.debug(
-    //   `(distributeCycleRewards) Adding ${toSendToHashReserve} $HASH to the Hash Reserve.`,
-    // );
 
-    // if (toSendToHashReserve > 0) {
-    //   await this.hashReserveService.addToHASHReserve(toSendToHashReserve);
-    // }
+    // Calculate the amount to send to the HASH Reserve
+    const toSendToHashReserve = issuedHash - totalIssuedHash;
+
+    // Check if we need to send to the HASH Reserve
+    if (toSendToHashReserve > 0) {
+      this.logger.debug(
+        `(distributeCycleRewards) Sending ${toSendToHashReserve} $HASH to the Hash Reserve.`,
+      );
+    }
 
     const end = performance.now();
     this.logger.log(
