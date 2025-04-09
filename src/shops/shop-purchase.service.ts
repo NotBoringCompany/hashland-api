@@ -114,6 +114,10 @@ export class ShopPurchaseService {
         );
       }
 
+      this.logger.debug(
+        `(purchaseItem) Blockchain data verified: ${JSON.stringify(blockchainData, null, 2)}`,
+      );
+
       // Create a new shop purchase
       const shopPurchase = await this.shopPurchaseModel.create({
         operatorId,
@@ -124,10 +128,22 @@ export class ShopPurchaseService {
         blockchainData,
       });
 
+      this.logger.debug(
+        `(purchaseItem) Shop purchase created: ${JSON.stringify(
+          shopPurchase,
+          null,
+          2,
+        )}`,
+      );
+
       // Grant the effects of the shop item to the operator
-      this.grantShopItemEffect(
+      await this.grantShopItemEffect(
         operatorId,
         purchaseAllowedResponse.data.shopItemEffects,
+      );
+
+      this.logger.debug(
+        `(purchaseItem) Shop item effects granted to operator ${operatorId}.`,
       );
 
       return new ApiResponse(
