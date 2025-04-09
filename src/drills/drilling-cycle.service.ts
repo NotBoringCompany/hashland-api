@@ -906,72 +906,75 @@ export class DrillingCycleService {
       activeSessionsResult.map((session) => session.operatorId.toString()),
     );
 
-    // Separate rewards for active and passive operators
-    const activeOperatorRewards = [];
-    const passiveOperatorRewards = [];
+    // For operators with active sessions, we need to update both:
+    // 1. Their active session's earnedHASH (for the current session)
+    // 2. Their total earned HASH (for cumulative tracking)
+
+    // For operators without active sessions, we only update their total earned HASH
+
+    // Prepare bulk write operations for session updates
+    const sessionUpdateOps = [];
+    // All operators get their totalEarnedHASH updated
+    const operatorUpdateOps = [];
 
     for (const reward of validRewardData) {
       const operatorIdStr = reward.operatorId.toString();
+      const { operatorId, amount } = reward;
 
+      // All operators get their totalEarnedHASH updated in the operator model
+      operatorUpdateOps.push({
+        updateOne: {
+          filter: { _id: operatorId },
+          update: { $inc: { totalEarnedHASH: amount } },
+        },
+      });
+
+      // If they have an active session, also update the session's earnedHASH
       if (operatorsWithActiveSessions.has(operatorIdStr)) {
-        // Has an active session
-        activeOperatorRewards.push(reward);
-
-        // Update Redis session
-        batchPromises.push(
-          this.drillingSessionService.updateSessionEarnedHash(
-            reward.operatorId,
-            reward.amount,
-          ),
-        );
-      } else {
-        // No active session (passive operator)
-        passiveOperatorRewards.push(reward);
-      }
-    }
-
-    // 1. Update MongoDB DrillingSession for active operators
-    if (activeOperatorRewards.length > 0) {
-      await this.drillingSessionModel.bulkWrite(
-        activeOperatorRewards.map(({ operatorId, amount }) => ({
+        sessionUpdateOps.push({
           updateOne: {
             filter: { operatorId, endTime: null },
             update: { $inc: { earnedHASH: amount } },
           },
-        })),
-      );
+        });
 
+        // Update Redis session
+        batchPromises.push(
+          this.drillingSessionService.updateSessionEarnedHash(
+            operatorId,
+            amount,
+          ),
+        );
+      }
+    }
+
+    // Execute bulk write operations in parallel
+    const bulkWritePromises = [];
+
+    if (sessionUpdateOps.length > 0) {
+      bulkWritePromises.push(
+        this.drillingSessionModel.bulkWrite(sessionUpdateOps),
+      );
       this.logger.log(
-        `✅ Updated ${activeOperatorRewards.length} active drilling sessions with rewards.`,
+        `⏳ Updating ${sessionUpdateOps.length} active drilling sessions with rewards.`,
       );
     }
 
-    // 2. Update totalEarnedHASH only for passive operators
-    // Active operators will have their totalEarnedHASH updated in completeStoppingSessionsForEndCycle
-    if (passiveOperatorRewards.length > 0) {
-      await this.operatorModel.bulkWrite(
-        passiveOperatorRewards.map(({ operatorId, amount }) => ({
-          updateOne: {
-            filter: { _id: operatorId },
-            update: { $inc: { totalEarnedHASH: amount } },
-          },
-        })),
-      );
-
+    if (operatorUpdateOps.length > 0) {
+      bulkWritePromises.push(this.operatorModel.bulkWrite(operatorUpdateOps));
       this.logger.log(
-        `✅ Updated ${passiveOperatorRewards.length} passive operators' totalEarnedHASH.`,
+        `⏳ Updating totalEarnedHASH for ${operatorUpdateOps.length} operators.`,
       );
     }
 
-    // Wait for all Redis updates to complete
-    await Promise.all(batchPromises);
+    // Wait for all updates to complete
+    await Promise.all([...bulkWritePromises, ...batchPromises]);
 
     const end = performance.now();
+    const timeMs = (end - start).toFixed(2);
 
     this.logger.log(
-      `✅ (batchIssueHashRewards) Issued ${validRewardData.length} rewards in ${
-        end - start
-      }ms. (${activeOperatorRewards.length} active, ${passiveOperatorRewards.length} passive).`,
+      `✅ (batchIssueHashRewards) Issued ${validRewardData.length} rewards in ${timeMs}ms. Updated ${sessionUpdateOps.length} active sessions and ${operatorUpdateOps.length} operator totals.`,
     );
   }
 
