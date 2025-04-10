@@ -24,6 +24,7 @@ import {
 } from 'src/common/utils/equity';
 import { ByteArray, keccak256, recoverAddress, Signature, toBytes } from 'viem';
 import { AlchemyService } from 'src/alchemy/alchemy.service';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 
 @Injectable()
 export class OperatorWalletService {
@@ -254,6 +255,13 @@ export class OperatorWalletService {
             }
           }
         }
+      }
+
+      // If totalUsdBalance is < MINIMUM_USD_BALANCE_THRESHOLD, set it to 0
+      if (
+        totalUsdBalance < GAME_CONSTANTS.WALLET.MINIMUM_USD_BALANCE_THRESHOLD
+      ) {
+        totalUsdBalance = 0;
       }
 
       return totalUsdBalance;
