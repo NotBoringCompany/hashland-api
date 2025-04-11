@@ -347,7 +347,7 @@ export class DrillingCycleService {
       } else {
         const storedAssetEquity = extractorOperator.assetEquity;
         const minThreshold =
-          GAME_CONSTANTS.EXTRACTOR.OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD *
+          GAME_CONSTANTS.ECONOMY.OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD *
           storedAssetEquity;
 
         // ✅ Fetch real-time asset equity **only if operator has wallets**

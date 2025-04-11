@@ -259,7 +259,7 @@ export class OperatorWalletService {
 
       // If totalUsdBalance is < MINIMUM_USD_BALANCE_THRESHOLD, set it to 0
       if (
-        totalUsdBalance < GAME_CONSTANTS.WALLET.MINIMUM_USD_BALANCE_THRESHOLD
+        totalUsdBalance < GAME_CONSTANTS.ECONOMY.MINIMUM_USD_BALANCE_THRESHOLD
       ) {
         totalUsdBalance = 0;
       }

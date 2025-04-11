@@ -21,6 +21,10 @@ export const GAME_CONSTANTS = {
      */
     ENABLED: true,
     /**
+     * The total aimed issuance of $HASH until `TOTAL_CYCLES` are reached.
+     */
+    TOTAL_HASH_ISSUANCE: 204_600_000,
+    /**
      * The number of cycles that pass before a new epoch begins and $HASH issuance is halved.
      */
     EPOCH_CYCLE_COUNT: 200_000,
@@ -155,6 +159,22 @@ export const GAME_CONSTANTS = {
      * How many TG Stars are equivalent to 1 USD.
      */
     USD_TO_STARS: 66.666666,
+    /**
+     * How much the operator's max EFF rating can increase per 1 USD worth of equity.
+     */
+    EQUITY_TO_MAX_EFF: 100,
+    /**
+     * The minimum asset equity threshold required for an extractor to be valid.
+     *
+     * For instance, if the operator's asset equity is $1000 and the minimum threshold is 0.8,
+     * the operator must have AT LEAST $800 in asset equity upon checking for extractor validity.
+     * If not, the operator will not be considered as a valid extractor and the cycle will not have an extractor.
+     */
+    OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD: 0.8,
+    /**
+     * The minimum asset equity threshold required to update the total USD balance of the operator's asset equity.
+     */
+    MINIMUM_USD_BALANCE_THRESHOLD: 5,
   },
 
   /**
@@ -182,16 +202,6 @@ export const GAME_CONSTANTS = {
   },
 
   /**
-   * Efficiency constants.
-   */
-  EFFICIENCY: {
-    /**
-     * How much the operator's max EFF rating can increase per 1 USD worth of equity.
-     */
-    EQUITY_TO_MAX_EFF: 100,
-  },
-
-  /**
    * Luck constants.
    */
   LUCK: {
@@ -203,29 +213,5 @@ export const GAME_CONSTANTS = {
      * The maximum luck multiplier that can be applied to an operator's EFF rating.
      */
     MAX_LUCK_MULTIPLIER: 1.1,
-  },
-
-  /**
-   * Extractor constants.
-   */
-  EXTRACTOR: {
-    /**
-     * The minimum asset equity threshold required for an extractor to be valid.
-     *
-     * For instance, if the operator's asset equity is $1000 and the minimum threshold is 0.8,
-     * the operator must have AT LEAST $800 in asset equity upon checking for extractor validity.
-     * If not, the operator will not be considered as a valid extractor and the cycle will not have an extractor.
-     */
-    OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD: 0.8,
-  },
-
-  /**
-   * Wallet constants.
-   */
-  WALLET: {
-    /**
-     * The minimum asset equity threshold required to update the total USD balance of the operator's asset equity.
-     */
-    MINIMUM_USD_BALANCE_THRESHOLD: 5,
   },
 };
