@@ -48,6 +48,14 @@ export class DrillingCycleController {
   ) {}
 
   /**
+   * Checks if the issued HASH data is correct.
+   */
+  @Get('hash-check')
+  async checkIssuedHASHData() {
+    return this.drillingCycleService.checkIssuedHASHData();
+  }
+
+  /**
    * Returns the current drilling cycle status.
    */
   @Get('status')

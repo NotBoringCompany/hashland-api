@@ -51,9 +51,9 @@ export class DrillingCycleService {
   ) {}
 
   /**
-   * Gets the total $HASH issued so far.
+   * Checks if the issued HASH data is correct.
    */
-  async getIssuedHASHData() {
+  async checkIssuedHASHData() {
     const operatorResult = await this.operatorModel.aggregate([
       { $group: { _id: null, total: { $sum: '$totalEarnedHASH' } } },
     ]);
@@ -66,14 +66,20 @@ export class DrillingCycleService {
       'drilling-cycle:current',
     );
 
-    console.log(`
-      Total $HASH issued so far: ${totalFromOperators + totalFromReserve}.
-      Latest cycle number: ${latestCycleNumber}
-      `);
+    const correctIssuedHASHResult = await this.drillingCycleModel.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$issuedHASH' },
+        },
+      },
+    ]);
+    const correctIssuedHASH = correctIssuedHASHResult[0]?.total || 0;
 
     return {
       cycle: latestCycleNumber,
       totalIssuedHASH: totalFromOperators + totalFromReserve,
+      correctIssuedHASH,
     };
   }
 
