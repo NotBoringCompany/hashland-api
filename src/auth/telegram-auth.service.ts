@@ -7,7 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
-import { createHash, createHmac } from 'crypto';
+import { createHmac } from 'crypto';
 import { Operator } from '../operators/schemas/operator.schema';
 import {
   TelegramAuthDto,
@@ -112,21 +112,33 @@ export class TelegramAuthService {
       return false;
     }
 
-    // Create data check string by sorting and joining key-value pairs
-    const { hash, ...data } = authData;
-    const dataCheckString = Object.keys(data)
-      .sort()
-      .map((key) => `${key}=${data[key]}`)
-      .join('\n');
+    // Extract hash and create data check string by sorting and joining key-value pairs
+    const { hash, ...dataWithoutHash } = authData;
 
-    // Create secret key using SHA-256 hash of bot token
-    const secretKey = createHash('sha256').update(this.botToken).digest();
+    // Create array of key=value strings
+    const dataCheckArray = Object.entries(dataWithoutHash)
+      .map(([key, value]) => {
+        // Handle objects like user data by stringifying them
+        const val = typeof value === 'object' ? JSON.stringify(value) : value;
+        return `${key}=${val}`;
+      })
+      .sort(); // Sort alphabetically
 
-    // Calculate HMAC hash of data string
+    // Join with newline character as per documentation
+    const dataCheckString = dataCheckArray.join('\n');
+
+    // Step 3 & 4: Create HMAC-SHA256 using key 'WebAppData' and apply it to bot token
+    const secretKey = createHmac('sha256', 'WebAppData')
+      .update(this.botToken)
+      .digest();
+
+    // Step 4 & 5: Create HMAC-SHA256 using the result of the previous step as a key
+    // Apply it to the pairs array joined with linebreak
     const calculatedHash = createHmac('sha256', secretKey)
       .update(dataCheckString)
       .digest('hex');
 
+    // Step 6: Compare the hash values
     return calculatedHash === hash;
   }
 
@@ -140,36 +152,39 @@ export class TelegramAuthService {
     const parsedData = new URLSearchParams(initData);
     const data: any = {};
 
-    // Validate required fields exist
-    const requiredFields = ['query_id', 'user', 'auth_date', 'hash'];
+    // Required fields for basic functionality
+    const requiredFields = ['auth_date', 'hash'];
     for (const field of requiredFields) {
       if (!parsedData.has(field)) {
         throw new Error(`Missing required field: ${field}`);
       }
     }
 
+    // Parse all fields from URL params
     parsedData.forEach((value, key) => {
-      data[key] = value;
+      // Convert JSON strings to objects
+      if (key === 'user' || key === 'receiver' || key === 'chat') {
+        try {
+          data[key] = JSON.parse(value);
+        } catch {
+          throw new Error(`Invalid JSON format for field: ${key}`);
+        }
+      } else {
+        data[key] = value;
+      }
     });
 
-    try {
-      const userData = JSON.parse(data.user);
-
-      // Validate required user fields
-      const requiredUserFields = ['id', 'first_name', 'username'];
+    // Validate user data if present
+    if (data.user) {
+      const requiredUserFields = ['id'];
       for (const field of requiredUserFields) {
-        if (!userData[field]) {
+        if (!data.user[field]) {
           throw new Error(`Missing required user field: ${field}`);
         }
       }
-
-      return {
-        ...data,
-        user: userData,
-      };
-    } catch {
-      throw new Error('Invalid user data format');
     }
+
+    return data as TelegramAuthData;
   }
 
   /**
