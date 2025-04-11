@@ -69,9 +69,13 @@ export class TelegramAuthService {
         throw new HttpException('Invalid Telegram authentication data', 401);
       }
 
+      // Create a username if not available (some users don't have usernames)
+      const username =
+        parsedAuthData.user.username || `user_${parsedAuthData.user.id}`;
+
       const operator = await this.operatorService.findOrCreateOperator({
         id: parsedAuthData.user.id.toString(),
-        username: parsedAuthData.user.username,
+        username,
       });
 
       if (!operator) {
@@ -140,8 +144,16 @@ export class TelegramAuthService {
     const parsedData = new URLSearchParams(initData);
     const data: any = {};
 
+    // Check if data has signature instead of hash
+    const hasSignature = parsedData.has('signature');
+
     // Validate required fields exist
-    const requiredFields = ['query_id', 'user', 'auth_date', 'hash'];
+    const requiredFields = ['query_id', 'user', 'auth_date'];
+    // Add hash or signature check
+    if (!hasSignature && !parsedData.has('hash')) {
+      throw new Error('Missing required field: hash or signature');
+    }
+
     for (const field of requiredFields) {
       if (!parsedData.has(field)) {
         throw new Error(`Missing required field: ${field}`);
@@ -153,14 +165,23 @@ export class TelegramAuthService {
     });
 
     try {
-      const userData = JSON.parse(data.user);
+      // Handle escaped backslashes by replacing \\/ with /
+      const cleanedUserData = data.user.replace(/\\\//g, '/');
+      const userData = JSON.parse(cleanedUserData);
 
       // Validate required user fields
-      const requiredUserFields = ['id', 'first_name', 'username'];
+      const requiredUserFields = ['id', 'first_name'];
+      // Username is not always present
       for (const field of requiredUserFields) {
         if (!userData[field]) {
           throw new Error(`Missing required user field: ${field}`);
         }
+      }
+
+      // If signature is present instead of hash, use it as hash
+      if (hasSignature) {
+        data.hash = data.signature;
+        delete data.signature;
       }
 
       return {
