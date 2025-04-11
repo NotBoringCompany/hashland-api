@@ -38,6 +38,24 @@ export class DrillingCycleQueue implements OnModuleInit {
         return;
       }
 
+      // Get the latest cycle number
+      const latestCycleNumber = await this.redisService.get(
+        'drilling-cycle:current',
+      );
+
+      // If the total number of cycles has been reached, disable the cycle
+      if (
+        parseInt(latestCycleNumber, 10) >= GAME_CONSTANTS.CYCLES.TOTAL_CYCLES
+      ) {
+        this.logger.warn(
+          '🚨 (DrillingCycleQueue) Total number of cycles has been reached. Disabling cycles.',
+        );
+        GAME_CONSTANTS.CYCLES.ENABLED = false;
+
+        // Return to prevent any further processing
+        return;
+      }
+
       // Clean up any existing recurring jobs first
       const existingJobs = await this.drillingCycleQueue.getRepeatableJobs();
 
@@ -86,7 +104,7 @@ export class DrillingCycleQueue implements OnModuleInit {
    */
   @Process({
     name: 'new-drilling-cycle',
-    concurrency: 1, // Ensure only one cycle processing job at a time
+    concurrency: 1, // Ensures only one cycle processing job at a time
   })
   async handleNewDrillingCycle() {
     if (!GAME_CONSTANTS.CYCLES.ENABLED) {
@@ -118,6 +136,17 @@ export class DrillingCycleQueue implements OnModuleInit {
           // Don't proceed if we can't end the current cycle properly
           throw new Error(`Failed to end current cycle: ${err.message}`);
         }
+      }
+
+      if (
+        parseInt(latestCycleNumber, 10) >= GAME_CONSTANTS.CYCLES.TOTAL_CYCLES
+      ) {
+        this.logger.warn(
+          '🚨 (handleNewDrillingCycle) Total number of cycles has been reached. Disabling cycles.',
+        );
+        GAME_CONSTANTS.CYCLES.ENABLED = false;
+
+        return;
       }
 
       // ✅ Step 2: Start a new drilling cycle

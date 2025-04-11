@@ -7,6 +7,10 @@ export const GAME_CONSTANTS = {
    */
   CYCLES: {
     /**
+     * The total number of drilling cycles that can be created.
+     */
+    TOTAL_CYCLES: 2_000_000,
+    /**
      * The duration of a drilling cycle in seconds.
      */
     CYCLE_DURATION: 10,
@@ -151,14 +155,6 @@ export const GAME_CONSTANTS = {
      * How many TG Stars are equivalent to 1 USD.
      */
     USD_TO_STARS: 66.666666,
-    /**
-     * The cost (in TON) to increase the operator's max fuel each upgrade.
-     */
-    INCREASE_MAX_FUEL_COST: 0.7,
-    /**
-     * How much the operator's max fuel can increase per upgrade.
-     */
-    INCREASE_MAX_FUEL_VALUE: 6000,
   },
 
   /**
@@ -221,5 +217,15 @@ export const GAME_CONSTANTS = {
      * If not, the operator will not be considered as a valid extractor and the cycle will not have an extractor.
      */
     OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD: 0.8,
+  },
+
+  /**
+   * Wallet constants.
+   */
+  WALLET: {
+    /**
+     * The minimum asset equity threshold required to update the total USD balance of the operator's asset equity.
+     */
+    MINIMUM_USD_BALANCE_THRESHOLD: 5,
   },
 };

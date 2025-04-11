@@ -1,4 +1,7 @@
 import {
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -73,9 +76,8 @@ export class ShopPurchaseService {
       );
 
       if (purchaseAllowedResponse.status !== 200) {
-        return new ApiResponse<null>(
-          purchaseAllowedResponse.status,
-          purchaseAllowedResponse.message,
+        throw new ForbiddenException(
+          `(purchaseItem) Purchase not allowed: ${purchaseAllowedResponse.message}`,
         );
       }
 
@@ -85,8 +87,7 @@ export class ShopPurchaseService {
       });
 
       if (existingPurchase) {
-        return new ApiResponse<null>(
-          403,
+        throw new ForbiddenException(
           `(purchaseItem) Transaction hash already used for a purchase.`,
         );
       }
@@ -112,8 +113,7 @@ export class ShopPurchaseService {
       }
 
       if (!blockchainData) {
-        return new ApiResponse<null>(
-          403,
+        throw new BadRequestException(
           `(purchaseItem) Invalid blockchain transaction.`,
         );
       }
@@ -171,9 +171,9 @@ export class ShopPurchaseService {
         },
       );
     } catch (err: any) {
-      return new ApiResponse<null>(
-        500,
+      throw new HttpException(
         `(purchaseItem) Error purchasing item: ${err.message}`,
+        err.status || 500,
       );
     }
   }

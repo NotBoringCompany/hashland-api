@@ -358,7 +358,9 @@ export class DrillingCycleService {
           finalExtractorOperatorId = extractorData.drillOperatorId; // ✅ Extractor is valid, add the extractor operator.
         } else {
           this.logger.warn(
-            `(endCurrentCycle) Extractor operator ${extractorOperatorId} has dropped below the asset equity threshold. Skipping extractor for this cycle.`,
+            `(endCurrentCycle) Extractor operator ${extractorOperatorId} has dropped below the asset equity threshold. 
+            Real-time equity: ${currentEquity}, Stored equity: ${storedAssetEquity}, Percentage: ${(currentEquity / storedAssetEquity) * 100}%,
+            Skipping extractor for this cycle.`,
           );
         }
       }
