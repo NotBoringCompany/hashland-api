@@ -204,13 +204,23 @@ export class DrillingCycleService {
 
     this.logger.log(`🛠 Creating Drilling Cycle: #${newCycleNumber}...`);
 
-    // Fetch HASH issuance from game constants
-    const issuedHash = GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE;
+    // Fetch $HASH issuance. Checks epoch to ensure proper epoch issuance is used.
+    const initialIssuance = GAME_CONSTANTS.CYCLES.GENESIS_EPOCH_HASH_ISSUANCE;
+    const halvingInterval = GAME_CONSTANTS.CYCLES.EPOCH_CYCLE_COUNT;
+    const epoch = Math.floor((newCycleNumber - 1) / halvingInterval);
+    const issuedHASH = Math.max(
+      1, // Minimum issuance is 1
+      Math.floor(initialIssuance / Math.pow(2, epoch)), // Halved issuance for each epoch
+    );
+
+    this.logger.debug(
+      `💰 (createDrillingCycle) Cycle #${newCycleNumber} HASH issuance: ${issuedHASH}`,
+    );
 
     // Store in Redis for fast access
     await this.redisService.set(
       `drilling-cycle:${newCycleNumber}:issuedHASH`,
-      issuedHash.toString(),
+      issuedHASH.toString(),
     );
 
     try {
@@ -246,8 +256,7 @@ export class DrillingCycleService {
         endTime: new Date(now.getTime() + this.cycleDuration),
         activeOperators, // Track active operators
         extractorId: null,
-        difficulty: 0,
-        issuedHASH: GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE,
+        issuedHASH,
       });
 
       // Verify that we have a valid cycle object with cycleNumber

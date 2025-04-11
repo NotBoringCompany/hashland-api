@@ -13,13 +13,23 @@ export const GAME_CONSTANTS = {
     /**
      * The duration of a drilling cycle in seconds.
      */
-    CYCLE_DURATION: 10,
+    CYCLE_DURATION: 8,
     /**
      * If drilling cycle creation is enabled.
      *
      * If this is `false`, no new drilling cycles will be created.
      */
     ENABLED: true,
+    /**
+     * The number of cycles that pass before a new epoch begins and $HASH issuance is halved.
+     */
+    EPOCH_CYCLE_COUNT: 200_000,
+    /**
+     * The amount of $HASH issued on the genesis epoch (Epoch 0).
+     *
+     * The actual issuance will vary depending on which epoch the current cycle is in.
+     */
+    GENESIS_EPOCH_HASH_ISSUANCE: 512,
   },
 
   /**
@@ -73,16 +83,6 @@ export const GAME_CONSTANTS = {
        */
       maxFuelRequired: 950000,
     },
-  },
-
-  /**
-   * Hash issuance constants.
-   */
-  HASH_ISSUANCE: {
-    /**
-     * The amount of $HASH issued per cycle.
-     */
-    CYCLE_HASH_ISSUANCE: 300,
   },
 
   /**

@@ -56,18 +56,12 @@ export class DrillingCycle extends Document {
   activeOperators: number;
 
   /**
-   * An arbitrary difficulty value that determines how hard it is to extract $HASH during this cycle.
-   */
-  @Prop({ type: Number, required: true, default: 0 })
-  difficulty: number;
-
-  /**
    * The total amount of $HASH that was issued during this cycle.
    */
   @Prop({
     type: Number,
     required: true,
-    default: GAME_CONSTANTS.HASH_ISSUANCE.CYCLE_HASH_ISSUANCE,
+    default: GAME_CONSTANTS.CYCLES.GENESIS_EPOCH_HASH_ISSUANCE,
   })
   issuedHASH: number;
 
