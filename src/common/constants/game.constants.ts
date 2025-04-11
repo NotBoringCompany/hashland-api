@@ -7,6 +7,10 @@ export const GAME_CONSTANTS = {
    */
   CYCLES: {
     /**
+     * The total number of drilling cycles that can be created.
+     */
+    TOTAL_CYCLES: 2_000_000,
+    /**
      * The duration of a drilling cycle in seconds.
      */
     CYCLE_DURATION: 10,
