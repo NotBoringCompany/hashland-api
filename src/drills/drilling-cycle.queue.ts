@@ -52,6 +52,7 @@ export class DrillingCycleQueue implements OnModuleInit {
         );
         GAME_CONSTANTS.CYCLES.ENABLED = false;
 
+        // Return to prevent any further processing
         return;
       }
 
