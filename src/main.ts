@@ -16,6 +16,7 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter(),
   );
+
   // Register global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
 

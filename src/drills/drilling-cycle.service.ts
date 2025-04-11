@@ -51,6 +51,33 @@ export class DrillingCycleService {
   ) {}
 
   /**
+   * Gets the total $HASH issued so far.
+   */
+  async getIssuedHASHData() {
+    const operatorResult = await this.operatorModel.aggregate([
+      { $group: { _id: null, total: { $sum: '$totalEarnedHASH' } } },
+    ]);
+    const totalFromOperators = operatorResult[0]?.total || 0;
+
+    const totalFromReserve =
+      await this.hashReserveService.getTotalHASHReserved();
+
+    const latestCycleNumber = await this.redisService.get(
+      'drilling-cycle:current',
+    );
+
+    console.log(`
+      Total $HASH issued so far: ${totalFromOperators + totalFromReserve}.
+      Latest cycle number: ${latestCycleNumber}
+      `);
+
+    return {
+      cycle: latestCycleNumber,
+      totalIssuedHASH: totalFromOperators + totalFromReserve,
+    };
+  }
+
+  /**
    * Gets a cycle's extended data, such as the extractor-related data and reward share data.
    */
   async getCycleExtendedData(
