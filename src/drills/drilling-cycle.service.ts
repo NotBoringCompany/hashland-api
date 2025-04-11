@@ -346,6 +346,15 @@ export class DrillingCycleService {
     const startTime = performance.now();
     this.logger.log(`⏳ (endCurrentCycle) Ending cycle #${cycleNumber}...`);
 
+    // Check if the cycle exists in the database before proceeding
+    const cycleExists = await this.drillingCycleModel.exists({ cycleNumber });
+    if (!cycleExists) {
+      this.logger.warn(
+        `⚠️ (endCurrentCycle) Cycle #${cycleNumber} not found in database. Skipping cycle processing.`,
+      );
+      return;
+    }
+
     // ✅ Step 1: Fetch issued HASH from Redis
     const issuedHASHStr = await this.redisService.get(
       `drilling-cycle:${cycleNumber}:issuedHASH`,
