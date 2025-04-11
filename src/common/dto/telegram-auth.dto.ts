@@ -28,16 +28,14 @@ export class TelegramCreds {
   @ApiProperty({
     description: 'User last name',
     example: 'Doe',
-    required: false,
   })
-  last_name?: string;
+  last_name: string;
 
   @ApiProperty({
     description: 'Telegram username',
     example: 'johndoe',
-    required: false,
   })
-  username?: string;
+  username: string;
 
   @ApiProperty({
     description: 'User language code',
@@ -50,13 +48,6 @@ export class TelegramCreds {
     example: true,
   })
   allows_write_to_pm: boolean;
-
-  @ApiProperty({
-    description: 'User photo URL',
-    example: 'https://t.me/i/userpic/320/example.jpg',
-    required: false,
-  })
-  photo_url?: string;
 }
 
 export class TelegramAuthData {
@@ -83,11 +74,4 @@ export class TelegramAuthData {
     example: 'abc123def456...',
   })
   hash: string;
-
-  @ApiProperty({
-    description: 'Data signature (alternative to hash)',
-    example: 'abc123def456...',
-    required: false,
-  })
-  signature?: string;
 }
