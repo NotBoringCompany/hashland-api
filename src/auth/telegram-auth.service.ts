@@ -91,9 +91,10 @@ export class TelegramAuthService {
       });
     } catch (err: any) {
       throw new InternalServerErrorException(
-        new ApiResponse<null>(
+        new ApiResponse<TelegramAuthDto>(
           500,
           `(telegramLogin) Error authenticating with Telegram: ${err.message}`,
+          authData,
         ),
       );
     }
