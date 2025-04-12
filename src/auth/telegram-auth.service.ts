@@ -65,7 +65,7 @@ export class TelegramAuthService {
     try {
       const parsedAuthData = this.parseTelegramInitData(authData.initData);
 
-      if (!this.validateTelegramAuth(parsedAuthData)) {
+      if (!this.validateTelegramAuth(authData.initData)) {
         throw new HttpException('Invalid Telegram authentication data', 401);
       }
 
@@ -104,28 +104,25 @@ export class TelegramAuthService {
    * @param authData - The authentication data from Telegram
    * @returns boolean indicating if the data is valid
    */
-  validateTelegramAuth(authData: TelegramAuthData): boolean {
-    // Check if auth_date is not older than 24 hours
-    const authDate = parseInt(authData.auth_date, 10);
+  validateTelegramAuth(authData: string): boolean {
+    const initData = new URLSearchParams(authData);
+    initData.sort();
+    // Step 1: Destructure hash & auth_date data
+    const auth_date = initData.get('auth_date');
+    const hash = initData.get('hash');
+    initData.delete('hash');
+
+    // Step 2: Check auth_date session
+    if (!auth_date) return false;
+    const authDate = parseInt(auth_date, 10);
     const currentTime = Math.floor(Date.now() / 1000);
     if (currentTime - authDate > 86400) {
       return false;
     }
 
-    // Extract hash and create data check string by sorting and joining key-value pairs
-    const { hash, ...dataWithoutHash } = authData;
-
-    // Create array of key=value strings
-    const dataCheckArray = Object.entries(dataWithoutHash)
-      .map(([key, value]) => {
-        // Handle objects like user data by stringifying them
-        const val = typeof value === 'object' ? JSON.stringify(value) : value;
-        return `${key}=${val}`;
-      })
-      .sort(); // Sort alphabetically
-
-    // Join with newline character as per documentation
-    const dataCheckString = dataCheckArray.join('\n');
+    const dataToCheck = [...initData.entries()]
+      .map(([key, value]) => key + '=' + value)
+      .join('\n');
 
     // Step 3 & 4: Create HMAC-SHA256 using key 'WebAppData' and apply it to bot token
     const secretKey = createHmac('sha256', 'WebAppData')
@@ -135,7 +132,7 @@ export class TelegramAuthService {
     // Step 4 & 5: Create HMAC-SHA256 using the result of the previous step as a key
     // Apply it to the pairs array joined with linebreak
     const calculatedHash = createHmac('sha256', secretKey)
-      .update(dataCheckString)
+      .update(dataToCheck)
       .digest('hex');
 
     // Step 6: Compare the hash values
