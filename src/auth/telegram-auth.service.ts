@@ -93,7 +93,7 @@ export class TelegramAuthService {
       throw new InternalServerErrorException(
         new ApiResponse<TelegramAuthDto>(
           500,
-          `(telegramLogin) Error authenticating with Telegram: ${err.message}`,
+          `(telegramLogin) Error authenticating with Telegram: ${err.message} ${JSON.stringify(authData)}`,
           authData,
         ),
       );
