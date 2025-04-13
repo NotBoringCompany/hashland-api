@@ -380,7 +380,28 @@ export class OperatorService {
         `🔍 (findOrCreateOperator) Searching for operator with wallet address: ${authData.walletAddress}`,
       );
 
-      // Try to find by wallet profile first
+      // Check if the wallet is already linked to an operator in the OperatorWallets collection
+      const existingWallet = await this.operatorWalletModel.findOne({
+        address: authData.walletAddress,
+        chain: authData.walletChain,
+      });
+
+      if (existingWallet) {
+        // Found the wallet, now get the operator it belongs to
+        const operator = await this.operatorModel.findById(
+          existingWallet.operatorId,
+          projection,
+        );
+
+        if (operator) {
+          this.logger.log(
+            `✅ (findOrCreateOperator) Found existing operator by wallet in OperatorWallets: ${operator.username}`,
+          );
+          return operator;
+        }
+      }
+
+      // If we didn't find in OperatorWallets, check the legacy walletProfile as a fallback
       const operator = await this.operatorModel.findOne(
         { 'walletProfile.address': authData.walletAddress },
         projection,
@@ -388,7 +409,7 @@ export class OperatorService {
 
       if (operator) {
         this.logger.log(
-          `✅ (findOrCreateOperator) Found existing operator by wallet: ${operator.username}`,
+          `✅ (findOrCreateOperator) Found existing operator by walletProfile: ${operator.username}`,
         );
         return operator;
       }

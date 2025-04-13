@@ -105,7 +105,7 @@ export class WalletAuthService {
           signatureMessage: walletLoginData.message,
         });
       } else {
-        // Find the operator
+        // Find the operator using the wallet's operatorId
         operator = await this.operatorModel.findById(wallet.operatorId);
         if (!operator) {
           this.logger.warn(
