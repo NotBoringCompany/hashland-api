@@ -211,77 +211,83 @@ export class DrillingGateway
 
   /**
    * Handles a new WebSocket connection.
-   * - Authenticates the operator using JWT.
-   * - Adds the operator to the online tracking list.
+   * - If auth token provided, authenticates the operator using JWT.
+   * - If authenticated, adds the operator to the online tracking list.
+   * - If not authenticated, still allows connection for public data access.
    * - Emits an updated online operator count.
    *
    * @param client The connected WebSocket client.
    */
   async handleConnection(client: Socket) {
     try {
-      // Authenticate the client using JWT
-      const operatorId = await this.authenticateClient(client);
+      // Check if the client provided an auth token
+      const hasToken = client.handshake.auth && client.handshake.auth.token;
 
-      if (!operatorId) {
-        this.logger.warn(`Client ${client.id} failed authentication`);
-        client.disconnect();
-        return;
-      }
+      if (hasToken) {
+        // Attempt to authenticate the client using JWT
+        const operatorId = await this.authenticateClient(client);
 
-      // Store the authenticated operatorId in the client data for easy access
-      client.data.operatorId = operatorId;
+        if (operatorId) {
+          // Store the authenticated operatorId in the client data for easy access
+          client.data.operatorId = operatorId;
 
-      // Add to online operators
-      this.onlineOperators.add(operatorId);
+          // Add to online operators
+          this.onlineOperators.add(operatorId);
 
-      // Add socket to operator sockets map
-      if (!this.operatorSockets.has(operatorId)) {
-        this.operatorSockets.set(operatorId, new Set<string>());
-      }
-      this.operatorSockets.get(operatorId).add(client.id);
+          // Add socket to operator sockets map
+          if (!this.operatorSockets.has(operatorId)) {
+            this.operatorSockets.set(operatorId, new Set<string>());
+          }
+          this.operatorSockets.get(operatorId).add(client.id);
 
-      // Save to Redis with error handling
-      try {
-        await Promise.all([
-          this.saveOnlineOperatorsToRedis(),
-          this.saveOperatorSocketsToRedis(),
-        ]);
-      } catch (redisError) {
-        this.logger.error(
-          `Redis error during connection: ${redisError.message}`,
-        );
-        // Continue execution despite Redis errors - local state is still updated
-      }
+          // Save to Redis with error handling
+          try {
+            await Promise.all([
+              this.saveOnlineOperatorsToRedis(),
+              this.saveOperatorSocketsToRedis(),
+            ]);
+          } catch (redisError) {
+            this.logger.error(
+              `Redis error during connection: ${redisError.message}`,
+            );
+            // Continue execution despite Redis errors - local state is still updated
+          }
 
-      this.logger.log(
-        `🔗 Operator Connected: ${operatorId} (Socket: ${client.id}, Total Connections: ${this.operatorSockets.get(operatorId).size})`,
-      );
+          this.logger.log(
+            `🔗 Operator Connected: ${operatorId} (Socket: ${client.id}, Total Connections: ${this.operatorSockets.get(operatorId).size})`,
+          );
 
-      try {
-        this.broadcastOnlineOperators(); // Notify all clients
-      } catch (broadcastError) {
-        this.logger.error(
-          `Error broadcasting online operators: ${broadcastError.message}`,
+          try {
+            this.broadcastOnlineOperators(); // Notify all clients
+          } catch (broadcastError) {
+            this.logger.error(
+              `Error broadcasting online operators: ${broadcastError.message}`,
+            );
+          }
+        } else {
+          // Failed authentication but will still allow connection for public data
+          this.logger.warn(
+            `Client ${client.id} provided invalid auth token, allowing connection for public data only`,
+          );
+        }
+      } else {
+        // No token provided, allowing connection for public data only
+        this.logger.log(
+          `Client ${client.id} connected without auth token (public data only)`,
         );
       }
     } catch (error) {
       this.logger.error(`Error in handleConnection: ${error.message}`);
       this.logger.error(error.stack);
-      try {
-        client.disconnect();
-      } catch (disconnectError) {
-        this.logger.error(
-          `Error disconnecting client: ${disconnectError.message}`,
-        );
-      }
+      // Don't disconnect the client - allow them to access public data
     }
   }
 
   /**
    * Handles a WebSocket disconnection.
-   * - Removes the operator from the online tracking list if all their connections are closed.
-   * - Automatically stops any active drilling session if the primary socket disconnects.
-   * - Emits an updated online operator count.
+   * - For authenticated clients: Removes the operator from the online tracking list if all their connections are closed.
+   * - For authenticated clients: Automatically stops any active drilling session if the primary socket disconnects.
+   * - For all clients: Emits an updated online operator count if needed.
    *
    * @param client The disconnected WebSocket client.
    */
@@ -289,6 +295,7 @@ export class DrillingGateway
     try {
       const operatorId = client.data.operatorId;
 
+      // If this was an authenticated client
       if (operatorId) {
         // Remove this socket from operator sockets
         if (this.operatorSockets.has(operatorId)) {
@@ -356,6 +363,9 @@ export class DrillingGateway
             );
           }
         }
+      } else {
+        // Unauthenticated client disconnected
+        this.logger.log(`Unauthenticated client ${client.id} disconnected`);
       }
     } catch (error) {
       this.logger.error(`Error in handleDisconnect: ${error.message}`);
@@ -839,25 +849,20 @@ export class DrillingGateway
   @SubscribeMessage('get-latest-cycle')
   async getLatestCycle(client: Socket) {
     try {
+      // Get operatorId if available, but don't require it
       const operatorId = client.data.operatorId;
-
-      if (!operatorId) {
-        client.emit('drilling-error', {
-          message: 'Authentication required',
-        } as DrillingErrorResponse);
-        return;
-      }
 
       // Get recent rewards from Redis with proper error handling
       try {
-        // Pass the operator ID to get personalized reward info
+        // Pass the operator ID to get personalized reward info if authenticated,
+        // or pass undefined for public access without personalized data
         const latestCycle = await this.getLatestCycles(operatorId);
 
         // Send the rewards to the client
         client.emit('latest-cycle', latestCycle);
 
         this.logger.log(
-          `📊 Sent latest cycle with reward info to operator ${operatorId} on socket ${client.id}`,
+          `📊 Sent latest cycle ${operatorId ? 'with reward info to operator ' + operatorId : 'without reward info to unauthenticated client'} on socket ${client.id}`,
         );
       } catch (redisError) {
         this.logger.error(
@@ -878,8 +883,8 @@ export class DrillingGateway
   /**
    * Retrieves the latest 5 drilling cycles from Redis.
    *
-   * @param operatorId The operator ID to fetch reward shares for
-   * @returns Array of the latest 5 drilling cycles with operator reward shares
+   * @param operatorId The operator ID to fetch reward shares for (optional)
+   * @returns Array of the latest 5 drilling cycles with operator reward shares if operatorId is provided
    */
   async getLatestCycles(operatorId?: string): Promise<any[]> {
     try {
@@ -933,11 +938,12 @@ export class DrillingGateway
         }),
       );
 
-      // If no operatorId provided, return cycles with usernames
+      // If no operatorId provided, return cycles with usernames (public data)
       if (!operatorId) {
         return cyclesWithUsernames;
       }
 
+      // For authenticated users, include personal reward data
       // For each cycle, find the reward share from the database
       const cycleNumbers = cyclesWithUsernames.map(
         (cycle) => cycle.cycleNumber,

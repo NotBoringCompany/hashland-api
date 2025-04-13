@@ -12,58 +12,81 @@ Drilling sessions follow a specific lifecycle:
 4. **COMPLETED**: At the end of a cycle, all stopping sessions are completed and removed from Redis
 
 ## Authentication
-The gateway uses JWT authentication. Clients must include a valid JWT token in the auth object when connecting.
+The gateway uses JWT authentication for operator-specific functionality. Clients must include a valid JWT token in the auth object when connecting for authenticated features. However, certain features are accessible without authentication (see Public Events section below).
+
+## Public Events
+The following events are accessible without authentication:
+
+1. **get-latest-cycle**: Request the latest 5 cycle data (rewards will only be included if authenticated)
+2. **latest-cycle**: Receive the latest cycle data in response to get-latest-cycle
+3. **new-cycle**: Receive broadcasts when a new drilling cycle is created
+4. **online-operator-update**: Receive updates about online operator counts
+5. **drilling-update**: Receive real-time drilling information updates
+
+These events allow public clients to access basic cycle and drilling information without requiring authentication.
 
 ## Available Events
 
 ### Client-to-Server Events
 1. **start-drilling**: Request to start a new drilling session
    - No parameters required
+   - *Requires authentication*
 
 2. **stop-drilling**: Request to stop an active drilling session
    - No parameters required
+   - *Requires authentication*
 
 3. **get-drilling-status**: Request the current status of the operator's drilling session
    - No parameters required
+   - *Requires authentication*
 
 4. **get-fuel-status**: Request the current fuel status of the operator
    - No parameters required
+   - *Requires authentication*
 
 5. **get-latest-cycle**: Request the latest 5 cycle rewards
    - No parameters required
+   - *Public access available*
 
 ### Server-to-Client Events
 1. **online-operator-update**: Broadcasts when operators connect/disconnect
    - `onlineOperatorCount`: Number of online operators
    - `activeDrillingOperatorCount`: Number of actively drilling operators
+   - *Public access available*
 
 2. **drilling-started**: Sent when drilling starts successfully
    - `message`: Success message
    - `status`: Session status (WAITING)
+   - *Requires authentication*
 
 3. **drilling-info**: Sent with additional information about the drilling session
    - `message`: Informational message
+   - *Requires authentication*
 
 4. **drilling-activated**: Sent when a session is activated at the start of a new cycle
    - `message`: Success message
    - `status`: Session status (ACTIVE)
    - `cycleNumber`: The cycle number when the session was activated
+   - *Requires authentication*
 
 5. **drilling-stopping**: Sent when a stop request is initiated
    - `message`: Status message
    - `status`: Session status (STOPPING)
+   - *Requires authentication*
 
 6. **drilling-completed**: Sent when a session is completed at the end of a cycle
    - `message`: Success message
    - `status`: Session status (COMPLETED)
    - `cycleNumber`: The cycle number when the session was completed
    - `earnedHASH`: Amount of HASH earned during the session
+   - *Requires authentication*
 
 7. **drilling-stopped**: Sent when a session is force-stopped (e.g., due to fuel depletion)
    - `message`: Status message
    - `reason`: Reason for stopping (e.g., 'fuel_depleted')
    - `status`: Session status (COMPLETED)
    - `operatorId`: ID of the operator whose session was stopped (only in broadcast messages)
+   - *Requires authentication*
 
 8. **drilling-status**: Sent in response to a get-drilling-status request
    - `status`: Current session status (WAITING, ACTIVE, STOPPING, or 'inactive')
@@ -73,9 +96,11 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
    - `cycleEnded`: Cycle number when the session was stopped (if stopping)
    - `currentCycleNumber`: The current cycle number
    - `message`: Only present if status is 'inactive'
+   - *Requires authentication*
 
 9. **drilling-error**: Sent when an error occurs
    - `message`: Error message
+   - *May be sent to authenticated or unauthenticated clients*
 
 10. **fuel-update**: Sent when an operator's fuel is depleted or replenished
     - `currentFuel`: Current fuel level
@@ -83,17 +108,20 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
     - `changeAmount`: Amount of fuel changed
     - `changeType`: Type of change ('depleted' or 'replenished')
     - `message`: Descriptive message about the fuel change
+    - *Requires authentication*
 
 11. **fuel-status**: Sent in response to a get-fuel-status request
     - `currentFuel`: Current fuel level
     - `maxFuel`: Maximum fuel capacity
     - `fuelPercentage`: Percentage of fuel remaining (0-100)
+    - *Requires authentication*
 
 12. **drilling-update**: Sent periodically with real-time drilling information
     - `currentCycleNumber`: The current cycle number
     - `onlineOperatorCount`: Number of online operators
     - `issuedHASH`: The total amount of HASH issued in the current cycle
     - `operatorEffData`: Data about operator efficiency and drilling difficulty
+    - *Public access available*
 
 13. **new-cycle**: Sent when a new drilling cycle is created
     - `_id`: The database ID of the drilling cycle
@@ -107,39 +135,47 @@ The gateway uses JWT authentication. Clients must include a valid JWT token in t
     - `extractorOperatorId`: The database ID of the operator who owns the extractor drill
     - `extractorOperatorUsername`: The username of the operator who owns the extractor drill (if available)
     - `totalWeightedEff`: The total weighted efficiency from all operators in this cycle
+    - *Public access available*
 
 14. **cycle-reward**: Sent to operators who earned rewards in a specific cycle
     - `cycleNumber`: The cycle number for which the reward was earned
     - `operatorReward`: The amount of $HASH earned by the operator in this cycle
+    - *Requires authentication*
 
 15. **latest-cycle**: Sent in response to a get-latest-cycle request
     - Array of the latest 5 drilling cycles, each with the same structure as the new-cycle event
     - When requested by an authenticated operator, includes an additional `operatorReward` field with the operator's personal reward for each cycle
+    - *Public access available* (personal rewards only included for authenticated users)
 
 ## Usage Example
 
 ```javascript
-// Connect to the WebSocket server with authentication
+// Connect to the WebSocket server with authentication (for full access)
 const socket = io('https://api.hashland.com', {
   auth: {
     token: jwtToken
   }
 });
 
+// OR connect without authentication (for public data only)
+const publicSocket = io('https://api.hashland.com');
+
 // Connection events
 socket.on('connect', () => console.log('Connected to WebSocket server'));
 socket.on('disconnect', () => console.log('Disconnected from WebSocket server'));
 
-// Request current drilling status
+// Request current drilling status (authenticated only)
 socket.emit('get-drilling-status');
 
-// Request current fuel status
+// Request current fuel status (authenticated only)
 socket.emit('get-fuel-status');
 
-// Request recent cycle rewards
+// Request recent cycle rewards (works for both authenticated and unauthenticated clients)
 socket.emit('get-latest-cycle');
+// OR for public data only
+publicSocket.emit('get-latest-cycle');
 
-// Listen for drilling status response
+// Listen for drilling status response (authenticated only)
 socket.on('drilling-status', (data) => {
   console.log('Current drilling status:', data.status);
   if (data.status !== 'inactive') {
@@ -148,17 +184,17 @@ socket.on('drilling-status', (data) => {
   }
 });
 
-// Listen for fuel status response
+// Listen for fuel status response (authenticated only)
 socket.on('fuel-status', (data) => {
   console.log('Current fuel:', data.currentFuel);
   console.log('Max fuel:', data.maxFuel);
   console.log('Fuel percentage:', data.fuelPercentage + '%');
 });
 
-// Start drilling
+// Start drilling (authenticated only)
 socket.emit('start-drilling');
 
-// Listen for drilling events
+// Listen for drilling events (authenticated only)
 socket.on('drilling-started', (data) => console.log('Drilling started:', data));
 socket.on('drilling-activated', (data) => console.log('Drilling activated:', data));
 socket.on('drilling-stopping', (data) => console.log('Drilling stopping:', data));
@@ -166,9 +202,12 @@ socket.on('drilling-completed', (data) => console.log('Drilling completed:', dat
 socket.on('drilling-stopped', (data) => console.log('Drilling stopped:', data));
 socket.on('drilling-error', (data) => console.error('Drilling error:', data.message));
 socket.on('fuel-update', (data) => console.log('Fuel update:', data));
-socket.on('drilling-update', (data) => console.log('Real-time update:', data));
 
-// Listen for new cycle
+// Listen for public events (works for both authenticated and unauthenticated clients)
+socket.on('drilling-update', (data) => console.log('Real-time update:', data));
+publicSocket.on('drilling-update', (data) => console.log('Real-time update:', data));
+
+// Listen for new cycle (works for both authenticated and unauthenticated clients)
 socket.on('new-cycle', (data) => {
   console.log('New cycle created:', data.cycleNumber);
   console.log('Cycle start time:', new Date(data.startTime).toLocaleString());
@@ -176,15 +215,20 @@ socket.on('new-cycle', (data) => {
   console.log('Total issued HASH:', data.issuedHASH);
   console.log('Total weighted efficiency:', data.totalWeightedEff);
 });
+// OR for public data only
+publicSocket.on('new-cycle', (data) => {
+  console.log('New cycle created:', data.cycleNumber);
+  // Same data as above, available to unauthenticated clients
+});
 
-// Listen for personal cycle rewards
+// Listen for personal cycle rewards (authenticated only)
 socket.on('cycle-reward', (data) => {
   console.log(`You earned ${data.operatorReward} HASH in cycle #${data.cycleNumber}!`);
   // Update UI to show personal reward
   updateRewardDisplay(data.operatorReward);
 });
 
-// Listen for recent cycle history
+// Listen for recent cycle history (works for both authenticated and unauthenticated clients)
 socket.on('latest-cycle', (cycles) => {
   console.log('Recent cycle rewards:');
   cycles.forEach((cycle) => {
@@ -200,13 +244,19 @@ socket.on('latest-cycle', (cycles) => {
     console.log('-------------------');
   });
 });
+// OR for public data only
+publicSocket.on('latest-cycle', (cycles) => {
+  // Will not include operatorReward field for unauthenticated clients
+  console.log('Recent cycle data:', cycles);
+});
 
-// Stop drilling
+// Stop drilling (authenticated only)
 socket.emit('stop-drilling');
 ```
 
 ## Key Features
 - JWT authentication for secure connections
+- Public data access without authentication
 - Automatic session termination on disconnection
 - Fuel monitoring with automatic drilling stoppage
 - Redis persistence for operator status and session data
