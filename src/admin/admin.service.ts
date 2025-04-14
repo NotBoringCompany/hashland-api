@@ -32,6 +32,7 @@ export class AdminService {
     private poolOperatorModel: Model<PoolOperator>,
     private readonly redisService: RedisService,
   ) {}
+
   /**
    * Resets all cycle-related data, such as DrillingCycles, DrillingCycleRewardShares, HashReserve, all operators' totalEarnedHASH, and so on.
    *

@@ -24,6 +24,10 @@ import {
   PoolOperatorSchema,
 } from 'src/pools/schemas/pool-operator.schema';
 import { RedisModule } from 'src/common/redis.module';
+import {
+  DrillingSession,
+  DrillingSessionSchema,
+} from 'src/drills/schemas/drilling-session.schema';
 
 @Module({
   imports: [
@@ -35,6 +39,7 @@ import { RedisModule } from 'src/common/redis.module';
         name: DrillingCycleRewardShare.name,
         schema: DrillingCycleRewardShareSchema,
       },
+      { name: DrillingSession.name, schema: DrillingSessionSchema },
       { name: HASHReserve.name, schema: HashReserveSchema },
       { name: Pool.name, schema: PoolSchema },
       { name: PoolOperator.name, schema: PoolOperatorSchema },
