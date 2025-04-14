@@ -103,6 +103,13 @@ export class RedisService {
   }
 
   /**
+   * Flush all keys in Redis (use with caution).
+   */
+  async flushAll() {
+    return this.redis.flushall();
+  }
+
+  /**
    * Scan Redis for keys matching a pattern.
    * @param pattern The pattern to match keys against
    * @param count The number of keys to return per iteration (default: 100)
