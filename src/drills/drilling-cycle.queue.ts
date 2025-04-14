@@ -43,7 +43,7 @@ export class DrillingCycleQueue implements OnModuleInit {
         (await this.redisService.get('drilling-cycle:current')) ?? '0';
 
       this.logger.debug(`
-        (DrillingCycleQueue) Latest cycle number: ${latestCycleNumber}
+        (DrillingCycleQueue) Latest cycle number: ${latestCycleNumber}.
         `);
 
       // If the total number of cycles has been reached, disable the cycle
