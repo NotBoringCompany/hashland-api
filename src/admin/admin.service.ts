@@ -98,6 +98,9 @@ export class AdminService {
       await this.redisService.flushAll().then((data) => {
         this.logger.log(`(resetCycleData) Flushed all Redis keys: ${data}`);
       });
+
+      // Reset the current cycle number in Redis
+      await this.redisService.set('drilling-cycle:current', '0');
     } catch (err: any) {
       throw new InternalServerErrorException(
         `(resetCycleData) Error resetting cycle data: ${err.message}`,
