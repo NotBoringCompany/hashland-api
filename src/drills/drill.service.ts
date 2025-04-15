@@ -23,6 +23,34 @@ export class DrillService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
   ) {}
 
+  async addDrillActiveStateAndMaxActiveLimit(): Promise<void> {
+    try {
+      await this.drillModel.updateMany(
+        { active: { $exists: false } },
+        { $set: { active: true } },
+      );
+
+      await this.operatorModel.updateMany(
+        {},
+        {
+          $set: {
+            maxActiveDrillsAllowed:
+              GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
+          },
+        },
+      );
+
+      console.log(
+        `✅ (addDrillActiveStateAndMaxActiveLimit) Updated drills and operators.`,
+      );
+    } catch (err: any) {
+      this.logger.error(`(activateAllDrills) Error: ${err.message}`, err.stack);
+      throw new InternalServerErrorException(
+        `(activateAllDrills) Error: ${err.message}`,
+      );
+    }
+  }
+
   /**
    * Activates or deactivates a drill for an operator.
    *

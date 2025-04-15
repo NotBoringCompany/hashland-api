@@ -19,7 +19,7 @@ export const GAME_CONSTANTS = {
      *
      * If this is `false`, no new drilling cycles will be created.
      */
-    ENABLED: false,
+    ENABLED: true,
     /**
      * The total aimed issuance of $HASH until `TOTAL_CYCLES` are reached.
      */
