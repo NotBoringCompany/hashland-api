@@ -1099,9 +1099,6 @@ export class DrillingCycleService {
    */
   toggleCycle(enabled: boolean, password: string): ApiResponse<null> {
     if (password !== process.env.ADMIN_PASSWORD) {
-      this.logger.error(`
-        Expected password: ${process.env.ADMIN_PASSWORD}. Given password: ${password}.
-        `);
       return new ApiResponse<null>(
         403,
         `(toggleCycle) Invalid password provided. Cycle state not changed.`,
