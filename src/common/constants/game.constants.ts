@@ -195,15 +195,15 @@ export const GAME_CONSTANTS = {
      * How much fuel is depleted per cycle for active operators.
      */
     BASE_FUEL_DEPLETION_RATE: {
-      minUnits: 190,
+      minUnits: 295,
       maxUnits: 650,
     },
     /**
      * How much fuel is regenerated per cycle for non-active operators.
      */
     BASE_FUEL_REGENERATION_RATE: {
-      minUnits: 6,
-      maxUnits: 10,
+      minUnits: 7,
+      maxUnits: 12,
     },
   },
 
