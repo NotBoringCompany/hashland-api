@@ -22,7 +22,7 @@ export class AlchemyService {
     );
 
     if (!this.evmReceiverAddress) {
-      throw new Error(
+      this.logger.error(
         'EVM_RECEIVER_ADDRESS is missing in environment variables',
       );
     }
@@ -99,7 +99,9 @@ export class AlchemyService {
           tx.to.toLowerCase() !== this.evmReceiverAddress.toLowerCase()
         ) {
           this.logger.error(
-            `❌ (verifyEVMTransaction) Transaction receiver does not match address.`,
+            `❌ (verifyEVMTransaction) Transaction receiver does not match address.
+            
+            Expected: ${this.evmReceiverAddress}, received: ${tx.to}`,
           );
 
           return null;
