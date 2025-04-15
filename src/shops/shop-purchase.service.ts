@@ -189,7 +189,7 @@ export class ShopPurchaseService {
     try {
       const bulkOperations: any[] = [];
 
-      // ✅ Step 1: Grant a new drill if applicable
+      // Grant a new drill if applicable
       if (shopItemEffects.drillData) {
         let active: boolean = false;
 
@@ -252,7 +252,7 @@ export class ShopPurchaseService {
       let maxFuelIncreaseAmount = 0;
       let fuelReplenishedAmount = 0;
 
-      // ✅ Step 2: Increase maxFuel if applicable
+      // Increase maxFuel if applicable
       if (
         shopItemEffects.maxFuelIncrease &&
         shopItemEffects.maxFuelIncrease > 0
@@ -269,7 +269,7 @@ export class ShopPurchaseService {
         });
       }
 
-      // ✅ Step 3: Replenish fuel (without exceeding maxFuel)
+      // Replenish fuel (without exceeding maxFuel) if applicable
       if (
         shopItemEffects.replenishFuelRatio &&
         shopItemEffects.replenishFuelRatio > 0
@@ -290,12 +290,30 @@ export class ShopPurchaseService {
         }
       }
 
-      // ✅ Step 4: Execute bulk updates if there are operations to perform
+      // Upgrade the operator's max active drill limit if applicable
+      if (
+        shopItemEffects.upgradedMaxActiveDrillLimit &&
+        shopItemEffects.upgradedMaxActiveDrillLimit > 0
+      ) {
+        bulkOperations.push({
+          updateOne: {
+            filter: { _id: operatorId },
+            update: {
+              $set: {
+                maxActiveDrillsAllowed:
+                  shopItemEffects.upgradedMaxActiveDrillLimit,
+              },
+            },
+          },
+        });
+      }
+
+      // Execute bulk updates if there are operations to perform
       if (bulkOperations.length > 0) {
         await this.operatorModel.bulkWrite(bulkOperations);
       }
 
-      // ✅ Step 5: Update Redis cache for fuel values if they changed
+      // Update Redis cache for fuel values if they changed
       if (maxFuelIncreased || fuelReplenished) {
         const operatorFuelCacheKey = `operator:${operatorId.toString()}:fuel`;
         await this.redisService.set(
@@ -414,7 +432,7 @@ export class ShopPurchaseService {
       const itemName = shopItem.item.toLowerCase();
 
       // ✅ Drill purchase prerequisites check
-      if (itemName.includes('drill')) {
+      if (itemName.includes('drill') && !itemName.includes('upgrade')) {
         // Fetch all drills and operator data in parallel
         const [operatorDrills, operator] = await Promise.all([
           this.drillModel.find({ operatorId }, { config: 1 }),
@@ -495,6 +513,59 @@ export class ShopPurchaseService {
               );
             }
           }
+        }
+      }
+
+      // If the item is to upgrade max active drill limit
+      if (itemName.includes('UPGRADE_MAX_ACTIVE_DRILLS')) {
+        // Check the operator's current max active drill limit
+        // They can only purchase the value after the current one AND once they have 10 they cannot purchase any at all
+        const operator = await this.operatorModel
+          .findById(operatorId, { maxActiveDrillsAllowed: 1 })
+          .lean();
+
+        if (!operator) {
+          return new ApiResponse<{
+            purchaseAllowed: boolean;
+            reason: string;
+          }>(404, `(checkPurchaseAllowed) Operator not found.`, {
+            purchaseAllowed: false,
+            reason: 'Operator not found.',
+          });
+        }
+
+        const currentLimit = operator.maxActiveDrillsAllowed;
+        const nextLimit = currentLimit + 1;
+
+        // Check if the next limit is greater than the max allowed
+        if (currentLimit >= GAME_CONSTANTS.DRILLS.MAX_ACTIVE_DRILLS_ALLOWED) {
+          return new ApiResponse<{
+            purchaseAllowed: boolean;
+            reason: string;
+          }>(
+            403,
+            `(checkPurchaseAllowed) Cannot purchase max active drill limit upgrade. Already at maximum.`,
+            {
+              purchaseAllowed: false,
+              reason: `Already at maximum active drill limit of ${GAME_CONSTANTS.DRILLS.MAX_ACTIVE_DRILLS_ALLOWED}.`,
+            },
+          );
+        }
+
+        // Check if the item name is `UPGRADE_MAX_ACTIVE_DRILLS_(nextLimit)`
+        // If not, return an error
+        if (!itemName.includes(`UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}`)) {
+          return new ApiResponse<{
+            purchaseAllowed: boolean;
+            reason: string;
+          }>(
+            403,
+            `(checkPurchaseAllowed) Cannot purchase max active drill limit upgrade that's not the correct limit.`,
+            {
+              purchaseAllowed: false,
+              reason: `Item name must be UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}.`,
+            },
+          );
         }
       }
 

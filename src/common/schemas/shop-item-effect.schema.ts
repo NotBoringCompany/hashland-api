@@ -79,4 +79,18 @@ export class ShopItemEffects {
   })
   @Prop({ required: false, default: 0 })
   replenishFuelRatio?: number;
+
+  /**
+   * If the shop item upgrades the operator's `maxActiveDrillLimit`, then this field will show the new value for `maxActiveDrillLimit`.
+   */
+  @ApiProperty({
+    description: 'New value for max active drill limit',
+    example: 10,
+    required: false,
+  })
+  @Prop({
+    required: false,
+    default: 0,
+  })
+  upgradedMaxActiveDrillLimit?: number;
 }
