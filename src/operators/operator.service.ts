@@ -133,9 +133,7 @@ export class OperatorService {
         .lean();
 
       // Fetch operator's drills
-      const drills = await this.drillModel
-        .find({ operatorId }, { _id: 0 })
-        .lean();
+      const drills = await this.drillModel.find({ operatorId }).lean();
 
       // Fetch operator's pool ID if in a pool
       const poolId = await this.poolOperatorModel
