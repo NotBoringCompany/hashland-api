@@ -96,6 +96,19 @@ export class Operator extends Document {
   currentFuel: number;
 
   /**
+   * The max number of active drills (drills that can extract $HASH) allowed.
+   */
+  @ApiProperty({
+    description: 'The max number of active drills allowed',
+    example: 5,
+  })
+  @Prop({
+    required: true,
+    default: GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
+  })
+  maxActiveDrillsAllowed: number;
+
+  /**
    * The total $HASH earned by the operator across all sessions so far.
    */
   @ApiProperty({

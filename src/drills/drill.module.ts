@@ -6,6 +6,7 @@ import {
   Operator,
   OperatorSchema,
 } from 'src/operators/schemas/operator.schema';
+import { DrillController } from './drill.controller';
 
 @Module({
   imports: [
@@ -16,5 +17,6 @@ import {
   ],
   providers: [DrillService],
   exports: [MongooseModule, DrillService],
+  controllers: [DrillController],
 })
 export class DrillModule {}

@@ -172,7 +172,11 @@ export class OperatorService {
     const startTime = performance.now();
 
     // ✅ Step 1: Aggregate Total `actualEff` per Operator
+    // Make sure to only include active drills
     const operatorEffData = await this.drillModel.aggregate([
+      {
+        $match: { active: true }, // ✅ Only include active drills
+      },
       {
         $group: {
           _id: '$operatorId',
@@ -357,7 +361,7 @@ export class OperatorService {
   }
 
   /**
-   * Finds an existing operator by Telegram ID or creates a new one if none exists.
+   * Finds an existing operator by Telegram ID or wallet address; creates a new one if none exists.
    * The operator will be associated with a random public pool and granted a basic drill.
    *
    * Also assigns the operator to a random public pool if still applicable.
@@ -450,13 +454,14 @@ export class OperatorService {
       counter++;
     }
 
-    const operatorData: any = {
+    const operatorData: Partial<Operator> = {
       username,
       assetEquity: 0,
       cumulativeEff: 0,
       effMultiplier: 1,
       maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
+      maxActiveDrillsAllowed: 5,
       totalEarnedHASH: 0,
     };
 

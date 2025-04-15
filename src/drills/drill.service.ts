@@ -1,10 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Drill } from './schemas/drill.schema';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { ApiResponse } from 'src/common/dto/response.dto';
 
 @Injectable()
 export class DrillService {
@@ -15,6 +22,96 @@ export class DrillService {
     private drillModel: Model<Drill>,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
   ) {}
+
+  /**
+   * Activates or deactivates a drill for an operator.
+   *
+   * If `state` is true, the drill will be activated and vice versa.
+   */
+  async toggleDrillActiveState(
+    operatorId: Types.ObjectId,
+    drillId: Types.ObjectId,
+    state: boolean,
+  ): Promise<ApiResponse<null>> {
+    try {
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { maxActiveDrillsAllowed: 1 })
+        .lean();
+
+      if (!operator) {
+        throw new NotFoundException(
+          `(activateOrDeactivateDrill) Operator with ID ${operatorId} not found.`,
+        );
+      }
+
+      // Check if the operator has reached the maximum number of active drills allowed.
+      const activeDrillCount = await this.drillModel.countDocuments({
+        operatorId,
+        active: true,
+      });
+
+      if (state && activeDrillCount >= operator.maxActiveDrillsAllowed) {
+        throw new BadRequestException(
+          `(activateOrDeactivateDrill) Operator has reached the maximum number of active drills allowed.`,
+        );
+      }
+
+      // Update the drill's active status
+      const updatedDrill = await this.drillModel.findOneAndUpdate(
+        {
+          _id: drillId,
+          operatorId,
+          version: { $ne: DrillVersion.BASIC }, // ❌ Reject BASIC version drills
+        },
+        { active: state },
+        { new: true },
+      );
+
+      if (!updatedDrill) {
+        throw new BadRequestException(
+          `(toggleDrillActiveState) Cannot toggle drill: either it doesn't exist, belongs to another operator, or it's a basic drill (which cannot be toggled).`,
+        );
+      }
+
+      // Update the cumulative EFF of the operator based on all active drills now
+      const activeDrills = await this.drillModel
+        .find({ operatorId, active: true }, { actualEff: 1 })
+        .lean();
+
+      const cumulativeEff = activeDrills.reduce(
+        (sum, drill) => sum + drill.actualEff,
+        0,
+      );
+
+      await this.operatorModel
+        .updateOne({ _id: operatorId }, { cumulativeEff })
+        .then(() => {
+          this.logger.log(
+            `(activateOrDeactivateDrill) Operator ${operatorId} cumulative EFF updated to ${cumulativeEff}.`,
+          );
+        });
+
+      this.logger.log(
+        `✅ (activateOrDeactivateDrill) Drill ${drillId} for operator ${operatorId} has been ${
+          state ? 'activated' : 'deactivated'
+        }.`,
+      );
+
+      return new ApiResponse(
+        200,
+        '(toggleDrillActiveState) Drill state updated successfully',
+        null,
+      );
+    } catch (err: any) {
+      this.logger.error(
+        `(activateOrDeactivateDrill) Error: ${err.message}`,
+        err.stack,
+      );
+      throw new InternalServerErrorException(
+        `(activateOrDeactivateDrill) Error: ${err.message}`,
+      );
+    }
+  }
 
   /**
    * Calculates the total weighted cumulative EFF from all operators
@@ -84,16 +181,45 @@ export class DrillService {
     actualEff: number,
   ): Promise<Types.ObjectId> {
     try {
-      const drill = await this.drillModel.create({
+      const drill: Partial<Drill> = {
         operatorId,
         version,
         config,
         extractorAllowed,
+        // Basic drills will always be active since they are given at the beginning
+        // They CANNOT be deactivated.
+        active: version === DrillVersion.BASIC ? true : false,
         level,
         actualEff,
+      };
+
+      // Check how many drills the operator already has that are active.
+      // If the drill's `active` property is set to false and the operator's active drill count is less than the allowed amount for the operator,
+      // then set the drill's `active` property to true.
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { maxActiveDrillsAllowed: 1 })
+        .lean();
+      if (!operator) {
+        throw new Error(
+          `(createDrill) Operator with ID ${operatorId} not found.`,
+        );
+      }
+
+      const activeDrillCount = await this.drillModel.countDocuments({
+        operatorId,
+        active: true,
       });
 
-      return drill._id;
+      if (
+        drill.active === false &&
+        activeDrillCount < operator.maxActiveDrillsAllowed
+      ) {
+        drill.active = true;
+      }
+
+      const insertedDrill = await this.drillModel.create(drill);
+
+      return insertedDrill._id;
     } catch (err: any) {
       throw new Error(`(createDrill) Error creating drill: ${err.message}`);
     }
@@ -125,7 +251,7 @@ export class DrillService {
 
     // ✅ Step 1: Aggregate Eligible Operators & Their Drills in ONE Query
     const eligibleOperators = await this.drillModel.aggregate([
-      { $match: { extractorAllowed: true } }, // ✅ Filter drills that are allowed
+      { $match: { extractorAllowed: true, active: true } }, // ✅ Filter drills that are allowed to be extractors and are active
       {
         $lookup: {
           from: 'Operators', // ✅ Join with the Operator collection

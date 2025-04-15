@@ -19,7 +19,7 @@ export const GAME_CONSTANTS = {
      *
      * If this is `false`, no new drilling cycles will be created.
      */
-    ENABLED: true,
+    ENABLED: false,
     /**
      * The total aimed issuance of $HASH until `TOTAL_CYCLES` are reached.
      */
@@ -45,9 +45,15 @@ export const GAME_CONSTANTS = {
      */
     BASE_BASIC_DRILLS_ALLOWED: 1,
     /**
-     * How many premium drills are allowed per operator, excluding upgrades.
+     * How many active drills are allowed per operator initially.
      */
-    BASE_PREMIUM_DRILLS_ALLOWED: 5,
+    INITIAL_ACTIVE_DRILLS_ALLOWED: 5,
+    /**
+     * How many active drills are allowed per operator after upgrades.
+     *
+     * This will be the hard cap, i.e. no more upgrades will be able to increase this number.
+     */
+    MAX_ACTIVE_DRILLS_ALLOWED: 10,
     /**
      * The prerequisites for purchasing a Bulwark drill from the shop.
      */

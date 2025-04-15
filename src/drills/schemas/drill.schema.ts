@@ -74,6 +74,18 @@ export class Drill extends Document {
   extractorAllowed: boolean;
 
   /**
+   * If this drill is active.
+   *
+   * NOTE: Only active drills can receive $HASH rewards (extractor/active operator rewards).
+   */
+  @ApiProperty({
+    description: 'Whether this drill is active',
+    example: true,
+  })
+  @Prop({ type: Boolean, required: true, default: false })
+  active: boolean;
+
+  /**
    * The level of the drill.
    */
   @ApiProperty({
