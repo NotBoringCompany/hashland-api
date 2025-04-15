@@ -742,7 +742,7 @@ export class DrillingCycleService {
     // ✅ Step 10: Group rewards by operator ID and remove null entries
     const groupedRewardMap = new Map<string, number>();
 
-    // Count how many invalid rewards we filtered out
+    // Count how many invalid rewards are filtered out
     let skippedRewards = 0;
 
     // Group rewardData by operatorId and sum the amounts
