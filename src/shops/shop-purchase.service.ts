@@ -191,11 +191,34 @@ export class ShopPurchaseService {
 
       // ✅ Step 1: Grant a new drill if applicable
       if (shopItemEffects.drillData) {
+        let active: boolean = false;
+
+        // If the operator's active drill count is less than their max limit, we
+        // can set the new drill as active.
+        const operator = await this.operatorModel
+          .findOne({ _id: operatorId }, { maxActiveDrillsAllowed: 1 })
+          .lean();
+        if (!operator) {
+          throw new Error(
+            `(grantShopItemEffects) Operator with ID ${operatorId} not found`,
+          );
+        }
+
+        const activeDrillCount = await this.drillModel.countDocuments({
+          operatorId,
+          active: true,
+        });
+
+        if (activeDrillCount < operator.maxActiveDrillsAllowed) {
+          active = true;
+        }
+
         const newDrill = new this.drillModel({
           operatorId,
           version: shopItemEffects.drillData.version,
           config: shopItemEffects.drillData.config,
           extractorAllowed: true,
+          active,
           level: 1,
           actualEff: shopItemEffects.drillData.baseEff,
         });
@@ -390,28 +413,13 @@ export class ShopPurchaseService {
 
       const itemName = shopItem.item.toLowerCase();
 
-      // ✅ Drill purchase limit and other prerequisites check
+      // ✅ Drill purchase prerequisites check
       if (itemName.includes('drill')) {
-        const maxDrillsAllowed =
-          GAME_CONSTANTS.DRILLS.BASE_PREMIUM_DRILLS_ALLOWED +
-          GAME_CONSTANTS.DRILLS.BASE_BASIC_DRILLS_ALLOWED;
-
         // Fetch all drills and operator data in parallel
         const [operatorDrills, operator] = await Promise.all([
           this.drillModel.find({ operatorId }, { config: 1 }),
           this.operatorModel.findById(operatorId, { maxFuel: 1 }),
         ]);
-
-        if (operatorDrills.length >= maxDrillsAllowed) {
-          return new ApiResponse<{ purchaseAllowed: boolean; reason: string }>(
-            403,
-            `(checkPurchaseAllowed) Operator has reached the maximum number of drills allowed.`,
-            {
-              purchaseAllowed: false,
-              reason: `Max drills reached (${maxDrillsAllowed}).`,
-            },
-          );
-        }
 
         // ✅ Count drill types in one iteration
         const drillCounts = operatorDrills.reduce(

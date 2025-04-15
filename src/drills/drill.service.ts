@@ -34,34 +34,33 @@ export class DrillService {
     state: boolean,
   ): Promise<ApiResponse<null>> {
     try {
-      const operator = await this.operatorModel
-        .findOne({ _id: operatorId }, { maxActiveDrillsAllowed: 1 })
-        .lean();
+      // Fetch operator and count active drills in parallel
+      const [operator, activeDrillCount] = await Promise.all([
+        this.operatorModel
+          .findById(operatorId, { maxActiveDrillsAllowed: 1 })
+          .lean(),
+        this.drillModel.countDocuments({ operatorId, active: true }),
+      ]);
 
       if (!operator) {
         throw new NotFoundException(
-          `(activateOrDeactivateDrill) Operator with ID ${operatorId} not found.`,
+          `(toggleDrillActiveState) Operator ${operatorId} not found.`,
         );
       }
 
-      // Check if the operator has reached the maximum number of active drills allowed.
-      const activeDrillCount = await this.drillModel.countDocuments({
-        operatorId,
-        active: true,
-      });
-
+      // Prevent activating if max active drill count is reached
       if (state && activeDrillCount >= operator.maxActiveDrillsAllowed) {
         throw new BadRequestException(
-          `(activateOrDeactivateDrill) Operator has reached the maximum number of active drills allowed.`,
+          `(toggleDrillActiveState) Operator has reached the max active drill limit.`,
         );
       }
 
-      // Update the drill's active status
+      // Try to update the drill, skipping BASIC version
       const updatedDrill = await this.drillModel.findOneAndUpdate(
         {
           _id: drillId,
           operatorId,
-          version: { $ne: DrillVersion.BASIC }, // ❌ Reject BASIC version drills
+          version: { $ne: DrillVersion.BASIC },
         },
         { active: state },
         { new: true },
@@ -69,46 +68,35 @@ export class DrillService {
 
       if (!updatedDrill) {
         throw new BadRequestException(
-          `(toggleDrillActiveState) Cannot toggle drill: either it doesn't exist, belongs to another operator, or it's a basic drill (which cannot be toggled).`,
+          `(toggleDrillActiveState) Drill not found, does not belong to operator, or is a Basic Drill (non-toggleable).`,
         );
       }
 
-      // Update the cumulative EFF of the operator based on all active drills now
-      const activeDrills = await this.drillModel
-        .find({ operatorId, active: true }, { actualEff: 1 })
-        .lean();
+      // ✅ Recalculate cumulativeEff for active drills
+      const totalEff = await this.drillModel.aggregate([
+        { $match: { operatorId, active: true } },
+        { $group: { _id: null, cumulativeEff: { $sum: '$actualEff' } } },
+      ]);
 
-      const cumulativeEff = activeDrills.reduce(
-        (sum, drill) => sum + drill.actualEff,
-        0,
+      const cumulativeEff = totalEff[0]?.cumulativeEff || 0;
+
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        { cumulativeEff },
       );
-
-      await this.operatorModel
-        .updateOne({ _id: operatorId }, { cumulativeEff })
-        .then(() => {
-          this.logger.log(
-            `(activateOrDeactivateDrill) Operator ${operatorId} cumulative EFF updated to ${cumulativeEff}.`,
-          );
-        });
 
       this.logger.log(
-        `✅ (activateOrDeactivateDrill) Drill ${drillId} for operator ${operatorId} has been ${
-          state ? 'activated' : 'deactivated'
-        }.`,
+        `✅ (toggleDrillActiveState) Drill ${drillId} ${state ? 'activated' : 'deactivated'} for operator ${operatorId}. New cumulative EFF: ${cumulativeEff}.`,
       );
 
-      return new ApiResponse(
-        200,
-        '(toggleDrillActiveState) Drill state updated successfully',
-        null,
-      );
+      return new ApiResponse(200, 'Drill state updated successfully', null);
     } catch (err: any) {
       this.logger.error(
-        `(activateOrDeactivateDrill) Error: ${err.message}`,
+        `(toggleDrillActiveState) Error: ${err.message}`,
         err.stack,
       );
       throw new InternalServerErrorException(
-        `(activateOrDeactivateDrill) Error: ${err.message}`,
+        `(toggleDrillActiveState) Error: ${err.message}`,
       );
     }
   }
