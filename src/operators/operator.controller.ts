@@ -16,7 +16,7 @@ import { Drill } from 'src/drills/schemas/drill.schema';
 import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
 
 @ApiTags('Operators')
-@Controller('operator')
+@Controller('operators')
 export class OperatorController {
   constructor(private readonly operatorService: OperatorService) {}
 
