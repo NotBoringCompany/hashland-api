@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Post,
@@ -48,7 +49,7 @@ export class OperatorController {
   @Post('rename')
   async renameOperator(
     @Request() req,
-    @Query('newUsername') newUsername: string,
+    @Body('newUsername') newUsername: string,
   ) {
     const operatorId = new Types.ObjectId(req.user.operatorId);
     await this.operatorService.renameUsername(operatorId, newUsername);

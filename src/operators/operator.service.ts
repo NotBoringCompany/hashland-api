@@ -46,6 +46,12 @@ export class OperatorService {
     newUsername: string,
   ): Promise<ApiResponse<null>> {
     try {
+      if (!newUsername) {
+        throw new ForbiddenException(
+          `(renameUsername) New username is required.`,
+        );
+      }
+
       // ENsure that the new username meets the following requirements:
       // Max 16 characters, only `-_` and alphanumeric characters allowed
       const usernameRegex = /^[a-zA-Z0-9-_]{1,16}$/;
