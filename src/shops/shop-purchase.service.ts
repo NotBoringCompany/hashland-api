@@ -433,6 +433,9 @@ export class ShopPurchaseService {
 
       // ✅ Drill purchase prerequisites check
       if (itemName.includes('drill') && !itemName.includes('upgrade')) {
+        this.logger.debug(
+          `(checkPurchaseAllowed) Checking prerequisites for drill purchase... `,
+        );
         // Fetch all drills and operator data in parallel
         const [operatorDrills, operator] = await Promise.all([
           this.drillModel.find({ operatorId }, { config: 1 }),
@@ -518,6 +521,10 @@ export class ShopPurchaseService {
 
       // If the item is to upgrade max active drill limit
       if (itemName.includes('UPGRADE_MAX_ACTIVE_DRILLS')) {
+        this.logger.debug(
+          `(checkPurchaseAllowed) Checking prerequisites for max active drill limit upgrade... `,
+        );
+
         // Check the operator's current max active drill limit
         // They can only purchase the value after the current one AND once they have 10 they cannot purchase any at all
         const operator = await this.operatorModel
@@ -555,6 +562,11 @@ export class ShopPurchaseService {
         // Check if the item name is `UPGRADE_MAX_ACTIVE_DRILLS_(nextLimit)`
         // If not, return an error
         if (!itemName.includes(`UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}`)) {
+          this.logger.error(`
+            (checkPurchaseAllowed) Invalid item name for max active drill limit upgrade. 
+            Allowed: UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}, current item: ${itemName}  
+          `);
+
           return new ApiResponse<{
             purchaseAllowed: boolean;
             reason: string;
