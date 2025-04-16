@@ -547,21 +547,6 @@ export class ShopPurchaseService {
         const currentLimit = operator.maxActiveDrillsAllowed;
         const nextLimit = currentLimit + 1;
 
-        // Check if the next limit is greater than the max allowed
-        if (currentLimit >= GAME_CONSTANTS.DRILLS.MAX_ACTIVE_DRILLS_ALLOWED) {
-          return new ApiResponse<{
-            purchaseAllowed: boolean;
-            reason: string;
-          }>(
-            403,
-            `(checkPurchaseAllowed) Cannot purchase max active drill limit upgrade. Already at maximum.`,
-            {
-              purchaseAllowed: false,
-              reason: `Already at maximum active drill limit of ${GAME_CONSTANTS.DRILLS.MAX_ACTIVE_DRILLS_ALLOWED}.`,
-            },
-          );
-        }
-
         // Check if the item name is `UPGRADE_MAX_ACTIVE_DRILLS_(nextLimit)`
         // If not, return an error
         if (lowercaseItemName !== `UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}`) {
@@ -569,6 +554,11 @@ export class ShopPurchaseService {
             (checkPurchaseAllowed) Invalid item name for max active drill limit upgrade. 
             Allowed: UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}, current item: ${lowercaseItemName}  
           `);
+
+          const message =
+            currentLimit >= GAME_CONSTANTS.DRILLS.MAX_ACTIVE_DRILLS_ALLOWED
+              ? `Already at maximum active drill limit of ${GAME_CONSTANTS.DRILLS.MAX_ACTIVE_DRILLS_ALLOWED}.`
+              : `You can only upgrade to the next limit: ${nextLimit}.`;
 
           return new ApiResponse<{
             purchaseAllowed: boolean;
@@ -578,7 +568,7 @@ export class ShopPurchaseService {
             `(checkPurchaseAllowed) Cannot purchase max active drill limit upgrade that's not the correct limit.`,
             {
               purchaseAllowed: false,
-              reason: `Item name must be UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}.`,
+              reason: message,
             },
           );
         }
