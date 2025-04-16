@@ -38,7 +38,7 @@ export class OperatorController {
       'Comma-separated list of fields to include in the response for the operator data',
     required: false,
     type: String,
-    example: 'username,assetEquity,cumulativeEff',
+    example: 'usernameData.username,assetEquity,cumulativeEff',
   })
   @ApiResponse({
     status: 200,

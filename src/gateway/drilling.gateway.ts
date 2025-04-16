@@ -920,11 +920,12 @@ export class DrillingGateway
               // Fetch the operator's username
               const operator = await this.operatorService.findById(
                 new Types.ObjectId(cycle.extractorOperatorId),
-                { username: 1 },
+                { 'usernameData.username': 1 },
               );
 
-              if (operator && operator.username) {
-                cycleObj.extractorOperatorUsername = operator.username;
+              if (operator && operator.usernameData.username) {
+                cycleObj.extractorOperatorUsername =
+                  operator.usernameData.username;
               }
             } catch (error) {
               this.logger.warn(

@@ -375,7 +375,7 @@ export class DrillingCycleService {
       const [extractorOperator, extractorOperatorWallets] = await Promise.all([
         this.operatorService.findById(extractorOperatorId, {
           assetEquity: 1,
-          username: 1, // Add username to the query
+          'usernameData.username': 1, // Add username to the query
         }),
         this.operatorWalletService.getOperatorWallets(extractorOperatorId, {
           address: 1,
@@ -517,7 +517,12 @@ export class DrillingCycleService {
     const activeOperators = await this.operatorModel
       .find(
         { _id: { $in: allActiveOperatorIds } },
-        { _id: 1, cumulativeEff: 1, effMultiplier: 1, username: 1 },
+        {
+          _id: 1,
+          cumulativeEff: 1,
+          effMultiplier: 1,
+          'usernameData.username': 1,
+        },
       )
       .lean();
 

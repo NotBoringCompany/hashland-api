@@ -226,7 +226,7 @@ export class DrillingGatewayService {
         // Fetch the operator's username
         const operator = await this.operatorService.findById(
           drillingCycle.extractorOperatorId,
-          { username: 1 },
+          { 'usernameData.username': 1 },
         );
 
         if (operator && operator.usernameData.username) {
