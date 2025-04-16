@@ -77,6 +77,12 @@ export class OperatorService {
         throw new NotFoundException(`(renameUsername) Operator not found`);
       }
 
+      if (operator.usernameData.username === newUsername) {
+        throw new ForbiddenException(
+          `(renameUsername) New username is the same as the current one.`,
+        );
+      }
+
       const lastRenameTimestamp = operator.usernameData.lastRenameTimestamp;
       const currentTime = new Date();
 
