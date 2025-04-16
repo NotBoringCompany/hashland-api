@@ -429,10 +429,13 @@ export class ShopPurchaseService {
         );
       }
 
-      const itemName = shopItem.item.toLowerCase();
+      const lowercaseItemName = shopItem.item.toLowerCase();
 
       // ✅ Drill purchase prerequisites check
-      if (itemName.includes('drill') && !itemName.includes('upgrade')) {
+      if (
+        lowercaseItemName.includes('drill') &&
+        !lowercaseItemName.includes('upgrade')
+      ) {
         this.logger.debug(
           `(checkPurchaseAllowed) Checking prerequisites for drill purchase... `,
         );
@@ -486,7 +489,7 @@ export class ShopPurchaseService {
           key,
           { requiredType, requiredCount, maxFuel },
         ] of Object.entries(prerequisites)) {
-          if (itemName.includes(key)) {
+          if (lowercaseItemName.includes(key)) {
             const ownedCount = drillCounts[requiredType] ?? 0;
 
             if (ownedCount < requiredCount) {
@@ -520,7 +523,7 @@ export class ShopPurchaseService {
       }
 
       // If the item is to upgrade max active drill limit
-      if (itemName.includes('UPGRADE_MAX_ACTIVE_DRILLS')) {
+      if (lowercaseItemName.includes('upgrade_max_active_drills')) {
         this.logger.error(
           `(checkPurchaseAllowed) Checking prerequisites for max active drill limit upgrade... `,
         );
@@ -561,10 +564,10 @@ export class ShopPurchaseService {
 
         // Check if the item name is `UPGRADE_MAX_ACTIVE_DRILLS_(nextLimit)`
         // If not, return an error
-        if (itemName !== `UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}`) {
+        if (lowercaseItemName !== `UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}`) {
           this.logger.error(`
             (checkPurchaseAllowed) Invalid item name for max active drill limit upgrade. 
-            Allowed: UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}, current item: ${itemName}  
+            Allowed: UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}, current item: ${lowercaseItemName}  
           `);
 
           return new ApiResponse<{
