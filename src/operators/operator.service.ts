@@ -96,6 +96,10 @@ export class OperatorService {
         );
       }
 
+      this.logger.debug(
+        `(renameUsername) Checks complete. Operator ${operatorId} is changing username from ${operator.usernameData.username} to ${newUsername}`,
+      );
+
       // Update the operator's username
       await this.operatorModel.updateOne(
         { _id: operatorId },
