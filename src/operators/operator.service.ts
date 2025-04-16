@@ -32,19 +32,6 @@ export class OperatorService {
     @InjectModel(HASHReserve.name) private hashReserveModel: Model<HASHReserve>,
   ) {}
 
-  async updateUsernameData(): Promise<void> {
-    await this.operatorModel.updateMany(
-      {},
-      {
-        $unset: {
-          username: 1,
-        },
-      },
-    );
-
-    console.log(`Updated usernameData for all operators`);
-  }
-
   /**
    * Fetches the overview data for all operators in Hashland.
    * Includes:

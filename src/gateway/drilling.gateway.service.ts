@@ -229,8 +229,8 @@ export class DrillingGatewayService {
           { username: 1 },
         );
 
-        if (operator && operator.username) {
-          cycleData.extractorOperatorUsername = operator.username;
+        if (operator && operator.usernameData.username) {
+          cycleData.extractorOperatorUsername = operator.usernameData.username;
         }
       } catch (error) {
         this.logger.warn(

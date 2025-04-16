@@ -119,7 +119,8 @@ export class DrillingCycleService {
         })
         .lean();
 
-      const extractorOperatorUsername = extractorOperator?.username || null;
+      const extractorOperatorUsername =
+        extractorOperator?.usernameData.username || null;
 
       // Get the operator and the extractor operator's reward share
       const [operatorRewardShare, extractorRewardShare] = await Promise.all([

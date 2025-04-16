@@ -533,7 +533,7 @@ export class PoolService implements OnModuleInit {
         operatorsQuery = operatorsQuery.populate({
           path: 'operator',
           select:
-            'username cumulativeEff effMultiplier totalEarnedHASH assetEquity',
+            'usernameData.username cumulativeEff effMultiplier totalEarnedHASH assetEquity',
           model: 'Operator',
           options: { lean: true },
         });
@@ -615,7 +615,7 @@ export class PoolService implements OnModuleInit {
       query = query.populate({
         path: 'operator',
         select:
-          'username cumulativeEff effMultiplier totalEarnedHASH assetEquity',
+          'usernameData.username cumulativeEff effMultiplier totalEarnedHASH assetEquity',
         model: 'Operator',
         options: { lean: true },
       });
