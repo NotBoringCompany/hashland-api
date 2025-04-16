@@ -32,6 +32,19 @@ export class OperatorService {
     @InjectModel(HASHReserve.name) private hashReserveModel: Model<HASHReserve>,
   ) {}
 
+  async updateUsernameData(): Promise<void> {
+    await this.operatorModel.updateMany(
+      {},
+      {
+        $unset: {
+          username: 1,
+        },
+      },
+    );
+
+    console.log(`Updated usernameData for all operators`);
+  }
+
   /**
    * Fetches the overview data for all operators in Hashland.
    * Includes:
@@ -397,7 +410,7 @@ export class OperatorService {
 
         if (operator) {
           this.logger.log(
-            `✅ (findOrCreateOperator) Found existing operator by wallet in OperatorWallets: ${operator.username}`,
+            `✅ (findOrCreateOperator) Found existing operator by wallet in OperatorWallets: ${operator.usernameData.username}`,
           );
           return operator;
         }
@@ -411,7 +424,7 @@ export class OperatorService {
 
       if (operator) {
         this.logger.log(
-          `✅ (findOrCreateOperator) Found existing operator by walletProfile: ${operator.username}`,
+          `✅ (findOrCreateOperator) Found existing operator by walletProfile: ${operator.usernameData.username}`,
         );
         return operator;
       }
@@ -431,7 +444,7 @@ export class OperatorService {
 
       if (operator) {
         this.logger.log(
-          `✅ (findOrCreateOperator) Found existing operator: ${operator.username}`,
+          `✅ (findOrCreateOperator) Found existing operator: ${operator.usernameData.username}`,
         );
         return operator;
       }
@@ -447,13 +460,18 @@ export class OperatorService {
     let username = baseUsername;
     let counter = 1;
 
-    while (await this.operatorModel.exists({ username })) {
+    while (
+      await this.operatorModel.exists({ 'usernameData.username': username })
+    ) {
       username = `${baseUsername}_${counter}`;
       counter++;
     }
 
     const operatorData: Partial<Operator> = {
-      username,
+      usernameData: {
+        username,
+        lastRenameTimestamp: null,
+      },
       assetEquity: 0,
       cumulativeEff: 0,
       effMultiplier: 1,

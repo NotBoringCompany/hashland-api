@@ -23,14 +23,29 @@ export class Operator extends Document {
   _id: Types.ObjectId;
 
   /**
-   * A unique username accompanying the operator.
+   * Username and last rename timestamp data for the operator.
    */
   @ApiProperty({
-    description: 'A unique username for the operator',
-    example: 'hashland_operator',
+    description: 'Username-related data for the operator',
+    example: {
+      username: 'hashland_operator',
+      lastRenameTimestamp: '1234',
+    },
   })
-  @Prop({ required: true, unique: true, index: true })
-  username: string;
+  @Prop({
+    type: {
+      username: { type: String, required: true, unique: true, index: true },
+      lastRenameTimestamp: { type: String, required: true },
+    },
+    required: false,
+    default: null,
+  })
+  usernameData?: {
+    /** A unique username accompanying the operator. */
+    username: string;
+    /** When the username was last renamed */
+    lastRenameTimestamp: string;
+  } | null;
 
   /**
    * The operator's latest asset equity value (in USD).
