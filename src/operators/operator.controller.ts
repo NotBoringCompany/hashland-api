@@ -1,4 +1,11 @@
-import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -19,6 +26,33 @@ import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
 @Controller('operators')
 export class OperatorController {
   constructor(private readonly operatorService: OperatorService) {}
+
+  @ApiOperation({
+    summary: 'Rename operator',
+    description: 'Renames the operator with a new username',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully renamed operator',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid operator ID or username',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Operator not found',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('rename')
+  async renameOperator(
+    @Request() req,
+    @Query('newUsername') newUsername: string,
+  ) {
+    const operatorId = new Types.ObjectId(req.user.operatorId);
+    await this.operatorService.renameUsername(operatorId, newUsername);
+  }
 
   @ApiOperation({
     summary: 'Get operator data',

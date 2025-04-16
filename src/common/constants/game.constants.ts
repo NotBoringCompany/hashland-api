@@ -2,6 +2,13 @@
  * A set of constants that define Hashland's game rules and mechanics.
  */
 export const GAME_CONSTANTS = {
+  OPERATORS: {
+    /**
+     * The cooldown time (in seconds) for renaming an operator's username.
+     */
+    RENAME_COOLDOWN: 604_800, // 7 days in seconds
+  },
+
   /**
    * Cycle constants.
    */

@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Operator } from './schemas/operator.schema';
@@ -31,6 +37,81 @@ export class OperatorService {
     private readonly redisService: RedisService,
     @InjectModel(HASHReserve.name) private hashReserveModel: Model<HASHReserve>,
   ) {}
+
+  /**
+   * Renames an operator's username.
+   */
+  async renameUsername(
+    operatorId: Types.ObjectId,
+    newUsername: string,
+  ): Promise<ApiResponse<null>> {
+    try {
+      // ENsure that the new username meets the following requirements:
+      // Max 16 characters, only `-_` and alphanumeric characters allowed
+      const usernameRegex = /^[a-zA-Z0-9-_]{1,16}$/;
+
+      if (!usernameRegex.test(newUsername)) {
+        throw new ForbiddenException(
+          `(renameUsername) Invalid username format. Only alphanumeric characters, dashes, and underscores are allowed.`,
+        );
+      }
+
+      // Check if the username already exists
+      const existingOperator = await this.operatorModel.exists({
+        'usernameData.username': newUsername,
+      });
+
+      if (existingOperator) {
+        throw new ForbiddenException(
+          `(renameUsername) Username already taken.`,
+        );
+      }
+
+      // Ensure that the 7 day cooldown has passed and that the username isn't the same
+      const operator = await this.operatorModel.findOne(
+        { _id: operatorId },
+        { usernameData: 1 },
+      );
+
+      if (!operator) {
+        throw new NotFoundException(`(renameUsername) Operator not found`);
+      }
+
+      const lastRenameTimestamp = operator.usernameData.lastRenameTimestamp;
+      const currentTime = new Date();
+
+      if (
+        lastRenameTimestamp &&
+        currentTime.getTime() - lastRenameTimestamp.getTime() <
+          GAME_CONSTANTS.OPERATORS.RENAME_COOLDOWN
+      ) {
+        throw new ForbiddenException(
+          `(renameUsername) You can only change your username once every 7 days.`,
+        );
+      }
+
+      // Update the operator's username
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        {
+          $set: {
+            'usernameData.username': newUsername,
+            'usernameData.lastRenameTimestamp': new Date(),
+          },
+        },
+      );
+
+      return new ApiResponse<null>(
+        200,
+        `(renameUsername) Username changed successfully`,
+        null,
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        `(renameUsername) Error renaming operator username: ${err.message}`,
+      );
+    }
+  }
 
   /**
    * Fetches the overview data for all operators in Hashland.

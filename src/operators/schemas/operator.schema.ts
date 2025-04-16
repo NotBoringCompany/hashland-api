@@ -35,7 +35,7 @@ export class Operator extends Document {
   @Prop({
     type: {
       username: { type: String, required: true, unique: true, index: true },
-      lastRenameTimestamp: { type: String, required: true },
+      lastRenameTimestamp: { type: Date, required: true },
     },
     required: false,
     default: null,
@@ -44,7 +44,7 @@ export class Operator extends Document {
     /** A unique username accompanying the operator. */
     username: string;
     /** When the username was last renamed */
-    lastRenameTimestamp: string;
+    lastRenameTimestamp: Date;
   } | null;
 
   /**
