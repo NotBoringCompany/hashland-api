@@ -502,7 +502,7 @@ export class OperatorService {
 
       // If we didn't find in OperatorWallets, check the legacy walletProfile as a fallback
       const operator = await this.operatorModel.findOne(
-        { 'walletProfile.address': authData.walletAddress },
+        { 'walletProfile.address': authData.walletAddress.toLowerCase() },
         projection,
       );
 
@@ -559,6 +559,7 @@ export class OperatorService {
       assetEquity: 0,
       cumulativeEff: 0,
       effMultiplier: 1,
+      effCredits: 0,
       maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       maxActiveDrillsAllowed: 5,

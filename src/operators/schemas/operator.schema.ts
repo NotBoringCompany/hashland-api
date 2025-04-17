@@ -85,6 +85,19 @@ export class Operator extends Document {
   effMultiplier: number;
 
   /**
+   * A bonus 'credit' towards the operator's final EFF calculation.
+   *
+   * This may be earned from events, giveaways and so on.
+   */
+  @ApiProperty({
+    description:
+      "A bonus 'credit' towards the operator's final EFF calculation",
+    example: 100,
+  })
+  @Prop({ required: true, default: 0 })
+  effCredits: number;
+
+  /**
    * The maximum fuel capacity of the operator's drills.
    */
   @ApiProperty({

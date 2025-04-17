@@ -54,7 +54,7 @@ export class WalletAuthService {
   ): Promise<AuthenticatedResponse> {
     try {
       this.logger.log(
-        `Wallet login attempt for address: ${walletLoginData.address}`,
+        `Wallet login attempt for address: ${walletLoginData.address.toLowerCase()}`,
       );
 
       // Validate the wallet signature
@@ -67,14 +67,14 @@ export class WalletAuthService {
 
       if (!isValid) {
         this.logger.warn(
-          `Invalid signature for address: ${walletLoginData.address}`,
+          `Invalid signature for address: ${walletLoginData.address.toLowerCase()}`,
         );
         throw new UnauthorizedException('Invalid wallet signature');
       }
 
       // Find existing operator wallet
       let wallet = await this.operatorWalletModel.findOne({
-        address: walletLoginData.address,
+        address: walletLoginData.address.toLowerCase(),
         chain: walletLoginData.chain,
       });
 
@@ -82,24 +82,24 @@ export class WalletAuthService {
 
       if (!wallet) {
         this.logger.log(
-          `Wallet not found, creating new operator for: ${walletLoginData.address}`,
+          `Wallet not found, creating new operator for: ${walletLoginData.address.toLowerCase()}`,
         );
 
         // Generate a username based on the wallet address
-        const username = `user_${walletLoginData.address.substring(0, 8).toLowerCase()}`;
+        const username = `user_${walletLoginData.address.toLowerCase().substring(0, 8).toLowerCase()}`;
 
         // Create a new operator
         operator = await this.operatorService.findOrCreateOperator({
-          id: walletLoginData.address.substring(0, 8),
+          id: walletLoginData.address.toLowerCase().substring(0, 8),
           username,
-          walletAddress: walletLoginData.address,
+          walletAddress: walletLoginData.address.toLowerCase(),
           walletChain: walletLoginData.chain,
         });
 
         // Create wallet record
         wallet = await this.operatorWalletModel.create({
           operatorId: operator._id,
-          address: walletLoginData.address,
+          address: walletLoginData.address.toLowerCase(),
           chain: walletLoginData.chain,
           signature: walletLoginData.signature,
           signatureMessage: walletLoginData.message,
@@ -109,7 +109,7 @@ export class WalletAuthService {
         operator = await this.operatorModel.findById(wallet.operatorId);
         if (!operator) {
           this.logger.warn(
-            `Operator not found for wallet: ${walletLoginData.address}`,
+            `Operator not found for wallet: ${walletLoginData.address.toLowerCase()}`,
           );
           throw new UnauthorizedException('Operator not found');
         }

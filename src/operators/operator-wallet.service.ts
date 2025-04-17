@@ -400,7 +400,7 @@ export class OperatorWalletService {
 
       // Check if wallet is already connected to this operator for this chain
       const existingWallet = await this.operatorWalletModel.findOne({
-        address: walletData.address,
+        address: walletData.address.toLowerCase(),
         chain: walletData.chain,
       });
 
@@ -456,7 +456,7 @@ export class OperatorWalletService {
       // Create new wallet after validation
       const newWallet = new this.operatorWalletModel({
         operatorId,
-        address: walletData.address,
+        address: walletData.address.toLowerCase(),
         chain: walletData.chain,
         signature: walletData.signature,
         signatureMessage: walletData.signatureMessage,
