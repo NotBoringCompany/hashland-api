@@ -44,6 +44,7 @@ jobs:
           echo "NODE_ENV=development" >> .env
           echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
           echo "EVM_RECEIVER_ADDRESS=${{ secrets.EVM_RECEIVER_ADDRESS }}" >> .env
+          echo "MIXPANEL_PROJECT_TOKEN=${{ secrets.MIXPANEL_PROJECT_TOKEN }}" >> .env
       
       - name: Build and deploy with Docker
         run: |

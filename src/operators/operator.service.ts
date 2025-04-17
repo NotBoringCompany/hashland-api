@@ -432,27 +432,25 @@ export class OperatorService {
 
   /**
    * Finds an operator by their Telegram ID
-   * @param id - The operator's ID
-   * @returns The operator document or null if not found
+   * @param telegramId The Telegram user ID to find
+   * @param projection Optional fields to project
+   * @returns The operator or null if not found
    */
   async findByTelegramId(
-    id: Types.ObjectId,
+    telegramId: string,
     projection?: Record<string, number>,
   ): Promise<Operator | null> {
-    const operator = await this.operatorModel
-      .findOne(
-        {
-          'tgProfile.tgId': id,
-        },
-        projection,
-      )
-      .lean();
-
-    if (!operator) {
-      throw new NotFoundException('Operator not found');
+    try {
+      return await this.operatorModel
+        .findOne({ 'tgProfile.tgId': telegramId }, projection)
+        .lean();
+    } catch (err: any) {
+      this.logger.error(
+        `(findByTelegramId) Error finding operator by Telegram ID: ${err.message}`,
+        err.stack,
+      );
+      return null;
     }
-
-    return operator;
   }
 
   /**
