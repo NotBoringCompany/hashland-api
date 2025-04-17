@@ -7,13 +7,18 @@ export class MixpanelService {
   private mixpanel: any;
 
   constructor(private configService: ConfigService) {
-    this.mixpanel = Mixpanel.init(
-      this.configService.get<string>('MIXPANEL_PROJECT_TOKEN'),
-      {
-        debug: true,
-        protocol: 'https',
-      },
-    );
+    const token = this.configService.get<string>('MIXPANEL_PROJECT_TOKEN');
+
+    if (!token) {
+      throw new Error(
+        '(MixpanelService) MIXPANEL_PROJECT_TOKEN is not defined in environment variables',
+      );
+    }
+
+    this.mixpanel = Mixpanel.init(token, {
+      debug: true,
+      protocol: 'https',
+    });
   }
 
   /**
