@@ -16,6 +16,10 @@ jobs:
         run: |
           docker rm -f hashland-api || true
 
+      - name: Remove perf.log for Winston (fix permission issue)
+        run: |
+          echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rm -f /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/logs/perf.log
+
       - name: Remove artifacts
         run: |
           echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rm -rf /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/dist
