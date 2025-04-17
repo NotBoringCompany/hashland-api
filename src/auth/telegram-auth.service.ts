@@ -18,6 +18,8 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { OperatorService } from 'src/operators/operator.service';
 import { AuthenticatedResponse } from '../common/dto/auth.dto';
 import { OperatorWalletService } from 'src/operators/operator-wallet.service';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constant';
 
 /**
  * Service handling Telegram authentication and operator management
@@ -31,6 +33,7 @@ export class TelegramAuthService {
     private jwtService: JwtService,
     private operatorService: OperatorService,
     private operatorWalletService: OperatorWalletService,
+    private readonly mixpanelService: MixpanelService,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
   ) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -69,10 +72,11 @@ export class TelegramAuthService {
         throw new HttpException('Invalid Telegram authentication data', 401);
       }
 
-      const operator = await this.operatorService.findOrCreateOperator({
-        id: parsedAuthData.user.id.toString(),
-        username: parsedAuthData.user.username,
-      });
+      const { operator, type } =
+        await this.operatorService.findOrCreateOperator({
+          id: parsedAuthData.user.id.toString(),
+          username: parsedAuthData.user.username,
+        });
 
       if (!operator) {
         throw new HttpException('Failed to create operator', 500);
@@ -84,6 +88,16 @@ export class TelegramAuthService {
       );
 
       const accessToken = this.generateToken({ _id: operator._id });
+
+      this.mixpanelService.track(
+        type === 'login'
+          ? EVENT_CONSTANTS.AUTH_LOGIN
+          : EVENT_CONSTANTS.AUTH_REGISTER,
+        {
+          operator,
+          service: 'Telegram',
+        },
+      );
 
       return new AuthenticatedResponse({
         operator,
@@ -199,21 +213,29 @@ export class TelegramAuthService {
         allows_write_to_pm: true,
       };
 
-      let operator = (await this.operatorModel.findOne({
-        'tgProfile.tgId': testUser.id,
-      })) as Operator;
+      let operatorData: {
+        operator: Operator;
+        type: 'login' | 'register';
+      } | null = {
+        operator: (await this.operatorModel.findOne({
+          'tgProfile.tgId': testUser.id,
+        })) as Operator,
+        type: 'login',
+      };
 
-      if (!operator) {
-        operator = await this.operatorService.findOrCreateOperator({
+      if (!operatorData) {
+        operatorData = await this.operatorService.findOrCreateOperator({
           id: testUser.id.toString(),
           username: testUser.username,
         });
       }
 
-      const accessToken = this.generateToken({ _id: operator._id });
+      const accessToken = this.generateToken({
+        _id: operatorData.operator._id,
+      });
 
       return new AuthenticatedResponse({
-        operator,
+        operator: operatorData.operator,
         accessToken,
       });
     } catch (err: any) {

@@ -15,6 +15,8 @@ import { AuthenticatedResponse } from '../common/dto/auth.dto';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { ApiResponse } from '../common/dto/response.dto';
 import { WalletLoginDto } from '../common/dto/wallet-auth.dto';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constant';
 
 /**
  * Service handling wallet-based authentication
@@ -30,6 +32,7 @@ export class WalletAuthService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel(OperatorWallet.name)
     private operatorWalletModel: Model<OperatorWallet>,
+    private mixpanelService: MixpanelService,
   ) {}
 
   /**
@@ -78,7 +81,10 @@ export class WalletAuthService {
         chain: walletLoginData.chain,
       });
 
-      let operator: Operator | null;
+      let operatorAuth: {
+        operator: Operator;
+        type: 'login' | 'register';
+      } | null;
 
       if (!wallet) {
         this.logger.log(
@@ -89,7 +95,7 @@ export class WalletAuthService {
         const username = `user_${walletLoginData.address.toLowerCase().substring(0, 8).toLowerCase()}`;
 
         // Create a new operator
-        operator = await this.operatorService.findOrCreateOperator({
+        operatorAuth = await this.operatorService.findOrCreateOperator({
           id: walletLoginData.address.toLowerCase().substring(0, 8),
           username,
           walletAddress: walletLoginData.address.toLowerCase(),
@@ -98,7 +104,7 @@ export class WalletAuthService {
 
         // Create wallet record
         wallet = await this.operatorWalletModel.create({
-          operatorId: operator._id,
+          operatorId: operatorAuth.operator._id,
           address: walletLoginData.address.toLowerCase(),
           chain: walletLoginData.chain,
           signature: walletLoginData.signature,
@@ -106,25 +112,44 @@ export class WalletAuthService {
         });
       } else {
         // Find the operator using the wallet's operatorId
-        operator = await this.operatorModel.findById(wallet.operatorId);
+        const operator = await this.operatorModel.findById(wallet.operatorId);
+
         if (!operator) {
           this.logger.warn(
             `Operator not found for wallet: ${walletLoginData.address.toLowerCase()}`,
           );
           throw new UnauthorizedException('Operator not found');
         }
+
+        // Update operaturAuth data
+        operatorAuth = {
+          operator,
+          type: 'login',
+        };
       }
 
       // Update asset equity
       await this.operatorWalletService.updateAssetEquityForOperator(
-        operator._id,
+        operatorAuth.operator._id,
       );
 
       // Generate access token
-      const accessToken = this.generateToken({ _id: operator._id });
+      const accessToken = this.generateToken({
+        _id: operatorAuth.operator._id,
+      });
+
+      this.mixpanelService.track(
+        operatorAuth.type === 'login'
+          ? EVENT_CONSTANTS.AUTH_LOGIN
+          : EVENT_CONSTANTS.AUTH_REGISTER,
+        {
+          operator: operatorAuth.operator,
+          service: 'Wallet',
+        },
+      );
 
       return new AuthenticatedResponse({
-        operator,
+        operator: operatorAuth.operator,
         accessToken,
       });
     } catch (error) {

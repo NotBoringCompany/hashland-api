@@ -18,6 +18,7 @@ import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { AlchemyModule } from './alchemy/alchemy.module';
 import { TaskModule } from './tasks/task.module';
 import { AdminModule } from './admin/admin.module';
+import { MixpanelModule } from './mixpanel/mixpanel.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AdminModule } from './admin/admin.module';
     AlchemyModule,
     TaskModule,
     AdminModule,
+    MixpanelModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -472,7 +472,7 @@ export class OperatorService {
       // Optional projection
     },
     projection?: Record<string, number>,
-  ): Promise<Operator | null> {
+  ): Promise<{ operator: Operator; type: 'login' | 'register' } | null> {
     if (authData.walletAddress) {
       // This is a wallet-based authentication
       this.logger.log(
@@ -496,7 +496,7 @@ export class OperatorService {
           this.logger.log(
             `✅ (findOrCreateOperator) Found existing operator by wallet in OperatorWallets: ${operator.usernameData.username}`,
           );
-          return operator;
+          return { operator, type: 'login' };
         }
       }
 
@@ -510,7 +510,7 @@ export class OperatorService {
         this.logger.log(
           `✅ (findOrCreateOperator) Found existing operator by walletProfile: ${operator.usernameData.username}`,
         );
-        return operator;
+        return { operator, type: 'login' };
       }
     } else {
       // This is a Telegram-based authentication
@@ -530,7 +530,7 @@ export class OperatorService {
         this.logger.log(
           `✅ (findOrCreateOperator) Found existing operator: ${operator.usernameData.username}`,
         );
-        return operator;
+        return { operator, type: 'login' };
       }
     }
 
@@ -620,7 +620,7 @@ export class OperatorService {
     this.logger.log(
       `🆕(findOrCreateOperator) Created new operator: ${username}`,
     );
-    return operator;
+    return { operator, type: 'register' };
   }
 
   /**
