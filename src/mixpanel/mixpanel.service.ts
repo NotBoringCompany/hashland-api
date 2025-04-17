@@ -16,7 +16,10 @@ export class MixpanelService {
     );
   }
 
-  public track(eventName: string, action: any = {}): void {
+  /**
+   * Tracks an event in Mixpanel.
+   */
+  track(eventName: string, action: any = {}): void {
     this.mixpanel.track(eventName, action);
   }
 }
