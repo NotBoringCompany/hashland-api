@@ -520,6 +520,7 @@ export class DrillingCycleService {
         {
           _id: 1,
           cumulativeEff: 1,
+          effCredits: 1, // Include the effCredits bonus
           effMultiplier: 1,
           'usernameData.username': 1,
         },
@@ -532,7 +533,7 @@ export class DrillingCycleService {
       );
     }
 
-    // ✅ Step 3: Apply Luck Factor & Compute Weighted Eff
+    // ✅ Step 3: Apply Luck Factor & Compute Weighted Eff. Also include effCredits for the bonus.
     const operatorsWithLuck = activeOperators.map((operator) => {
       const luckFactor =
         GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
@@ -540,10 +541,12 @@ export class DrillingCycleService {
           (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
             GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
 
+      const baseEff =
+        operator.cumulativeEff * operator.effMultiplier * luckFactor;
+
       return {
         operatorId: operator._id,
-        weightedEff:
-          operator.cumulativeEff * operator.effMultiplier * luckFactor,
+        weightedEff: baseEff + (operator.effCredits || 0), // ⬅️ Add effCredits
       };
     });
 
