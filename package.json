@@ -45,6 +45,7 @@
     "dotenv": "^16.4.7",
     "mixpanel": "^0.18.1",
     "mongoose": "^8.12.1",
+    "nest-winston": "^1.10.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "redis": "^4.7.0",
@@ -53,7 +54,8 @@
     "socket.io": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
     "tonweb": "^0.0.66",
-    "viem": "^2.23.14"
+    "viem": "^2.23.14",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
