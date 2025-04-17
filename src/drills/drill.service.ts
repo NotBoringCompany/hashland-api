@@ -280,8 +280,9 @@ export class DrillService {
       {
         $group: {
           _id: '$operatorId',
-          effMultiplier: { $first: '$operatorData.effMultiplier' }, // ✅ Get operator's effMultiplier
-          drills: { $push: { _id: '$_id', actualEff: '$actualEff' } }, // ✅ Store drill details
+          effMultiplier: { $first: '$operatorData.effMultiplier' },
+          effCredits: { $first: '$operatorData.effCredits' }, // ⬅️ Include effCredits from the operator
+          drills: { $push: { _id: '$_id', actualEff: '$actualEff' } },
         },
       },
     ]);
@@ -291,7 +292,7 @@ export class DrillService {
       return null;
     }
 
-    // ✅ Step 2: Apply Luck Factor & Compute Weighted EFF
+    // ✅ Step 2: Apply Luck Factor & Compute Weighted EFF. Add effCredits at the end (bonus).
     const operatorsWithLuck = eligibleOperators.map((operator) => {
       const luckFactor =
         GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
@@ -299,13 +300,17 @@ export class DrillService {
           (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
             GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
 
+      const drillEff = operator.drills.reduce(
+        (sum, drill) => sum + drill.actualEff,
+        0,
+      );
+
+      const weightedDrillEff = drillEff * operator.effMultiplier * luckFactor;
+      const finalWeightedEff = weightedDrillEff + (operator.effCredits || 0); // 🧠 add effCredits here
+
       return {
         operatorId: operator._id,
-        weightedEff: operator.drills.reduce(
-          (sum, drill) =>
-            sum + drill.actualEff * operator.effMultiplier * luckFactor,
-          0,
-        ),
+        weightedEff: finalWeightedEff,
         drills: operator.drills,
       };
     });

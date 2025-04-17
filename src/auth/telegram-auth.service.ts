@@ -94,6 +94,7 @@ export class TelegramAuthService {
           ? EVENT_CONSTANTS.AUTH_LOGIN
           : EVENT_CONSTANTS.AUTH_REGISTER,
         {
+          distinct_id: operator._id,
           operator,
           service: 'Telegram',
         },

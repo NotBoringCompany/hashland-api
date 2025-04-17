@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MixpanelService {
+  private ALLOW_MIXPANEL: boolean = true; // 👈 toggle manually here
   private mixpanel: any;
 
   constructor(private configService: ConfigService) {
@@ -25,6 +26,7 @@ export class MixpanelService {
    * Tracks an event in Mixpanel.
    */
   track(eventName: string, action: any = {}): void {
+    if (!this.ALLOW_MIXPANEL) return;
     this.mixpanel.track(eventName, action);
   }
 }

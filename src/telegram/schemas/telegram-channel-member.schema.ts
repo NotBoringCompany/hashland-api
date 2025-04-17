@@ -32,7 +32,7 @@ export class TelegramChannelMember extends Document {
     description: 'The operator ID who is a member of the channel',
     example: '507f1f77bcf86cd799439011',
   })
-  @Prop({ type: Types.ObjectId, ref: 'Operator', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'Operators', required: true, index: true })
   operatorId: Types.ObjectId;
 
   /**

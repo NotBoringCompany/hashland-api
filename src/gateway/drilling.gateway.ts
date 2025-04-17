@@ -29,6 +29,8 @@ import {
 import { DrillingCycle } from 'src/drills/schemas/drilling-cycle.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { DrillingCycleRewardShare } from 'src/drills/schemas/drilling-crs.schema';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 /**
  * WebSocket Gateway for handling real-time drilling updates.
@@ -86,6 +88,7 @@ export class DrillingGateway
     private readonly jwtService: JwtService,
     @InjectModel(DrillingCycleRewardShare.name)
     private rewardShareModel: Model<DrillingCycleRewardShare>,
+    private readonly mixpanelService: MixpanelService,
   ) {}
 
   /**
@@ -495,6 +498,12 @@ export class DrillingGateway
         // Broadcast updated counts
         this.broadcastOnlineOperators();
 
+        this.mixpanelService.track(EVENT_CONSTANTS.DRILLING_START, {
+          distinct_id: operatorId,
+          clientId: client.id,
+          totalConnection: allSockets.length,
+        });
+
         this.logger.log(
           `🔄 Operator ${operatorId} started drilling in waiting status (primary socket: ${client.id})`,
         );
@@ -675,6 +684,12 @@ export class DrillingGateway
 
         // Broadcast updated counts
         this.broadcastOnlineOperators();
+
+        this.mixpanelService.track(EVENT_CONSTANTS.DRILLING_START, {
+          distinct_id: operatorId,
+          clientId: client.id,
+          totalConnection: allSockets.length,
+        });
 
         this.logger.log(
           `🛑 Operator ${operatorId} initiated stopping drilling on socket ${client.id} (total connections: ${allSockets.length})`,

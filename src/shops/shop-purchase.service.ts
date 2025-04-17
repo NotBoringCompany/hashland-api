@@ -22,6 +22,8 @@ import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
 import { AlchemyService } from 'src/alchemy/alchemy.service';
 import { RedisService } from 'src/common/redis.service';
 import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 @Injectable()
 export class ShopPurchaseService {
@@ -40,6 +42,7 @@ export class ShopPurchaseService {
     private readonly alchemyService: AlchemyService,
     private readonly redisService: RedisService,
     private readonly drillingGatewayService: DrillingGatewayService,
+    private readonly mixpanelService: MixpanelService,
   ) {}
 
   /**
@@ -157,6 +160,15 @@ export class ShopPurchaseService {
       this.logger.debug(
         `(purchaseItem) Shop item effects granted to operator ${operatorId}.`,
       );
+
+      this.mixpanelService.track(EVENT_CONSTANTS.SHOP_PURCHASE, {
+        distinct_id: operatorId,
+        shopPurchaseId: String(shopPurchase._id),
+        itemPurchased: shopPurchase.itemPurchased,
+        totalCost: shopPurchase.totalCost,
+        currency: shopPurchase.currency,
+        createdAt: shopPurchase.createdAt,
+      });
 
       return new ApiResponse(
         200,

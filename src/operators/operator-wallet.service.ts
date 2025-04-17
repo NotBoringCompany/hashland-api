@@ -25,6 +25,8 @@ import {
 import { ByteArray, keccak256, recoverAddress, Signature, toBytes } from 'viem';
 import { AlchemyService } from 'src/alchemy/alchemy.service';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 @Injectable()
 export class OperatorWalletService {
@@ -38,6 +40,7 @@ export class OperatorWalletService {
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly redisService: RedisService,
     private readonly alchemyService: AlchemyService,
+    private readonly mixpanelService: MixpanelService,
   ) {
     // Initialize TON client
     const endpoint =
@@ -142,6 +145,14 @@ export class OperatorWalletService {
           },
         },
       );
+
+      this.mixpanelService.track(EVENT_CONSTANTS.WALLET_UPDATE_ASSET_EQUITY, {
+        distinct_id: operatorId,
+        wallets: walletDocuments,
+        assetEquity: newEquity,
+        effMultiplier: newEffMultiplier,
+        cumulativeEff: newCumulativeEff,
+      });
 
       this.logger.debug(
         `✅ (updateAssetEquityForOperator) Updated asset equity & effMultiplier for operator ${operatorId}.`,
@@ -450,6 +461,11 @@ export class OperatorWalletService {
         existingWallet.signature = walletData.signature;
         existingWallet.signatureMessage = walletData.signatureMessage;
         await existingWallet.save();
+
+        this.mixpanelService.track(EVENT_CONSTANTS.WALLET_CONNECT, {
+          distinct_id: operatorId,
+          wallet: existingWallet,
+        });
         return existingWallet._id;
       }
 
@@ -469,6 +485,11 @@ export class OperatorWalletService {
         this.logger.error(
           `(connectWallet) Error updating asset equity for operator: ${err.message}`,
         );
+      });
+
+      this.mixpanelService.track(EVENT_CONSTANTS.WALLET_CONNECT, {
+        distinct_id: operatorId,
+        wallet: newWallet,
       });
 
       return newWallet._id;

@@ -4,7 +4,6 @@ import {
   Delete,
   Get,
   HttpCode,
-  Param,
   Post,
   Query,
   UseGuards,
@@ -23,7 +22,6 @@ import {
   TelegramWebhookDto,
 } from './dto/telegram-webhook.dto';
 import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
-import { ApiResponse } from 'src/common/dto/response.dto';
 
 @ApiTags('Telegram')
 @Controller('telegram')
