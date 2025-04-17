@@ -78,24 +78,6 @@ export class TelegramWebhook extends Document {
   })
   @Prop({ type: String, required: false })
   processingMessage?: string;
-
-  /**
-   * The timestamp when the record was created
-   */
-  @ApiProperty({
-    description: 'The timestamp when the record was created',
-    example: '2024-03-19T12:00:00.000Z',
-  })
-  createdAt: Date;
-
-  /**
-   * The timestamp when the record was last updated
-   */
-  @ApiProperty({
-    description: 'The timestamp when the record was last updated',
-    example: '2024-03-19T12:00:00.000Z',
-  })
-  updatedAt: Date;
 }
 
 /**

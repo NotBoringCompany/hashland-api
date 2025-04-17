@@ -85,24 +85,6 @@ export class TelegramChannelMember extends Document {
   })
   @Prop({ type: Date, required: true, default: Date.now })
   lastVerified: Date;
-
-  /**
-   * The timestamp when the record was created
-   */
-  @ApiProperty({
-    description: 'The timestamp when the record was created',
-    example: '2024-03-19T12:00:00.000Z',
-  })
-  createdAt: Date;
-
-  /**
-   * The timestamp when the record was last updated
-   */
-  @ApiProperty({
-    description: 'The timestamp when the record was last updated',
-    example: '2024-03-19T12:00:00.000Z',
-  })
-  updatedAt: Date;
 }
 
 /**
