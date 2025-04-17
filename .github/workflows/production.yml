@@ -28,6 +28,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Ensure logs folder exists # For Winston logs
+        run: mkdir -p ./logs
+
       - name: Create .env file
         run: |
           echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" > .env

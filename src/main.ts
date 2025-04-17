@@ -19,6 +19,7 @@ import * as path from 'path';
 
 const logDir = path.join(__dirname, '..', 'logs');
 if (!fs.existsSync(logDir)) {
+  console.log(`Creating logs folder: ${logDir}`);
   fs.mkdirSync(logDir, { recursive: true });
 }
 
