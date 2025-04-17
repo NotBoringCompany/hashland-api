@@ -19,7 +19,7 @@ import { OperatorService } from 'src/operators/operator.service';
 import { AuthenticatedResponse } from '../common/dto/auth.dto';
 import { OperatorWalletService } from 'src/operators/operator-wallet.service';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
-import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constant';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 /**
  * Service handling Telegram authentication and operator management

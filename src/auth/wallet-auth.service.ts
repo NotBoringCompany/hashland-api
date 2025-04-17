@@ -16,7 +16,7 @@ import { AllowedChain } from 'src/common/enums/chain.enum';
 import { ApiResponse } from '../common/dto/response.dto';
 import { WalletLoginDto } from '../common/dto/wallet-auth.dto';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
-import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constant';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 /**
  * Service handling wallet-based authentication

@@ -20,6 +20,7 @@ import {
   OperatorWallet,
   OperatorWalletSchema,
 } from 'src/operators/schemas/operator-wallet.schema';
+import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import {
     PoolOperatorModule,
     PoolModule,
     DrillModule,
+    MixpanelModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
