@@ -7,6 +7,7 @@ import {
 } from './schemas/pool-operator.schema';
 import { PoolModule } from './pool.module';
 import { PoolOperatorController } from './pool-operator.controller';
+import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { PoolOperatorController } from './pool-operator.controller';
       { name: PoolOperator.name, schema: PoolOperatorSchema },
     ]), // Register Pool schema
     PoolModule,
+    MixpanelModule,
   ],
   controllers: [PoolOperatorController], // Expose API endpoints
   providers: [PoolOperatorService], // Business logic for pool operators

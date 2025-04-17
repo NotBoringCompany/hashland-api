@@ -11,6 +11,7 @@ import {
   DrillingCycleRewardShareSchema,
 } from 'src/drills/schemas/drilling-crs.schema';
 import { MongooseModule } from '@nestjs/mongoose';
+import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { MongooseModule } from '@nestjs/mongoose';
         schema: DrillingCycleRewardShareSchema,
       },
     ]),
+    MixpanelModule,
   ],
   providers: [DrillingGateway, DrillingGatewayService],
   exports: [DrillingGatewayService, DrillingGateway], // Export DrillingGateway as well

@@ -15,6 +15,7 @@ import {
 import { ShopPurchaseController } from './shop-purchase.controller';
 import { AlchemyModule } from 'src/alchemy/alchemy.module';
 import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
+import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
     TonModule,
     AlchemyModule,
     DrillingGatewayModule,
+    MixpanelModule,
   ],
   controllers: [ShopPurchaseController], // Expose API endpoints
   providers: [ShopPurchaseService], // Business logic for ShopService
