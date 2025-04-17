@@ -13,6 +13,15 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './logger/winston.config';
 
+// ✅ Ensure logs folder exists before Winston tries to write to it
+import * as fs from 'fs';
+import * as path from 'path';
+
+const logDir = path.join(__dirname, '..', 'logs');
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
