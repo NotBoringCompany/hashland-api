@@ -5,6 +5,8 @@ import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolService } from './pool.service';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 @Injectable()
 export class PoolOperatorService {
@@ -13,6 +15,7 @@ export class PoolOperatorService {
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private readonly poolModel: Model<Pool>,
     private readonly poolService: PoolService,
+    private readonly mixpanelService: MixpanelService,
   ) {}
 
   /**
@@ -91,6 +94,11 @@ export class PoolOperatorService {
         );
       }
 
+      this.mixpanelService.track(EVENT_CONSTANTS.POOL_JOIN, {
+        distinct_id: operatorId,
+        pool,
+      });
+
       return new ApiResponse<null>(
         200,
         `(createPoolOperator) Operator successfully joined pool.`,
@@ -143,6 +151,11 @@ export class PoolOperatorService {
           `Error updating pool efficiency after leave: ${effError.message}`,
         );
       }
+
+      this.mixpanelService.track(EVENT_CONSTANTS.POOL_LEAVE, {
+        distinct_id: operatorId,
+        poolId,
+      });
 
       return new ApiResponse<null>(
         200,

@@ -143,6 +143,7 @@ export class WalletAuthService {
           ? EVENT_CONSTANTS.AUTH_LOGIN
           : EVENT_CONSTANTS.AUTH_REGISTER,
         {
+          distinct_id: operatorAuth.operator._id,
           operator: operatorAuth.operator,
           service: 'Wallet',
         },
