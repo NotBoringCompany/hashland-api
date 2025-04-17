@@ -11,6 +11,7 @@ import {
 } from './schemas/completed-task.schema';
 import { TaskService } from './task.service';
 import { TaskController } from './task.controller';
+import { TelegramModule } from 'src/telegram/telegram.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { TaskController } from './task.controller';
       { name: CompletedTask.name, schema: CompletedTaskSchema },
       { name: Operator.name, schema: OperatorSchema },
     ]),
+    TelegramModule,
   ],
   controllers: [TaskController],
   providers: [TaskService],

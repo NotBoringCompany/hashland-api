@@ -2,6 +2,32 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { ApiProperty } from '@nestjs/swagger';
 import { Document, Types } from 'mongoose';
 import { TaskRewards } from 'src/common/schemas/task-reward.schema';
+import { TaskRequirement } from './task-requirement.schema';
+
+/**
+ * Requirements for a telegram channel join task
+ */
+export class TelegramChannelRequirement {
+  /**
+   * The Telegram channel ID
+   */
+  @ApiProperty({
+    description: 'The Telegram channel ID',
+    example: '-1001234567890',
+  })
+  @Prop({ type: String, required: true })
+  channelId: string;
+
+  /**
+   * The name/title of the Telegram channel
+   */
+  @ApiProperty({
+    description: 'The name/title of the Telegram channel',
+    example: 'HashLand Official',
+  })
+  @Prop({ type: String, required: true })
+  channelName: string;
+}
 
 /**
  * `Task` refers to a task that can be completed by a pool operator to earn rewards.
@@ -79,7 +105,48 @@ export class Task extends Document {
   })
   rewards: TaskRewards;
 
-  // TO DO: ADD REQUIREMENTS TO TASK.
+  /**
+   * The type of task
+   */
+  @ApiProperty({
+    description: 'The type of task',
+    example: 'telegram_channel_join',
+    enum: ['basic', 'telegram_channel_join'],
+  })
+  @Prop({
+    type: String,
+    required: true,
+    default: 'basic',
+  })
+  taskType: string;
+
+  /**
+   * Requirements for telegram channel join task type
+   */
+  @ApiProperty({
+    description: 'Requirements for telegram channel join task',
+    type: TelegramChannelRequirement,
+    required: false,
+  })
+  @Prop({
+    type: TelegramChannelRequirement,
+    required: false,
+  })
+  telegramChannelRequirement?: TelegramChannelRequirement;
+
+  /**
+   * Array of task requirements
+   */
+  @ApiProperty({
+    description: 'Array of task requirements',
+    type: [TaskRequirement],
+    required: false,
+  })
+  @Prop({
+    type: [TaskRequirement],
+    required: false,
+  })
+  requirements?: TaskRequirement[];
 }
 
 /**
