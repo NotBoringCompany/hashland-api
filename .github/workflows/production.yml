@@ -60,6 +60,6 @@ jobs:
             --name hashland-api \
             -p 8080:8080 \
             --env-file .env \
-            -v $(pwd)/logs:/app/logs \
+            -v ${{ github.workspace }}/logs:/app/logs \
             --restart unless-stopped \
             hashland-api 
