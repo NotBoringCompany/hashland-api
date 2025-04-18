@@ -52,15 +52,6 @@ export class TaskDto {
   rewards: TaskRewards;
 
   /**
-   * Task type
-   */
-  @ApiProperty({
-    description: 'Task type',
-    example: 'telegram_channel_join',
-  })
-  taskType: string;
-
-  /**
    * Whether the task has been completed by the user
    */
   @ApiProperty({
@@ -76,5 +67,5 @@ export class TaskDto {
     description: 'Task requirements',
     type: [TaskRequirement],
   })
-  requirements?: TaskRequirement[];
+  requirements: TaskRequirement[];
 }

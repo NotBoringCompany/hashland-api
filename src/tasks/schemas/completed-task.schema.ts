@@ -23,6 +23,7 @@ export class CompletedTask extends Document {
   @Prop({
     type: Types.ObjectId,
     default: () => new Types.ObjectId(),
+    index: true,
   })
   _id: Types.ObjectId;
 
@@ -36,6 +37,7 @@ export class CompletedTask extends Document {
   @Prop({
     type: Types.ObjectId,
     required: true,
+    index: true,
   })
   operatorId: Types.ObjectId;
 
@@ -52,9 +54,26 @@ export class CompletedTask extends Document {
     default: 0,
   })
   timesCompleted: number;
+
+  /**
+   * Last time this task was completed
+   */
+  @ApiProperty({
+    description: 'Last time this task was completed',
+    example: '2023-01-01T00:00:00.000Z',
+  })
+  @Prop({
+    type: Date,
+    default: Date.now,
+  })
+  lastCompletedAt: Date;
 }
 
 /**
  * Generate the Mongoose schema for CompletedTask.
  */
 export const CompletedTaskSchema = SchemaFactory.createForClass(CompletedTask);
+
+// Create compound indexes
+CompletedTaskSchema.index({ operatorId: 1, _id: 1 }, { unique: true }); // Each operator can complete a task only once (entry is updated with timesCompleted)
+CompletedTaskSchema.index({ operatorId: 1, lastCompletedAt: -1 }); // For getting recent completions by operator

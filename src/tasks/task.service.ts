@@ -4,14 +4,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Task, TelegramChannelRequirement } from './schemas/task.schema';
+import { Task } from './schemas/task.schema';
 import { Model, Types } from 'mongoose';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { CompletedTask } from './schemas/completed-task.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { TelegramService } from 'src/telegram/telegram.service';
 import { TaskDto } from 'src/tasks/dto/task.dto';
-import { TaskRequirementType } from './schemas/task-requirement.schema';
+import {
+  TaskRequirement,
+  TaskRequirementType,
+} from './schemas/task-requirement.schema';
 
 @Injectable()
 export class TaskService {
@@ -24,7 +27,34 @@ export class TaskService {
   ) {}
 
   /**
-   * Adds a new task to the database.
+   * Adds a new task to the database with specified requirements.
+   */
+  async addTaskWithRequirements(
+    name: string,
+    description: string,
+    maxCompletions: number,
+    rewards: { fuel: number },
+    requirements: TaskRequirement[],
+  ): Promise<Types.ObjectId> {
+    try {
+      const task = await this.taskModel.create({
+        name,
+        description,
+        maxCompletions,
+        rewards,
+        requirements,
+      });
+
+      return task._id;
+    } catch (err) {
+      throw new InternalServerErrorException(
+        `(addTaskWithRequirements) Error creating task: ${err.message}`,
+      );
+    }
+  }
+
+  /**
+   * Adds a basic task with no special requirements.
    */
   async addTask(
     name: string,
@@ -32,15 +62,14 @@ export class TaskService {
     maxCompletions: number,
     rewards: { fuel: number },
   ): Promise<Types.ObjectId> {
-    const task = await this.taskModel.create({
+    // Create a task with empty requirements array
+    return this.addTaskWithRequirements(
       name,
       description,
       maxCompletions,
       rewards,
-      taskType: 'basic',
-    });
-
-    return task._id;
+      [],
+    );
   }
 
   /**
@@ -54,24 +83,25 @@ export class TaskService {
     channelId: string,
     channelName: string,
   ): Promise<Types.ObjectId> {
-    // Verify that the channel exists and is valid
     try {
-      // You might want to validate channel existence with the Telegram API
-      const requirement: TelegramChannelRequirement = {
-        channelId,
-        channelName,
+      // Create a task with a Telegram channel join requirement
+      const telegramRequirement: TaskRequirement = {
+        _id: new Types.ObjectId(),
+        type: TaskRequirementType.JOIN_TELEGRAM_CHANNEL,
+        description: `Join the ${channelName} Telegram channel`,
+        parameters: {
+          channelId,
+          channelName,
+        },
       };
 
-      const task = await this.taskModel.create({
+      return this.addTaskWithRequirements(
         name,
         description,
         maxCompletions,
         rewards,
-        taskType: 'telegram_channel_join',
-        telegramChannelRequirement: requirement,
-      });
-
-      return task._id;
+        [telegramRequirement],
+      );
     } catch (err) {
       throw new InternalServerErrorException(
         `(addTelegramChannelJoinTask) Error creating task: ${err.message}`,
@@ -104,10 +134,18 @@ export class TaskService {
     }>
   > {
     try {
-      const task = await this.taskModel.findOne({ _id: taskId }).lean();
+      const task = await this.taskModel
+        .findOne({
+          _id: taskId,
+          isActive: true,
+        })
+        .lean();
 
       if (!task) {
-        return new ApiResponse<null>(404, '(completeTask) Task not found.');
+        return new ApiResponse<null>(
+          404,
+          '(completeTask) Task not found or inactive.',
+        );
       }
 
       // Check number of completions for this task
@@ -125,28 +163,24 @@ export class TaskService {
         );
       }
 
-      // Handle task-specific requirements
-      if (task.taskType === 'telegram_channel_join') {
-        if (!task.telegramChannelRequirement) {
-          return new ApiResponse<null>(
-            400,
-            '(completeTask) Invalid telegram channel join task configuration.',
-          );
-        }
-
-        // Verify the operator is a member of the required channel
-        const verified = await this.verifyTelegramChannelMembership(
+      // Verify all requirements
+      if (task.requirements && task.requirements.length > 0) {
+        // Check if all requirements are met
+        const requirementsMet = await this.verifyTaskRequirements(
           operatorId,
-          task.telegramChannelRequirement.channelId,
+          task.requirements,
         );
 
-        if (!verified) {
+        if (!requirementsMet) {
           return new ApiResponse<null>(
             400,
-            '(completeTask) Operator is not a member of the required channel.',
+            '(completeTask) Task requirements are not met.',
           );
         }
       }
+
+      // Update the current time for tracking
+      const now = new Date();
 
       // If the completed task instance exists, increment the `timesCompleted` field by 1.
       // Otherwise, create a new completed task instance.
@@ -155,6 +189,7 @@ export class TaskService {
           { _id: taskId, operatorId },
           {
             $inc: { timesCompleted: 1 },
+            $set: { lastCompletedAt: now },
           },
         );
       } else {
@@ -162,6 +197,7 @@ export class TaskService {
           _id: taskId,
           operatorId,
           timesCompleted: 1,
+          lastCompletedAt: now,
         });
       }
 
@@ -210,6 +246,64 @@ export class TaskService {
   }
 
   /**
+   * Verify all requirements for a task
+   * @param operatorId The operator ID
+   * @param requirements Array of task requirements to verify
+   * @returns True if all requirements are met, false otherwise
+   */
+  private async verifyTaskRequirements(
+    operatorId: Types.ObjectId,
+    requirements: TaskRequirement[],
+  ): Promise<boolean> {
+    try {
+      // Check each requirement
+      for (const requirement of requirements) {
+        let requirementMet = false;
+
+        switch (requirement.type) {
+          case TaskRequirementType.JOIN_TELEGRAM_CHANNEL:
+            if (requirement.parameters?.channelId) {
+              requirementMet = await this.verifyTelegramChannelMembership(
+                operatorId,
+                requirement.parameters.channelId,
+              );
+            }
+            break;
+
+          case TaskRequirementType.DAILY_LOGIN:
+            // For daily login, we simply verify that the operator is active
+            // This would typically be handled by the login system
+            requirementMet = true;
+            break;
+
+          case TaskRequirementType.COMPLETE_PROFILE:
+            // Check if operator has completed their profile
+            const operator = await this.operatorModel
+              .findOne({ _id: operatorId })
+              .lean();
+            requirementMet = !!operator; // Simplistic check - should be enhanced
+            break;
+
+          // Additional requirement types would be implemented here
+          default:
+            // For unimplemented requirement types, default to false
+            requirementMet = false;
+        }
+
+        if (!requirementMet) {
+          return false; // If any requirement is not met, return false
+        }
+      }
+
+      return true; // All requirements are met
+    } catch (err) {
+      throw new InternalServerErrorException(
+        `Error verifying task requirements: ${err.message}`,
+      );
+    }
+  }
+
+  /**
    * Get a list of tasks the operator has completed at least once.
    */
   async getCompletedTasks(
@@ -218,6 +312,7 @@ export class TaskService {
     try {
       const completedTasks = await this.completedTaskModel
         .find({ operatorId, timesCompleted: { $gt: 0 } })
+        .sort({ lastCompletedAt: -1 }) // Sort by most recently completed
         .lean();
 
       return new ApiResponse<{ completedTasks: CompletedTask[] }>(
@@ -287,46 +382,16 @@ export class TaskService {
     taskDto.description = task.description;
     taskDto.maxCompletions = task.maxCompletions;
     taskDto.rewards = task.rewards;
-    taskDto.taskType = task.taskType;
+    taskDto.requirements = task.requirements;
 
     // If userId is provided, check if user has completed the task
     if (userId) {
       const completedTask = await this.completedTaskModel.findOne({
-        taskId: task._id,
-        userId,
+        _id: task._id,
+        operatorId: userId,
       });
 
       taskDto.completed = !!completedTask;
-
-      // If task has requirements, update their progress
-      if (task.requirements && task.requirements.length > 0) {
-        await Promise.all(
-          task.requirements.map(async (requirement) => {
-            // Initialize progress if not present
-            if (!requirement.progress) {
-              requirement.progress = {
-                completed: false,
-              };
-            }
-
-            // Verify each requirement type
-            switch (requirement.type) {
-              case TaskRequirementType.JOIN_TELEGRAM_CHANNEL:
-                if (requirement.parameters?.channelId) {
-                  // Check if user is a member of the Telegram channel
-                  // This will need to be implemented based on your Telegram integration
-                  // For now, set as not completed
-                  requirement.progress.completed = false;
-                  requirement.progress.lastVerified = new Date();
-                }
-                break;
-              default:
-                // For other requirement types, no specific verification needed
-                break;
-            }
-          }),
-        );
-      }
     }
 
     return taskDto;
