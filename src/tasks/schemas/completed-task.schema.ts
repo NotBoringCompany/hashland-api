@@ -23,7 +23,6 @@ export class CompletedTask extends Document {
   @Prop({
     type: Types.ObjectId,
     default: () => new Types.ObjectId(),
-    index: true,
   })
   _id: Types.ObjectId;
 
@@ -75,5 +74,4 @@ export class CompletedTask extends Document {
 export const CompletedTaskSchema = SchemaFactory.createForClass(CompletedTask);
 
 // Create compound indexes
-CompletedTaskSchema.index({ operatorId: 1, _id: 1 }, { unique: true }); // Each operator can complete a task only once (entry is updated with timesCompleted)
 CompletedTaskSchema.index({ operatorId: 1, lastCompletedAt: -1 }); // For getting recent completions by operator
