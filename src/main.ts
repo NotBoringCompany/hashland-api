@@ -10,26 +10,28 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-// import { WinstonModule } from 'nest-winston';
-// import { winstonConfig } from './logger/winston.config';
+import { WinstonModule } from 'nest-winston';
+import { winstonConfig } from './logger/winston.config';
 
-// // ✅ Ensure logs folder exists before Winston tries to write to it
-// import * as fs from 'fs';
-// import * as path from 'path';
+// ✅ Ensure logs folder exists before Winston tries to write to it
+import * as fs from 'fs';
+import * as path from 'path';
 
-// const logDir = path.join(__dirname, '..', 'logs');
-// if (!fs.existsSync(logDir)) {
-//   console.log(`Creating logs folder: ${logDir}`);
-//   fs.mkdirSync(logDir, { recursive: true });
-// }
+const logDir = path.join(__dirname, '..', 'logs');
+if (!fs.existsSync(logDir)) {
+  console.log(`Creating logs folder: ${logDir}`);
+  fs.mkdirSync(logDir, { recursive: true });
+} else {
+  console.log(`Logs folder exists: ${logDir}`);
+}
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
-    // {
-    //   logger: WinstonModule.createLogger(winstonConfig),
-    // },
+    {
+      logger: WinstonModule.createLogger(winstonConfig),
+    },
   );
 
   // Register global exception filter
