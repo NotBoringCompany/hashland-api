@@ -303,7 +303,7 @@ export class DrillingCycleService {
       const endFetchTime = performance.now();
 
       this.logger.log(
-        `⏳ (Performance) Drilling Cycle #${newCycleNumber} setup with ${activeOperators} operators took ${endFetchTime - startFetchTime}ms.`,
+        `⏳ (createDrillingCycle) Drilling Cycle #${newCycleNumber} setup with ${activeOperators} operators took ${endFetchTime - startFetchTime}ms.`,
       );
 
       return newCycleNumber;
@@ -939,9 +939,6 @@ export class DrillingCycleService {
       }
     }
 
-    // Measure execution time
-    const start = performance.now();
-
     // Process rewards in batches
     const batchPromises = [];
 
@@ -1027,13 +1024,6 @@ export class DrillingCycleService {
 
     // Wait for all updates to complete
     await Promise.all([...bulkWritePromises, ...batchPromises]);
-
-    const end = performance.now();
-    const timeMs = (end - start).toFixed(2);
-
-    this.logger.log(
-      `✅ (batchIssueHashRewards) Issued ${validRewardData.length} rewards in ${timeMs}ms. Updated ${sessionUpdateOps.length} active sessions and ${operatorUpdateOps.length} operator totals.`,
-    );
   }
 
   /**
