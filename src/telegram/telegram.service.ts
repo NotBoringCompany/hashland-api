@@ -26,6 +26,7 @@ export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
   private readonly botToken: string;
   private readonly apiBaseUrl: string;
+  private readonly hashlandUrl: string;
 
   constructor(
     private configService: ConfigService,
@@ -42,6 +43,11 @@ export class TelegramService {
       );
     }
     this.apiBaseUrl = `https://api.telegram.org/bot${this.botToken}`;
+
+    this.hashlandUrl = this.configService.get<string>('HASHLAND_URL');
+    if (!this.hashlandUrl) {
+      this.logger.warn('HASHLAND_URL is not defined in environment variables');
+    }
   }
 
   /**
@@ -201,7 +207,20 @@ export class TelegramService {
 
       switch (command) {
         case 'start':
-          await this.sendTelegramMessage(chatId, 'Welcome to HashLand Bot! 👋');
+          await this.sendTelegramMessage(chatId, 'Play Hashland!', {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: 'Open Game',
+                    web_app: {
+                      url: this.hashlandUrl,
+                    },
+                  },
+                ],
+              ],
+            },
+          });
           return 'Processed /start command';
         case 'help':
           await this.sendTelegramMessage(
