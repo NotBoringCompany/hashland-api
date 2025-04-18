@@ -195,6 +195,7 @@ export class TelegramService {
     // Basic message handling - can be expanded as needed
     const message = update.message;
     const chatId = message.chat.id;
+    const userId = message.from?.id?.toString();
     const text = message.text;
 
     if (!text) {
@@ -203,10 +204,39 @@ export class TelegramService {
 
     // Handle commands
     if (text.startsWith('/')) {
-      const command = text.split(' ')[0].substring(1);
+      // Extract command and parameters
+      const parts = text.split(' ');
+      const commandWithParams = parts[0].substring(1);
+      const commandParts = commandWithParams.split('@'); // Handle commands with bot username
+      const command = commandParts[0];
+      const params = parts.slice(1);
 
       switch (command) {
         case 'start':
+          let referralCode = null;
+
+          // Check if there's a parameter that might be a referral code
+          if (params.length > 0) {
+            referralCode = params[0];
+
+            // Process the referral - in a real implementation, you'd save this to a database
+            this.logger.log(
+              `User ${userId} was referred by code: ${referralCode}`,
+            );
+
+            // Save the referral relationship here
+            // For now, we just log it
+            const referrerId = this.getUserIdFromReferralCode(referralCode);
+            if (referrerId && referrerId !== userId) {
+              this.logger.log(
+                `User ${userId} was referred by user ${referrerId}`,
+              );
+              // Here you would add your referral processing logic
+              // e.g., await this.processReferral(referrerId, userId);
+            }
+          }
+
+          // Send the regular start message with game link
           await this.sendTelegramMessage(chatId, 'Play Hashland!', {
             reply_markup: {
               inline_keyboard: [
@@ -214,7 +244,9 @@ export class TelegramService {
                   {
                     text: 'Open Game',
                     web_app: {
-                      url: this.hashlandUrl,
+                      url:
+                        this.hashlandUrl +
+                        (referralCode ? `?ref=${referralCode}` : ''),
                     },
                   },
                 ],
@@ -222,12 +254,24 @@ export class TelegramService {
             },
           });
           return 'Processed /start command';
+
+        case 'referral':
+          if (!userId) {
+            await this.sendTelegramMessage(
+              chatId,
+              'Could not generate referral link. Please try again later.',
+            );
+            return 'Failed to generate referral: missing user ID';
+          }
+          return await this.sendReferralLink(chatId, userId);
+
         case 'help':
           await this.sendTelegramMessage(
             chatId,
-            'Available commands:\n/start - Start the bot\n/help - Show this help message',
+            'Available commands:\n/start - Start the bot\n/referral - Get your referral link\n/help - Show this help message',
           );
           return 'Processed /help command';
+
         default:
           await this.sendTelegramMessage(chatId, `Unknown command: ${command}`);
           return `Received unknown command: ${command}`;
@@ -240,6 +284,31 @@ export class TelegramService {
       'I received your message, but I only respond to commands.',
     );
     return 'Processed regular message';
+  }
+
+  /**
+   * Get the user ID from a referral code
+   * @param referralCode - The referral code
+   * @returns The original user ID or null if invalid
+   */
+  private getUserIdFromReferralCode(referralCode: string): string | null {
+    try {
+      // Add padding if needed
+      let paddedCode = referralCode;
+      while (paddedCode.length % 4 !== 0) {
+        paddedCode += '=';
+      }
+
+      // Convert back to the original user ID
+      const buffer = Buffer.from(paddedCode, 'base64');
+      return buffer.toString();
+    } catch (error) {
+      this.logger.error(
+        `Error decoding referral code: ${error.message}`,
+        error.stack,
+      );
+      return null;
+    }
   }
 
   /**
@@ -568,6 +637,81 @@ export class TelegramService {
           `Error sending Telegram message: ${error.message}`,
         ),
       );
+    }
+  }
+
+  /**
+   * Generate a unique referral code for a user
+   * @param userId - The Telegram user ID
+   * @returns A unique referral code
+   */
+  private generateReferralCode(userId: string): string {
+    // Simple encoding to generate a unique code based on user ID
+    // For production, consider a more sophisticated approach
+    const buffer = Buffer.from(userId);
+    return buffer.toString('base64').replace(/[/+=]/g, '').substring(0, 8);
+  }
+
+  /**
+   * Get the bot's username
+   * @returns The bot's username
+   */
+  private async getBotUsername(): Promise<string> {
+    try {
+      const response = await axios.get(`${this.apiBaseUrl}/getMe`);
+      if (response.data.ok) {
+        return response.data.result.username;
+      }
+      return '';
+    } catch (error) {
+      this.logger.error(
+        `Error getting bot username: ${error.message}`,
+        error.stack,
+      );
+      return '';
+    }
+  }
+
+  /**
+   * Send a referral link to a user
+   * @param chatId - The chat ID to send to
+   * @param userId - The user's Telegram ID
+   * @returns Status message
+   */
+  private async sendReferralLink(
+    chatId: string | number,
+    userId: string,
+  ): Promise<string> {
+    try {
+      const referralCode = this.generateReferralCode(userId);
+      const botUsername = await this.getBotUsername();
+
+      if (!botUsername) {
+        await this.sendTelegramMessage(
+          chatId,
+          'Error generating referral link. Please try again later.',
+        );
+        return 'Failed to generate referral link: could not get bot username';
+      }
+
+      const referralLink = `https://t.me/${botUsername}?start=${referralCode}`;
+
+      await this.sendTelegramMessage(
+        chatId,
+        `Share your unique referral link with friends:\n${referralLink}\n\nWhen they join through your link, you'll both receive special bonuses!`,
+      );
+
+      return 'Sent referral link';
+    } catch (error) {
+      this.logger.error(
+        `Error sending referral link: ${error.message}`,
+        error.stack,
+      );
+      await this.sendTelegramMessage(
+        chatId,
+        'Error generating referral link. Please try again later.',
+      );
+      return `Error sending referral link: ${error.message}`;
     }
   }
 }
