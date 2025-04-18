@@ -21,6 +21,7 @@ import {
   OperatorWalletSchema,
 } from 'src/operators/schemas/operator-wallet.schema';
 import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
+import { AdminGuard } from './admin/admin.guard';
 
 @Module({
   imports: [
@@ -57,7 +58,14 @@ import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
     JwtStrategy,
     OperatorService,
     WalletAuthService,
+    AdminGuard,
   ],
-  exports: [TelegramAuthService, WalletAuthService, JwtStrategy, JwtModule],
+  exports: [
+    TelegramAuthService,
+    WalletAuthService,
+    JwtStrategy,
+    JwtModule,
+    AdminGuard,
+  ],
 })
 export class AuthModule {}
