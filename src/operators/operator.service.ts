@@ -21,6 +21,7 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { HASHReserve } from 'src/hash-reserve/schemas/hash-reserve.schema';
 import { randomBytes } from 'crypto';
 import { AllowedChain } from 'src/common/enums/chain.enum';
+import { ReferralService } from 'src/referral/referral.service';
 
 @Injectable()
 export class OperatorService {
@@ -37,6 +38,7 @@ export class OperatorService {
     private readonly poolService: PoolService,
     private readonly drillService: DrillService,
     private readonly redisService: RedisService,
+    private readonly referralService: ReferralService,
     @InjectModel(HASHReserve.name) private hashReserveModel: Model<HASHReserve>,
   ) {}
 
@@ -566,6 +568,8 @@ export class OperatorService {
    *
    * Also assigns the operator to a random public pool if still applicable.
    * @param authData - Authentication data (Telegram or Wallet)
+   * @param projection - Optional projection for fields to include
+   * @param referralCode - Optional referral code used during registration
    * @returns The operator's data (or null if not found)
    */
   async findOrCreateOperator(
@@ -574,9 +578,9 @@ export class OperatorService {
       username?: string;
       walletAddress?: string;
       walletChain?: string;
-      // Optional projection
     },
     projection?: Record<string, number>,
+    referralCode?: string,
   ): Promise<{ operator: Operator; type: 'login' | 'register' } | null> {
     if (authData.walletAddress) {
       // This is a wallet-based authentication
@@ -669,6 +673,16 @@ export class OperatorService {
       currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       maxActiveDrillsAllowed: 5,
       totalEarnedHASH: 0,
+      referralData: {
+        referralCode: null,
+        referredBy: null,
+        totalReferrals: 0,
+        referralRewards: {
+          effCredits: 0,
+          fuelBonus: 0,
+          hashBonus: 0,
+        },
+      },
     };
 
     // Add the appropriate profile based on authentication method
@@ -687,6 +701,18 @@ export class OperatorService {
     }
 
     const operator = await this.operatorModel.create(operatorData);
+
+    // Process referral code if provided
+    if (referralCode) {
+      this.logger.log(
+        `Processing referral code for new operator: ${referralCode}`,
+      );
+      await this.referralService
+        .processReferral(referralCode, operator._id)
+        .catch((err) => {
+          this.logger.warn(`Error processing referral: ${err.message}`);
+        });
+    }
 
     // Pick a random pool to join
     const poolId = this.poolService.fetchRandomPublicPoolId();
@@ -721,6 +747,11 @@ export class OperatorService {
           `(findOrCreateOperator) Error granting basic drill: ${err.message}`,
         );
       });
+
+    // Generate a referral code for the new operator
+    this.referralService.getOperatorReferralCode(operator._id).catch((err) => {
+      this.logger.warn(`Error generating referral code: ${err.message}`);
+    });
 
     this.logger.log(
       `🆕(findOrCreateOperator) Created new operator: ${username}`,
@@ -1152,6 +1183,241 @@ export class OperatorService {
       };
     } catch (error) {
       this.logger.error(`(getOperatorFuelStatus) Error: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Generates or retrieves a unique referral code for an operator
+   * @param operatorId The operator's ID
+   * @returns The referral code
+   */
+  async getOperatorReferralCode(
+    operatorId: Types.ObjectId,
+  ): Promise<{ referralCode: string; isNew: boolean }> {
+    try {
+      // Check if operator already has a referral code
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { 'referralData.referralCode': 1 })
+        .lean();
+
+      if (!operator) {
+        throw new NotFoundException(
+          '(getOperatorReferralCode) Operator not found',
+        );
+      }
+
+      // If operator already has a referral code, return it
+      if (operator.referralData?.referralCode) {
+        return {
+          referralCode: operator.referralData.referralCode,
+          isNew: false,
+        };
+      }
+
+      // Generate a new referral code
+      const referralCode = this.generateReferralCode(operatorId.toString());
+
+      // Save the referral code to the operator
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        {
+          $set: { 'referralData.referralCode': referralCode },
+        },
+      );
+
+      return { referralCode, isNew: true };
+    } catch (error) {
+      this.logger.error(
+        `(getOperatorReferralCode) Error: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error generating referral code: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Generate a unique referral code for a user
+   * @param userId - The operator ID to encode
+   * @returns A unique referral code
+   */
+  private generateReferralCode(userId: string): string {
+    // Simple encoding to generate a unique code based on user ID and timestamp
+    const timestamp = Date.now().toString().slice(-6);
+    const buffer = Buffer.from(userId + timestamp);
+    return buffer
+      .toString('base64')
+      .replace(/[/+=]/g, '')
+      .substring(0, 8)
+      .toUpperCase();
+  }
+
+  /**
+   * Process a referral when a new user signs up using a referral code
+   * @param referralCode The referral code used
+   * @param newOperatorId The ID of the newly registered operator
+   * @returns Success status and message
+   */
+  async processReferral(
+    referralCode: string,
+    newOperatorId: Types.ObjectId,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    referrerId?: Types.ObjectId;
+  }> {
+    try {
+      // Find the referring operator
+      const referrer = await this.operatorModel.findOne(
+        { 'referralData.referralCode': referralCode },
+        { _id: 1 },
+      );
+
+      if (!referrer) {
+        return { success: false, message: 'Invalid referral code' };
+      }
+
+      const referrerId = referrer._id;
+
+      // Make sure the new operator isn't already referred and isn't referring themselves
+      if (newOperatorId.equals(referrerId)) {
+        return { success: false, message: 'Cannot refer yourself' };
+      }
+
+      const newOperator = await this.operatorModel.findById(newOperatorId, {
+        'referralData.referredBy': 1,
+      });
+
+      if (!newOperator) {
+        return { success: false, message: 'New operator not found' };
+      }
+
+      if (newOperator.referralData?.referredBy) {
+        return { success: false, message: 'Operator already has a referrer' };
+      }
+
+      // Update the referrer's stats (increment total referrals)
+      await this.operatorModel.updateOne(
+        { _id: referrerId },
+        { $inc: { 'referralData.totalReferrals': 1 } },
+      );
+
+      // Update the new operator with the referrer ID
+      await this.operatorModel.updateOne(
+        { _id: newOperatorId },
+        { $set: { 'referralData.referredBy': referrerId } },
+      );
+
+      // Apply referral rewards here (customize based on your needs)
+      await this.applyReferralRewards(referrerId, newOperatorId);
+
+      return {
+        success: true,
+        message: 'Referral processed successfully',
+        referrerId,
+      };
+    } catch (error) {
+      this.logger.error(
+        `(processReferral) Error: ${error.message}`,
+        error.stack,
+      );
+      return {
+        success: false,
+        message: `Error processing referral: ${error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Apply rewards to both referrer and referred user
+   * @param referrerId ID of the referring operator
+   * @param referredId ID of the referred operator
+   */
+  private async applyReferralRewards(
+    referrerId: Types.ObjectId,
+    referredId: Types.ObjectId,
+  ): Promise<void> {
+    try {
+      // Example rewards (customize based on your game mechanics)
+      const referrerRewards = {
+        effCredits: 25,
+        fuelBonus: 10,
+        hashBonus: 0,
+      };
+
+      const referredRewards = {
+        effCredits: 10,
+        fuelBonus: 5,
+        hashBonus: 0,
+      };
+
+      // Apply referrer rewards
+      await this.operatorModel.updateOne(
+        { _id: referrerId },
+        {
+          $inc: {
+            'referralData.referralRewards.effCredits':
+              referrerRewards.effCredits,
+            'referralData.referralRewards.fuelBonus': referrerRewards.fuelBonus,
+            'referralData.referralRewards.hashBonus': referrerRewards.hashBonus,
+            effCredits: referrerRewards.effCredits,
+            maxFuel: referrerRewards.fuelBonus,
+            currentFuel: referrerRewards.fuelBonus,
+          },
+        },
+      );
+
+      // Apply referred user rewards
+      await this.operatorModel.updateOne(
+        { _id: referredId },
+        {
+          $inc: {
+            effCredits: referredRewards.effCredits,
+            maxFuel: referredRewards.fuelBonus,
+            currentFuel: referredRewards.fuelBonus,
+          },
+        },
+      );
+
+      // Clear any cached fuel values since we modified them
+      await this.redisService.del(this.getOperatorFuelCacheKey(referrerId));
+      await this.redisService.del(this.getOperatorFuelCacheKey(referredId));
+
+      this.logger.log(
+        `Applied referral rewards: Referrer ${referrerId} (+${referrerRewards.effCredits} EFF, +${referrerRewards.fuelBonus} fuel), ` +
+          `Referred ${referredId} (+${referredRewards.effCredits} EFF, +${referredRewards.fuelBonus} fuel)`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `(applyReferralRewards) Error: ${error.message}`,
+        error.stack,
+      );
+      // Don't throw - we don't want to break the referral process if rewards fail
+    }
+  }
+
+  /**
+   * Get user ID from a referral code by finding the operator with that code
+   * @param referralCode The referral code to look up
+   * @returns The operator ID that owns the referral code, or null if not found
+   */
+  async getUserIdFromReferralCode(
+    referralCode: string,
+  ): Promise<Types.ObjectId | null> {
+    try {
+      const operator = await this.operatorModel.findOne(
+        { 'referralData.referralCode': referralCode },
+        { _id: 1 },
+      );
+
+      return operator ? operator._id : null;
+    } catch (error) {
+      this.logger.error(
+        `(getUserIdFromReferralCode) Error: ${error.message}`,
+        error.stack,
+      );
       return null;
     }
   }

@@ -195,6 +195,56 @@ export class Operator extends Document {
   } | null;
 
   /**
+   * Referral details for the operator
+   */
+  @ApiProperty({
+    description: "The operator's referral information",
+    required: false,
+    example: {
+      referralCode: 'abc123xyz',
+      referredBy: '507f1f77bcf86cd799439011',
+      totalReferrals: 5,
+      referralRewards: {
+        effCredits: 250,
+        fuelBonus: 50,
+      },
+    },
+  })
+  @Prop({
+    type: {
+      referralCode: { type: String, required: false, index: true },
+      referredBy: { type: Types.ObjectId, ref: 'Operators', required: false },
+      totalReferrals: { type: Number, default: 0 },
+      referralRewards: {
+        effCredits: { type: Number, default: 0 },
+        fuelBonus: { type: Number, default: 0 },
+        hashBonus: { type: Number, default: 0 },
+      },
+    },
+    required: false,
+    default: {
+      referralCode: null,
+      referredBy: null,
+      totalReferrals: 0,
+      referralRewards: {
+        effCredits: 0,
+        fuelBonus: 0,
+        hashBonus: 0,
+      },
+    },
+  })
+  referralData?: {
+    referralCode: string | null;
+    referredBy: Types.ObjectId | null;
+    totalReferrals: number;
+    referralRewards: {
+      effCredits: number;
+      fuelBonus: number;
+      hashBonus: number;
+    };
+  };
+
+  /**
    * The timestamp when the operator was created
    */
   @ApiProperty({

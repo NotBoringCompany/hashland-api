@@ -12,15 +12,15 @@ import {
   TelegramWebhookSchema,
 } from './schemas/telegram-webhook.schema';
 import { HttpModule } from '@nestjs/axios';
-import { AuthModule } from 'src/auth/auth.module';
 import { OperatorModule } from 'src/operators/operator.module';
+import { ReferralModule } from 'src/referral/referral.module';
 
 @Module({
   imports: [
     ConfigModule,
     HttpModule,
-    AuthModule,
     OperatorModule,
+    ReferralModule,
     MongooseModule.forFeature([
       { name: TelegramChannelMember.name, schema: TelegramChannelMemberSchema },
       { name: TelegramWebhook.name, schema: TelegramWebhookSchema },

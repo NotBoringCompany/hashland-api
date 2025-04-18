@@ -22,7 +22,7 @@ import {
 } from 'src/operators/schemas/operator-wallet.schema';
 import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
 import { AdminGuard } from './admin/admin.guard';
-
+import { ReferralModule } from 'src/referral/referral.module';
 @Module({
   imports: [
     ConfigModule,
@@ -32,6 +32,7 @@ import { AdminGuard } from './admin/admin.guard';
     PoolModule,
     DrillModule,
     MixpanelModule,
+    ReferralModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
