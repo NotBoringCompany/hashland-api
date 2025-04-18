@@ -59,5 +59,6 @@ jobs:
             --name hashland-api \
             -p 8080:8080 \
             --env-file .env \
+            -v $(pwd)/logs:/app/logs \     # <-- Add this line for Winston logs
             --restart unless-stopped \
             hashland-api 
