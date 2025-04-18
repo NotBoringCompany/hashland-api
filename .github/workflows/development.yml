@@ -52,6 +52,8 @@ jobs:
           echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
           echo "EVM_RECEIVER_ADDRESS=${{ secrets.EVM_RECEIVER_ADDRESS }}" >> .env
           echo "MIXPANEL_PROJECT_TOKEN=${{ secrets.MIXPANEL_PROJECT_TOKEN }}" >> .env
+          echo "ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}" >> .env
+          echo "HASHLAND_URL=${{ secrets.HASHLAND_URL }}" >> .env
   
       # /logs folder is mounted in the container
       - name: Build and deploy with Docker
