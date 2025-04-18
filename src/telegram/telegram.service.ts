@@ -52,6 +52,8 @@ export class TelegramService {
   async processWebhook(
     update: Record<string, any>,
   ): Promise<{ success: boolean; message: string }> {
+    this.logger.debug(update);
+
     try {
       const updateId = update.update_id;
 
@@ -151,7 +153,7 @@ export class TelegramService {
       );
 
       // Update or create membership record
-      const membershipRecord = await this.channelMemberModel.findOneAndUpdate(
+      await this.channelMemberModel.findOneAndUpdate(
         { operatorId, channelId },
         {
           $set: {
@@ -329,7 +331,9 @@ export class TelegramService {
    * @param telegramId - The Telegram user ID
    * @returns The operator document or null if not found
    */
-  private async findOperatorByTelegramId(telegramId: string): Promise<Operator | null> {
+  private async findOperatorByTelegramId(
+    telegramId: string,
+  ): Promise<Operator | null> {
     try {
       // Use the OperatorService to find an operator by Telegram ID
       return await this.operatorService.findByTelegramId(telegramId);
@@ -434,6 +438,8 @@ export class TelegramService {
       if (secretToken) {
         params.secret_token = secretToken;
       }
+
+      this.logger.debug(`${this.apiBaseUrl}/setWebhook`);
 
       const response = await axios.post(
         `${this.apiBaseUrl}/setWebhook`,

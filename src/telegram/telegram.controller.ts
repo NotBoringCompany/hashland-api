@@ -49,7 +49,7 @@ export class TelegramController {
   async handleWebhook(
     @Body() webhookData: TelegramWebhookDto,
   ): Promise<{ success: boolean; message: string }> {
-    return this.telegramService.processWebhook(webhookData.update);
+    return this.telegramService.processWebhook(webhookData);
   }
 
   /**
