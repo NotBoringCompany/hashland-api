@@ -22,6 +22,7 @@ import {
   TelegramWebhookDto,
 } from './dto/telegram-webhook.dto';
 import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
+import { AdminProtected } from 'src/auth/admin';
 
 @ApiTags('Telegram')
 @Controller('telegram')
@@ -95,8 +96,7 @@ export class TelegramController {
     status: 500,
     description: 'Failed to set webhook',
   })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @AdminProtected()
   @Post('set-webhook')
   async setWebhook(
     @Body() dto: SetWebhookDto,
@@ -119,8 +119,7 @@ export class TelegramController {
     status: 500,
     description: 'Failed to delete webhook',
   })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @AdminProtected()
   @Delete('webhook')
   async deleteWebhook(): Promise<{ success: boolean; message: string }> {
     return this.telegramService.deleteWebhook();
@@ -141,8 +140,7 @@ export class TelegramController {
     status: 500,
     description: 'Failed to get webhook information',
   })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @AdminProtected()
   @Get('webhook-info')
   async getWebhookInfo(): Promise<any> {
     return this.telegramService.getWebhookInfo();
@@ -163,8 +161,7 @@ export class TelegramController {
     status: 500,
     description: 'Failed to send message',
   })
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @AdminProtected()
   @Post('send-message')
   async sendMessage(
     @Query('chat_id') chatId: string,
