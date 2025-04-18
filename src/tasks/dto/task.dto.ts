@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { TaskRewards } from 'src/common/schemas/task-reward.schema';
+import { TaskReward } from '../schemas/task.schema';
 import { TaskRequirement } from '../schemas/task-requirement.schema';
 
 /**
@@ -20,7 +20,7 @@ export class TaskDto {
    */
   @ApiProperty({
     description: 'Task name',
-    example: 'Join our Telegram channel',
+    example: 'Clean the pool',
   })
   name: string;
 
@@ -29,27 +29,18 @@ export class TaskDto {
    */
   @ApiProperty({
     description: 'Task description',
-    example: 'Join our official Telegram channel to receive news and updates',
+    example: 'Vacuum the pool, skim the surface, and clean the filter',
   })
   description: string;
 
   /**
-   * Maximum times the task can be completed
+   * Maximum number of times this task can be completed
    */
   @ApiProperty({
-    description: 'Maximum times the task can be completed',
-    example: 1,
+    description: 'Maximum number of times this task can be completed',
+    example: 5,
   })
   maxCompletions: number;
-
-  /**
-   * Task rewards
-   */
-  @ApiProperty({
-    description: 'Task rewards',
-    type: TaskRewards,
-  })
-  rewards: TaskRewards;
 
   /**
    * Whether the task has been completed by the user
@@ -61,10 +52,19 @@ export class TaskDto {
   completed?: boolean;
 
   /**
-   * Task requirements
+   * The rewards for completing the task
    */
   @ApiProperty({
-    description: 'Task requirements',
+    description: 'The rewards for completing the task',
+    type: [TaskReward],
+  })
+  rewards: TaskReward[];
+
+  /**
+   * Array of task requirements
+   */
+  @ApiProperty({
+    description: 'Array of task requirements',
     type: [TaskRequirement],
   })
   requirements: TaskRequirement[];

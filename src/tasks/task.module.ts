@@ -12,6 +12,7 @@ import {
 import { TaskService } from './task.service';
 import { TaskController } from './task.controller';
 import { TelegramModule } from 'src/telegram/telegram.module';
+import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TelegramModule } from 'src/telegram/telegram.module';
       { name: Operator.name, schema: OperatorSchema },
     ]),
     TelegramModule,
+    DrillingGatewayModule,
   ],
   controllers: [TaskController],
   providers: [TaskService],

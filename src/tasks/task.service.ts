@@ -15,15 +15,23 @@ import {
   TaskRequirement,
   TaskRequirementType,
 } from './schemas/task-requirement.schema';
+import { TaskReward, TaskRewardType } from './schemas/task.schema';
+import { Logger } from '@nestjs/common';
+import { RedisService } from 'src/common/redis.service';
+import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
 
 @Injectable()
 export class TaskService {
+  private readonly logger = new Logger(TaskService.name);
+
   constructor(
     @InjectModel(Task.name) private taskModel: Model<Task>,
     @InjectModel(CompletedTask.name)
     private completedTaskModel: Model<CompletedTask>,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     private readonly telegramService: TelegramService,
+    private readonly redisService: RedisService,
+    private readonly drillingGatewayService: DrillingGatewayService,
   ) {}
 
   /**
@@ -33,7 +41,7 @@ export class TaskService {
     name: string,
     description: string,
     maxCompletions: number,
-    rewards: { fuel: number },
+    rewards: TaskReward[],
     requirements: TaskRequirement[],
   ): Promise<Types.ObjectId> {
     try {
@@ -60,7 +68,7 @@ export class TaskService {
     name: string,
     description: string,
     maxCompletions: number,
-    rewards: { fuel: number },
+    rewards: TaskReward[],
   ): Promise<Types.ObjectId> {
     // Create a task with empty requirements array
     return this.addTaskWithRequirements(
@@ -79,7 +87,7 @@ export class TaskService {
     name: string,
     description: string,
     maxCompletions: number,
-    rewards: { fuel: number },
+    rewards: TaskReward[],
     channelId: string,
     channelName: string,
   ): Promise<Types.ObjectId> {
@@ -201,31 +209,107 @@ export class TaskService {
         });
       }
 
-      // Give the operator the rewards for completing the task
-      if (task.rewards.fuel > 0) {
-        const operator = await this.operatorModel
-          .findOne({ _id: operatorId }, { currentFuel: 1, maxFuel: 1 })
-          .lean();
+      // Get operator's current fuel and maxFuel status
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { currentFuel: 1, maxFuel: 1 })
+        .lean();
 
-        if (!operator) {
-          return new ApiResponse<null>(
-            404,
-            '(completeTask) Operator not found.',
-          );
+      if (!operator) {
+        return new ApiResponse<null>(404, '(completeTask) Operator not found.');
+      }
+
+      let currentFuel = operator.currentFuel;
+      let maxFuel = operator.maxFuel;
+      let maxFuelIncreased = false;
+      let fuelReplenished = false;
+      let maxFuelIncreaseAmount = 0;
+      let fuelReplenishedAmount = 0;
+
+      // Apply all rewards
+      for (const reward of task.rewards) {
+        switch (reward.type) {
+          case TaskRewardType.FUEL:
+            // Update fuel without exceeding maxFuel
+            const fuelToAdd = Math.min(reward.amount, maxFuel - currentFuel);
+            if (fuelToAdd > 0) {
+              currentFuel += fuelToAdd;
+              fuelReplenishedAmount += fuelToAdd;
+              fuelReplenished = true;
+              this.logger.log(
+                `✅ (completeTask) Fuel granted to operator ${operatorId}: +${fuelToAdd} units (${currentFuel}/${maxFuel})`,
+              );
+            }
+            break;
+          case TaskRewardType.MAX_FUEL:
+            // Increase maxFuel
+            maxFuel += reward.amount;
+            maxFuelIncreaseAmount += reward.amount;
+            maxFuelIncreased = true;
+            this.logger.log(
+              `✅ (completeTask) Max fuel increased for operator ${operatorId}: +${reward.amount} units (${currentFuel}/${maxFuel})`,
+            );
+            break;
+          default:
+            this.logger.warn(
+              `⚠️ (completeTask) Unknown reward type: ${reward.type}`,
+            );
         }
+      }
 
-        // Update the operator's fuel amount (limit at `maxFuel`)
-        const fuelToInc = Math.min(
-          task.rewards.fuel,
-          operator.maxFuel - operator.currentFuel,
-        );
-
+      // Update operator with all changes
+      if (
+        currentFuel !== operator.currentFuel ||
+        maxFuel !== operator.maxFuel
+      ) {
         await this.operatorModel.updateOne(
           { _id: operatorId },
           {
-            $inc: { currentFuel: fuelToInc },
+            $set: {
+              currentFuel,
+              maxFuel,
+            },
           },
         );
+
+        // Update Redis cache for fuel values
+        const operatorFuelCacheKey = `operator:${operatorId.toString()}:fuel`;
+        await this.redisService.set(
+          operatorFuelCacheKey,
+          JSON.stringify({ currentFuel, maxFuel }),
+          3600, // 1 hour expiry
+        );
+
+        // Create notification data
+        const operatorUpdate = {
+          operatorId,
+          currentFuel,
+          maxFuel,
+        };
+
+        // Notify for fuel replenishment if applicable
+        if (fuelReplenished) {
+          // Send websocket notification for fuel replenishment
+          await this.drillingGatewayService.notifyFuelUpdates(
+            [operatorUpdate],
+            fuelReplenishedAmount,
+            'replenished',
+          );
+        }
+
+        // Notify for max fuel increase if applicable
+        if (
+          maxFuelIncreased &&
+          (!fuelReplenished || maxFuelIncreaseAmount > fuelReplenishedAmount)
+        ) {
+          // Send websocket notification for max fuel increase
+          // Only notify about max fuel increase if we haven't already notified for replenishment
+          // or if the max fuel increase is more significant than the replenishment
+          await this.drillingGatewayService.notifyFuelUpdates(
+            [operatorUpdate],
+            maxFuelIncreaseAmount,
+            'replenished',
+          );
+        }
       }
 
       return new ApiResponse<{ completedTaskId: Types.ObjectId }>(
@@ -236,6 +320,9 @@ export class TaskService {
         },
       );
     } catch (err: any) {
+      this.logger.error(
+        `❌ (completeTask) Error completing task: ${err.message}`,
+      );
       throw new InternalServerErrorException(
         new ApiResponse<null>(
           500,

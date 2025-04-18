@@ -1,8 +1,48 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { ApiProperty } from '@nestjs/swagger';
 import { Document, Types } from 'mongoose';
-import { TaskRewards } from 'src/common/schemas/task-reward.schema';
 import { TaskRequirement } from './task-requirement.schema';
+
+/**
+ * Types of rewards that can be earned from completing a task
+ */
+export enum TaskRewardType {
+  FUEL = 'fuel',
+  MAX_FUEL = 'maxFuel',
+}
+
+/**
+ * Represents a reward that can be earned from completing a task
+ */
+export class TaskReward {
+  /**
+   * Type of reward
+   */
+  @ApiProperty({
+    description: 'Type of reward',
+    example: TaskRewardType.FUEL,
+    enum: TaskRewardType,
+  })
+  @Prop({
+    type: String,
+    required: true,
+    enum: Object.values(TaskRewardType),
+  })
+  type: TaskRewardType;
+
+  /**
+   * Amount of the reward
+   */
+  @ApiProperty({
+    description: 'Amount of the reward',
+    example: 10,
+  })
+  @Prop({
+    type: Number,
+    required: true,
+  })
+  amount: number;
+}
 
 /**
  * `Task` refers to a task that can be completed by a pool operator to earn rewards.
@@ -73,14 +113,15 @@ export class Task extends Document {
    */
   @ApiProperty({
     description: 'The rewards for completing the task',
-    type: TaskRewards,
+    type: [TaskReward],
     required: true,
   })
   @Prop({
-    type: TaskRewards,
+    type: [TaskReward],
     required: true,
+    default: [],
   })
-  rewards: TaskRewards;
+  rewards: TaskReward[];
 
   /**
    * Array of task requirements
