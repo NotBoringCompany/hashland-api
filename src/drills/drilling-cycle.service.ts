@@ -491,10 +491,6 @@ export class DrillingCycleService {
       0,
     );
 
-    this.logger.error(
-      `(distributeCycleRewards) Total cumulative EFF: ${totalCumulativeEff}`,
-    );
-
     if (totalCumulativeEff === 0) {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No valid cumulative EFF for reward distribution.`,
@@ -533,6 +529,15 @@ export class DrillingCycleService {
         .findOne({ operator: extractorOperatorId })
         .select('pool')
         .lean();
+
+      this.logger.error(
+        `(distributeCycleRewards) Pool operator: ${JSON.stringify(
+          poolOperator,
+          null,
+          2,
+        )}`,
+      );
+
       const isSoloOperator = !poolOperator;
 
       if (isSoloOperator) {
