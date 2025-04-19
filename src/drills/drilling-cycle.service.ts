@@ -369,7 +369,7 @@ export class DrillingCycleService {
     let extractorOperatorId: Types.ObjectId | null = null;
 
     if (extractorData) {
-      extractorOperatorId = extractorData.drillOperatorId;
+      extractorOperatorId = extractorData.drillOperatorId ?? null;
     } else {
       this.logger.warn(
         `(endCurrentCycle) No valid extractor drill found. Skipping extractor distribution.`,
@@ -474,8 +474,6 @@ export class DrillingCycleService {
         {
           _id: 1,
           cumulativeEff: 1,
-          effCredits: 1, // Include the effCredits bonus
-          effMultiplier: 1,
           'usernameData.username': 1,
         },
       )
@@ -487,31 +485,14 @@ export class DrillingCycleService {
       );
     }
 
-    // ✅ Step 3: Apply Luck Factor & Compute Weighted Eff. Also include effCredits for the bonus.
-    const operatorsWithLuck = activeOperators.map((operator) => {
-      const luckFactor =
-        GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
-        Math.random() *
-          (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
-            GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
-
-      const baseEff =
-        operator.cumulativeEff * operator.effMultiplier * luckFactor;
-
-      return {
-        operatorId: operator._id,
-        weightedEff: baseEff + (operator.effCredits || 0), // ⬅️ Add effCredits
-      };
-    });
-
-    // ✅ Step 4: Compute Total Weighted Eff Sum
-    const totalWeightedEff = operatorsWithLuck.reduce(
-      (sum, op) => sum + op.weightedEff,
+    // ✅ Step 3: Compute Total Cumulative EFF
+    const totalCumulativeEff = activeOperators.reduce(
+      (sum, op) => sum + op.cumulativeEff,
       0,
     );
-    if (totalWeightedEff === 0) {
+    if (totalCumulativeEff === 0) {
       this.logger.warn(
-        `⚠️ (distributeCycleRewards) No valid weighted EFF for reward distribution.`,
+        `⚠️ (distributeCycleRewards) No valid cumulative EFF for reward distribution.`,
       );
     }
 
@@ -528,12 +509,12 @@ export class DrillingCycleService {
         issuedHash *
         GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.allActiveOperators;
 
-      // ✅ Compute Each Operator's Reward Share Based on Weighted Eff
+      // ✅ Compute Each Operator's Reward Share Based on cumulative EFF
       // This includes the supposed extractor as well even if they didn't get selected due to validation issues.
-      const weightedRewards = operatorsWithLuck.map((operator) => ({
-        operatorId: operator.operatorId,
+      const weightedRewards = activeOperators.map((operator) => ({
+        operatorId: operator._id,
         amount:
-          (operator.weightedEff / totalWeightedEff) * activeOperatorsReward,
+          (operator.cumulativeEff / totalCumulativeEff) * activeOperatorsReward,
       }));
 
       rewardData.push(...weightedRewards);
@@ -558,11 +539,12 @@ export class DrillingCycleService {
           issuedHash *
           GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.allActiveOperators;
 
-        // ✅ Compute Each Operator's Reward Share Based on Weighted Eff
-        const weightedRewards = operatorsWithLuck.map((operator) => ({
-          operatorId: operator.operatorId,
+        // ✅ Compute Each Operator's Reward Share Based on Cumulative Eff
+        const weightedRewards = activeOperators.map((operator) => ({
+          operatorId: operator._id,
           amount:
-            (operator.weightedEff / totalWeightedEff) * activeOperatorsReward,
+            (operator.cumulativeEff / totalCumulativeEff) *
+            activeOperatorsReward,
         }));
 
         rewardData.push(
@@ -603,12 +585,12 @@ export class DrillingCycleService {
           activePoolOperators.map((op) => op.operator.toString()),
         );
 
-        // ✅ Step 7: Compute Rewards Based on Weighted Eff (Only for Active Pool Operators)
-        const weightedPoolOperators = operatorsWithLuck.filter((op) =>
-          activePoolOperatorIds.has(op.operatorId.toString()),
+        // ✅ Step 7: Compute Rewards Based on Cumulative Eff (Only for Active Pool Operators)
+        const weightedPoolOperators = activeOperators.filter((op) =>
+          activePoolOperatorIds.has(op._id.toString()),
         );
         const totalPoolEff = weightedPoolOperators.reduce(
-          (sum, op) => sum + op.weightedEff,
+          (sum, op) => sum + op.cumulativeEff,
           0,
         );
 
@@ -654,10 +636,10 @@ export class DrillingCycleService {
         // ✅ Compute Weighted Pool Rewards
         const weightedPoolRewards = weightedPoolOperators.map((operator) => {
           const opReward =
-            (operator.weightedEff / totalPoolEff) * activePoolReward;
+            (operator.cumulativeEff / totalPoolEff) * activePoolReward;
 
           // Track individual pool operator rewards
-          const poolOpKey = `${operator.operatorId.toString()}_${poolOperator.pool.toString()}`;
+          const poolOpKey = `${operator._id.toString()}_${poolOperator.pool.toString()}`;
           const existingReward = poolOperatorRewards.get(poolOpKey) || 0;
           const newReward = existingReward + opReward;
 
@@ -667,7 +649,7 @@ export class DrillingCycleService {
           );
 
           return {
-            operatorId: operator.operatorId,
+            operatorId: operator._id,
             amount: opReward,
           };
         });

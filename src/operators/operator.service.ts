@@ -365,9 +365,8 @@ export class OperatorService {
   }
 
   /**
-   * Updates cumulativeEff for all operators by summing their drills' actualEff values.
-   *
-   * This is called periodically to keep the cumulativeEff values up-to-date.
+   * Updates cumulativeEff for all operators by summing their drills' actualEff values
+   * and applying luck factor, effMultiplier and effCredits.
    */
   async updateCumulativeEff() {
     this.logger.log(
@@ -375,36 +374,67 @@ export class OperatorService {
     );
     const startTime = performance.now();
 
-    // ✅ Step 1: Aggregate Total `actualEff` per Operator
-    // Make sure to only include active drills
-    const operatorEffData = await this.drillModel.aggregate([
-      {
-        $match: { active: true }, // ✅ Only include active drills
-      },
+    // ✅ Step 1: Aggregate active drills' actualEff per operator
+    const drillEffs = await this.drillModel.aggregate([
+      { $match: { active: true } },
       {
         $group: {
           _id: '$operatorId',
-          totalEff: { $sum: '$actualEff' },
+          totalDrillEff: { $sum: '$actualEff' },
         },
       },
     ]);
 
-    if (operatorEffData.length === 0) {
+    if (drillEffs.length === 0) {
       this.logger.warn(
-        '⚠️ (updateCumulativeEff) No drills found. Skipping update.',
+        '⚠️ (updateCumulativeEff) No active drills found. Skipping update.',
       );
       return;
     }
 
-    // ✅ Step 2: Prepare Bulk Updates
-    const bulkUpdates = operatorEffData.map(({ _id, totalEff }) => ({
-      updateOne: {
-        filter: { _id },
-        update: { $set: { cumulativeEff: totalEff } },
-      },
-    }));
+    // ✅ Step 2: Get operator data (effMultiplier and effCredits)
+    const operatorIds = drillEffs.map((d) => d._id);
+    const operators = await this.operatorModel
+      .find({ _id: { $in: operatorIds } }, { effMultiplier: 1, effCredits: 1 })
+      .lean();
 
-    // ✅ Step 3: Batch Process Updates for Large Datasets
+    const operatorMap = new Map<
+      string,
+      { effMultiplier: number; effCredits: number }
+    >();
+    for (const op of operators) {
+      operatorMap.set(op._id.toString(), {
+        effMultiplier: op.effMultiplier || 1,
+        effCredits: op.effCredits || 0,
+      });
+    }
+
+    // ✅ Step 3: Compute final cumulativeEff with Luck Factor
+    const bulkUpdates = drillEffs
+      .map(({ _id, totalDrillEff }) => {
+        const operatorData = operatorMap.get(_id.toString());
+        if (!operatorData) return null;
+
+        const luckFactor =
+          GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
+          Math.random() *
+            (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
+              GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
+
+        const cumulativeEff =
+          totalDrillEff * operatorData.effMultiplier * luckFactor +
+          operatorData.effCredits;
+
+        return {
+          updateOne: {
+            filter: { _id },
+            update: { $set: { cumulativeEff } },
+          },
+        };
+      })
+      .filter(Boolean);
+
+    // ✅ Step 4: Process in batches
     const batchSize = 1000;
     for (let i = 0; i < bulkUpdates.length; i += batchSize) {
       await this.operatorModel.bulkWrite(bulkUpdates.slice(i, i + batchSize));
@@ -413,7 +443,7 @@ export class OperatorService {
       );
     }
 
-    // ✅ Step 4: Get operators that are in pools
+    // ✅ Step 5: Update estimated pool efficiency
     const operatorIdsInPools = await this.poolOperatorModel.aggregate([
       {
         $group: {
@@ -423,40 +453,30 @@ export class OperatorService {
       },
     ]);
 
-    // ✅ Step 5: If there are operators in pools, update pool estimated efficiency
     if (operatorIdsInPools.length > 0) {
       this.logger.log(
-        `Updating estimated efficiency for ${operatorIdsInPools.length} pools...`,
+        `🔁 Updating estimated efficiency for ${operatorIdsInPools.length} pools...`,
       );
 
-      try {
-        // Process in batches to avoid overloading the system
-        const poolBatchSize = 5;
-        for (let i = 0; i < operatorIdsInPools.length; i += poolBatchSize) {
-          const batchPromises = operatorIdsInPools
-            .slice(i, i + poolBatchSize)
-            .map((pool) =>
-              this.poolService.updatePoolEstimatedEff(pool._id, true),
-            );
-
-          await Promise.all(batchPromises);
-
-          this.logger.log(
-            `Processed pool estimatedEff update batch ${Math.floor(i / poolBatchSize) + 1}/${Math.ceil(operatorIdsInPools.length / poolBatchSize)}`,
+      const poolBatchSize = 5;
+      for (let i = 0; i < operatorIdsInPools.length; i += poolBatchSize) {
+        const batchPromises = operatorIdsInPools
+          .slice(i, i + poolBatchSize)
+          .map((pool) =>
+            this.poolService.updatePoolEstimatedEff(pool._id, true),
           );
-        }
-      } catch (error) {
-        this.logger.error(
-          `Error updating pool estimated efficiency: ${error.message}`,
-          error.stack,
+
+        await Promise.all(batchPromises);
+
+        this.logger.log(
+          `✅ Processed pool estimatedEff update batch ${Math.floor(i / poolBatchSize) + 1}/${Math.ceil(operatorIdsInPools.length / poolBatchSize)}`,
         );
-        // Continue execution as this is a non-critical operation
       }
     }
 
     const endTime = performance.now();
     this.logger.log(
-      `✅ (updateCumulativeEff) Updated cumulativeEff for ${operatorEffData.length} operators in ${(endTime - startTime).toFixed(2)}ms.`,
+      `✅ (updateCumulativeEff) Updated cumulativeEff for ${bulkUpdates.length} operators in ${(endTime - startTime).toFixed(2)}ms.`,
     );
   }
 
@@ -1422,3 +1442,4 @@ export class OperatorService {
     }
   }
 }
+
