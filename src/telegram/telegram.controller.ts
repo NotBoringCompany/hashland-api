@@ -63,7 +63,7 @@ export class TelegramController {
   @SwaggerResponse({
     status: 200,
     description: 'Successfully checked membership',
-    type: ChannelMembershipResponseDto,
+    type: ApiResponse<ChannelMembershipResponseDto>,
   })
   @SwaggerResponse({
     status: 404,
@@ -78,8 +78,12 @@ export class TelegramController {
   @Post('check-channel-membership')
   async checkChannelMembership(
     @Body() dto: CheckChannelMembershipDto,
-  ): Promise<ApiResponse<ChannelMembershipResponseDto>> {
-    return this.telegramService.checkChannelMembership(dto);
+  ): Promise<ApiResponse> {
+    return new ApiResponse(
+      200,
+      'Successfully checked membership',
+      this.telegramService.checkChannelMembership(dto),
+    );
   }
 
   /**
