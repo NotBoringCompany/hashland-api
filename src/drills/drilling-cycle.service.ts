@@ -490,6 +490,11 @@ export class DrillingCycleService {
       (sum, op) => sum + op.cumulativeEff,
       0,
     );
+
+    this.logger.error(
+      `(distributeCycleRewards) Total cumulative EFF: ${totalCumulativeEff}`,
+    );
+
     if (totalCumulativeEff === 0) {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No valid cumulative EFF for reward distribution.`,
@@ -581,17 +586,45 @@ export class DrillingCycleService {
           )
           .lean();
 
+        this.logger.error(
+          `(distributeCycleRewards) Active pool operators: ${JSON.stringify(
+            activePoolOperators,
+            null,
+            2,
+          )}`,
+        );
+
         const activePoolOperatorIds = new Set(
           activePoolOperators.map((op) => op.operator.toString()),
+        );
+
+        this.logger.error(
+          `(distributeCycleRewards) Active pool operator IDs: ${JSON.stringify(
+            Array.from(activePoolOperatorIds),
+            null,
+            2,
+          )}`,
         );
 
         // ✅ Step 7: Compute Rewards Based on Cumulative Eff (Only for Active Pool Operators)
         const weightedPoolOperators = activeOperators.filter((op) =>
           activePoolOperatorIds.has(op._id.toString()),
         );
+
+        this.logger.error(
+          `(distributeCycleRewards) Weighted pool operators: ${JSON.stringify(
+            weightedPoolOperators,
+            null,
+            2,
+          )}`,
+        );
         const totalPoolEff = weightedPoolOperators.reduce(
           (sum, op) => sum + op.cumulativeEff,
           0,
+        );
+
+        this.logger.error(
+          `(distributeCycleRewards) Total pool EFF: ${totalPoolEff}`,
         );
 
         if (totalPoolEff === 0) {
