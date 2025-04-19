@@ -20,7 +20,6 @@ import { DrillingSession } from './schemas/drilling-session.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { DrillingGateway } from 'src/gateway/drilling.gateway';
 import { OperatorWalletService } from 'src/operators/operator-wallet.service';
-import { AllowedChain } from 'src/common/enums/chain.enum';
 import { HashReserveService } from 'src/hash-reserve/hash-reserve.service';
 import { DrillingCycleRewardShare } from './schemas/drilling-crs.schema';
 @Injectable()
@@ -364,58 +363,13 @@ export class DrillingCycleService {
 
     // ✅ Step 2: Select extractor
     const extractorData = await this.drillService.selectExtractor();
-    let finalExtractorOperatorId: Types.ObjectId | null = null;
     // Store the total weighted efficiency from extractor selection
     const totalWeightedEff = extractorData?.totalWeightedEff || 0;
 
+    let extractorOperatorId: Types.ObjectId | null = null;
+
     if (extractorData) {
-      const extractorOperatorId = extractorData.drillOperatorId;
-
-      // ✅ Step 2B: Fetch operator's stored asset equity **and their wallets** in a single query
-      const [extractorOperator, extractorOperatorWallets] = await Promise.all([
-        this.operatorService.findById(extractorOperatorId, {
-          assetEquity: 1,
-          'usernameData.username': 1, // Add username to the query
-        }),
-        this.operatorWalletService.getOperatorWallets(extractorOperatorId, {
-          address: 1,
-          chain: 1,
-        }),
-      ]);
-
-      if (!extractorOperator) {
-        this.logger.warn(
-          `(endCurrentCycle) Extractor operator ${extractorOperatorId} not found. Skipping extractor.`,
-        );
-      } else {
-        const storedAssetEquity = extractorOperator.assetEquity;
-        const minThreshold =
-          GAME_CONSTANTS.ECONOMY.OPERATOR_MINIMUM_ASSET_EQUITY_THRESHOLD *
-          storedAssetEquity;
-
-        // ✅ Fetch real-time asset equity **only if operator has wallets**
-        let currentEquity = 0;
-        if (extractorOperatorWallets.length > 0) {
-          currentEquity =
-            await this.operatorWalletService.fetchTotalBalanceForWallets(
-              extractorOperatorWallets.map((wallet) => ({
-                address: wallet.address,
-                chain: wallet.chain as AllowedChain,
-              })),
-            );
-        }
-
-        // ✅ Ensure operator meets minimum equity threshold
-        if (currentEquity >= minThreshold) {
-          finalExtractorOperatorId = extractorData.drillOperatorId; // ✅ Extractor is valid, add the extractor operator.
-        } else {
-          this.logger.warn(
-            `(endCurrentCycle) Extractor operator ${extractorOperatorId} has dropped below the asset equity threshold. 
-            Real-time equity: ${currentEquity}, Stored equity: ${storedAssetEquity}, Percentage: ${(currentEquity / storedAssetEquity) * 100}%,
-            Skipping extractor for this cycle.`,
-          );
-        }
-      }
+      extractorOperatorId = extractorData.drillOperatorId;
     } else {
       this.logger.warn(
         `(endCurrentCycle) No valid extractor drill found. Skipping extractor distribution.`,
@@ -424,7 +378,7 @@ export class DrillingCycleService {
 
     // ✅ Step 3: Distribute rewards to extractor operator and active operators (extractorOperatorId could be null)
     const rewardShares = await this.distributeCycleRewards(
-      finalExtractorOperatorId,
+      extractorOperatorId,
       issuedHASH,
     );
 
@@ -436,7 +390,7 @@ export class DrillingCycleService {
       { cycleNumber },
       {
         extractorId: extractorData?.drillId || null, // ✅ Store null if no extractor is chosen
-        extractorOperatorId: finalExtractorOperatorId,
+        extractorOperatorId,
         totalWeightedEff,
       },
       { new: true },

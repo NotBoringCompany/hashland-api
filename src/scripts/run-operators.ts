@@ -6,7 +6,7 @@ export async function runOperators() {
   const app = await NestFactory.createApplicationContext(AppModule); // Create NestJS app context
   const operatorService = app.get(OperatorService); // Get service instance
 
-  const result = await operatorService.adminBatchCreateOperators(1000);
+  const result = await operatorService.adminBatchCreateOperators(10000);
   console.log('✅ adminBatchCreateOperators result:', result);
 
   await app.close(); // Close the app to prevent memory leaks

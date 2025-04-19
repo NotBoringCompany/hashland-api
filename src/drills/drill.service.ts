@@ -255,7 +255,8 @@ export class DrillService {
 
   /**
    * Selects an extractor using weighted probability.
-   * Uses a dice roll between 0 and the cumulative sum of all (actualEff × effMultiplier × Luck Factor).
+   * Uses a dice roll between 0 and the cumulative sum of all (actualEff × Luck Factor).
+   * No operator-based effMultiplier or effCredits are used.
    */
   async selectExtractor(): Promise<{
     drillId: Types.ObjectId;
@@ -265,59 +266,38 @@ export class DrillService {
   } | null> {
     const selectionStartTime = performance.now();
 
-    // ✅ Step 1: Aggregate Eligible Operators & Their Drills in ONE Query
-    const eligibleOperators = await this.drillModel.aggregate([
-      { $match: { extractorAllowed: true, active: true } }, // ✅ Filter drills that are allowed to be extractors and are active
-      {
-        $lookup: {
-          from: 'Operators', // ✅ Join with the Operator collection
-          localField: 'operatorId',
-          foreignField: '_id',
-          as: 'operatorData',
-        },
-      },
-      { $unwind: '$operatorData' }, // ✅ Unwind operatorData array
-      {
-        $group: {
-          _id: '$operatorId',
-          effMultiplier: { $first: '$operatorData.effMultiplier' },
-          effCredits: { $first: '$operatorData.effCredits' }, // ⬅️ Include effCredits from the operator
-          drills: { $push: { _id: '$_id', actualEff: '$actualEff' } },
-        },
-      },
-    ]);
+    // ✅ Step 1: Fetch all eligible drills directly (must have `extractorAllowed` set to true and be active)
+    const eligibleDrills = await this.drillModel
+      .find(
+        { extractorAllowed: true, active: true },
+        { _id: 1, actualEff: 1, operatorId: 1 },
+      )
+      .lean();
 
-    if (eligibleOperators.length === 0) {
-      this.logger.warn(`⚠️ (selectExtractor) No eligible operators found.`);
+    if (eligibleDrills.length === 0) {
+      this.logger.warn(`⚠️ (selectExtractor) No eligible drills found.`);
       return null;
     }
 
-    // ✅ Step 2: Apply Luck Factor & Compute Weighted EFF. Add effCredits at the end (bonus).
-    const operatorsWithLuck = eligibleOperators.map((operator) => {
+    // ✅ Step 2: Apply luck factor and compute weighted EFF for each drill
+    const drillsWithWeight = eligibleDrills.map((drill) => {
       const luckFactor =
         GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
         Math.random() *
           (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
             GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
 
-      const drillEff = operator.drills.reduce(
-        (sum, drill) => sum + drill.actualEff,
-        0,
-      );
-
-      const weightedDrillEff = drillEff * operator.effMultiplier * luckFactor;
-      const finalWeightedEff = weightedDrillEff + (operator.effCredits || 0); // 🧠 add effCredits here
-
       return {
-        operatorId: operator._id,
-        weightedEff: finalWeightedEff,
-        drills: operator.drills,
+        drillId: drill._id,
+        drillOperatorId: drill.operatorId,
+        eff: drill.actualEff,
+        weightedEff: drill.actualEff * luckFactor,
       };
     });
 
-    // ✅ Step 3: Compute Total Weighted Eff Sum & Dice Roll
-    const totalWeightedEff = operatorsWithLuck.reduce(
-      (sum, op) => sum + op.weightedEff,
+    // ✅ Step 3: Calculate total weighted EFF and roll the dice
+    const totalWeightedEff = drillsWithWeight.reduce(
+      (sum, drill) => sum + drill.weightedEff,
       0,
     );
 
@@ -327,63 +307,31 @@ export class DrillService {
     }
 
     const diceRoll = Math.random() * totalWeightedEff;
-    let cumulativeWeightedEff = 0;
-    let selectedOperator: { operatorId: Types.ObjectId; drills: any[] } | null =
-      null;
+    let cumulativeEff = 0;
 
-    for (const operator of operatorsWithLuck) {
-      cumulativeWeightedEff += operator.weightedEff;
-      if (diceRoll <= cumulativeWeightedEff) {
-        selectedOperator = operator;
-        break;
-      }
-    }
+    for (const drill of drillsWithWeight) {
+      cumulativeEff += drill.weightedEff;
+      if (diceRoll <= cumulativeEff) {
+        const selectionEndTime = performance.now();
 
-    if (!selectedOperator) {
-      this.logger.warn(
-        `⚠️ (selectExtractor) Unexpected error in operator selection.`,
-      );
-      return null;
-    }
-
-    // ✅ Step 4: Select Drill Using Weighted `actualEff`
-    const selectedDrills = selectedOperator.drills;
-
-    if (selectedDrills.length === 0) {
-      this.logger.warn(
-        `⚠️ (selectExtractor) No valid drills found for selected operator.`,
-      );
-      return null;
-    }
-
-    const totalDrillEff = selectedDrills.reduce(
-      (sum, drill) => sum + drill.actualEff,
-      0,
-    );
-    const drillDiceRoll = Math.random() * totalDrillEff;
-    let cumulativeDrillEff = 0;
-
-    for (const drill of selectedDrills) {
-      cumulativeDrillEff += drill.actualEff;
-      if (drillDiceRoll <= cumulativeDrillEff) {
         this.logger.log(
-          `✅ (selectExtractor) Selected extractor: Drill ${drill._id.toString()} with ${drill.actualEff.toFixed(2)} EFF. Cumulative EFF this cycle: ${totalWeightedEff.toFixed(2)}.`,
+          `✅ (selectExtractor) Selected extractor: Drill ${drill.drillId.toString()} with ${drill.eff.toFixed(2)} EFF. Cumulative EFF this cycle: ${totalWeightedEff.toFixed(2)}.`,
         );
 
-        const selectionEndTime = performance.now();
         this.logger.log(
           `⏳ (selectExtractor) Extractor selection took ${(selectionEndTime - selectionStartTime).toFixed(2)}ms.`,
         );
 
         return {
-          drillId: drill._id,
-          drillOperatorId: selectedOperator.operatorId,
-          eff: drill.actualEff,
+          drillId: drill.drillId,
+          drillOperatorId: drill.drillOperatorId,
+          eff: drill.eff,
           totalWeightedEff,
         };
       }
     }
 
+    // Fallback return, should not happen unless there's floating-point edge case
     return {
       drillId: null,
       drillOperatorId: null,
