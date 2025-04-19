@@ -82,7 +82,7 @@ export class TelegramController {
     return new ApiResponse(
       200,
       'Successfully checked membership',
-      this.telegramService.checkChannelMembership(dto),
+      await this.telegramService.checkChannelMembership(dto),
     );
   }
 
