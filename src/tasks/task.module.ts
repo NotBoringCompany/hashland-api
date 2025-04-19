@@ -13,6 +13,7 @@ import { TaskService } from './task.service';
 import { TaskController } from './task.controller';
 import { TelegramModule } from 'src/telegram/telegram.module';
 import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
+import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { DrillingGatewayModule } from 'src/gateway/drilling.gateway.module';
     ]),
     TelegramModule,
     DrillingGatewayModule,
+    MixpanelModule,
   ],
   controllers: [TaskController],
   providers: [TaskService],

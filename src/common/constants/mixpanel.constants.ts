@@ -11,4 +11,5 @@ export const EVENT_CONSTANTS = {
   DRILLING_STOP: 'Drilling: Stopped',
   POOL_JOIN: 'Pool: Joined',
   POOL_LEAVE: 'Pool: Left',
+  TASK_COMPLETE: 'Task: Completed',
 };

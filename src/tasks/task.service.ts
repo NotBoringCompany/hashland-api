@@ -19,6 +19,8 @@ import { TaskReward, TaskRewardType } from './schemas/task.schema';
 import { Logger } from '@nestjs/common';
 import { RedisService } from 'src/common/redis.service';
 import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 @Injectable()
 export class TaskService {
@@ -32,6 +34,7 @@ export class TaskService {
     private readonly telegramService: TelegramService,
     private readonly redisService: RedisService,
     private readonly drillingGatewayService: DrillingGatewayService,
+    private readonly mixpanelService: MixpanelService,
   ) {}
 
   /**
@@ -311,6 +314,11 @@ export class TaskService {
           );
         }
       }
+
+      this.mixpanelService.track(EVENT_CONSTANTS.TASK_COMPLETE, {
+        distinct_id: operator._id,
+        task,
+      });
 
       return new ApiResponse<{ completedTaskId: Types.ObjectId }>(
         200,
