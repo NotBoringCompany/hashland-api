@@ -54,8 +54,9 @@ export class OperatorWalletService {
   }
 
   /**
-   * Updates asset equity, effMultiplier (in Operator), actualEff for basic drills,
-   * and adjusts cumulativeEff in the Operator schema.
+   * Updates asset equity, effMultiplier (in Operator) and actualEff for basic drills in the Operator schema.
+   *
+   * Does NOT update `cumulativeEff`. This needs to be done separately.
    */
   async updateAssetEquityForOperator(
     operatorId: Types.ObjectId,
@@ -91,7 +92,7 @@ export class OperatorWalletService {
 
       // ✅ Step 3: Fetch operator document
       const operator = await this.operatorModel
-        .findById(operatorId, { assetEquity: 1, cumulativeEff: 1 })
+        .findById(operatorId, { assetEquity: 1 })
         .lean();
       if (!operator) return;
 
@@ -102,46 +103,26 @@ export class OperatorWalletService {
         `(updateAssetEquityForOperator) New effMultiplier: ${newEffMultiplier}`,
       );
 
-      // ✅ Step 5: Update `actualEff` of **Basic Drill** & Compute `cumulativeEff`
+      // ✅ Step 5: Update `actualEff` of **Basic Drill**
       const newActualEff = equityToActualEff(newEquity);
 
       this.logger.debug(
         `(updateAssetEquityForOperator) New actualEff: ${newActualEff}`,
       );
 
-      const drillToUpdate = await this.drillModel.findOneAndUpdate(
+      await this.drillModel.findOneAndUpdate(
         { operatorId, version: DrillVersion.BASIC },
         { $set: { actualEff: newActualEff } },
         { new: false, projection: { actualEff: 1 } }, // Return the old `actualEff` (with `new: false`)
       );
 
-      // ✅ Step 6: Compute `cumulativeEff`
-      const oldActualEff = drillToUpdate?.actualEff ?? 0;
-
-      this.logger.debug(
-        `(updateAssetEquityForOperator) Old actualEff: ${oldActualEff}.`,
-      );
-
-      const effDifference = newActualEff - oldActualEff;
-
-      this.logger.debug(
-        `(updateAssetEquityForOperator) Eff difference: ${effDifference}.`,
-      );
-
-      const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
-
-      this.logger.debug(
-        `(updateAssetEquityForOperator) New cumulativeEff: ${newCumulativeEff}.`,
-      );
-
-      // ✅ Step 7: Update `assetEquity`, `effMultiplier` & `cumulativeEff` in Operator document
+      // ✅ Step 6: Update `assetEquity` and `effMultiplier` in Operator document
       await this.operatorModel.updateOne(
         { _id: operatorId },
         {
           $set: {
             assetEquity: newEquity,
             effMultiplier: newEffMultiplier,
-            cumulativeEff: newCumulativeEff,
           },
         },
       );
@@ -150,8 +131,6 @@ export class OperatorWalletService {
         distinct_id: operatorId,
         wallets: walletDocuments,
         assetEquity: newEquity,
-        effMultiplier: newEffMultiplier,
-        cumulativeEff: newCumulativeEff,
       });
 
       this.logger.debug(

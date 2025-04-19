@@ -87,6 +87,11 @@ export class TelegramAuthService {
         operator._id,
       );
 
+      // ✅ Update cumulativeEff for the operator
+      await this.operatorService.updateCumulativeEffForSingleOperator(
+        operator._id,
+      );
+
       const accessToken = this.generateToken({ _id: operator._id });
 
       this.mixpanelService.track(

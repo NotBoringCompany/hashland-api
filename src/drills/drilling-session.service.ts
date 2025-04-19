@@ -67,6 +67,11 @@ export class DrillingSessionService {
           );
         });
 
+      // Update cumulativeEff for the operator
+      await this.operatorService.updateCumulativeEffForSingleOperator(
+        operatorId,
+      );
+
       // Check if operator already has an active session in Redis
       const existingSession = await this.redisService.get(sessionKey);
       if (existingSession) {
