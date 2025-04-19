@@ -530,14 +530,6 @@ export class DrillingCycleService {
         .select('pool')
         .lean();
 
-      this.logger.error(
-        `(distributeCycleRewards) Pool operator: ${JSON.stringify(
-          poolOperator,
-          null,
-          2,
-        )}`,
-      );
-
       const isSoloOperator = !poolOperator;
 
       if (isSoloOperator) {
@@ -591,24 +583,8 @@ export class DrillingCycleService {
           )
           .lean();
 
-        this.logger.error(
-          `(distributeCycleRewards) Active pool operators: ${JSON.stringify(
-            activePoolOperators,
-            null,
-            2,
-          )}`,
-        );
-
         const activePoolOperatorIds = new Set(
           activePoolOperators.map((op) => op.operator.toString()),
-        );
-
-        this.logger.error(
-          `(distributeCycleRewards) Active pool operator IDs: ${JSON.stringify(
-            Array.from(activePoolOperatorIds),
-            null,
-            2,
-          )}`,
         );
 
         // ✅ Step 7: Compute Rewards Based on Cumulative Eff (Only for Active Pool Operators)
@@ -616,20 +592,9 @@ export class DrillingCycleService {
           activePoolOperatorIds.has(op._id.toString()),
         );
 
-        this.logger.error(
-          `(distributeCycleRewards) Weighted pool operators: ${JSON.stringify(
-            weightedPoolOperators,
-            null,
-            2,
-          )}`,
-        );
         const totalPoolEff = weightedPoolOperators.reduce(
           (sum, op) => sum + op.cumulativeEff,
           0,
-        );
-
-        this.logger.error(
-          `(distributeCycleRewards) Total pool EFF: ${totalPoolEff}`,
         );
 
         if (totalPoolEff === 0) {
@@ -742,7 +707,7 @@ export class DrillingCycleService {
         groupedRewardMap.set(operatorIdString, currentTotal + reward.amount);
       } catch (error) {
         this.logger.error(
-          `❌ Error processing reward: ${error.message}`,
+          `(distributeCycleRewards) ❌ Error processing reward: ${error.message}`,
           error,
         );
         skippedRewards++;
