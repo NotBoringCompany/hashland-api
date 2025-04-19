@@ -447,7 +447,7 @@ export class OperatorService {
     const operatorIdsInPools = await this.poolOperatorModel.aggregate([
       {
         $group: {
-          _id: '$poolId',
+          _id: '$pool',
           operatorIds: { $push: '$operatorId' },
         },
       },
@@ -477,6 +477,94 @@ export class OperatorService {
     const endTime = performance.now();
     this.logger.log(
       `✅ (updateCumulativeEff) Updated cumulativeEff for ${bulkUpdates.length} operators in ${(endTime - startTime).toFixed(2)}ms.`,
+    );
+  }
+
+  /**
+   * Updates cumulativeEff for a specific operator by summing their active drills' actualEff values
+   * and applying luck factor, effMultiplier, and effCredits.
+   */
+  async updateCumulativeEffForSingleOperator(
+    operatorId: Types.ObjectId,
+  ): Promise<void> {
+    this.logger.log(
+      `🔄 (updateCumulativeEffForOperator) Updating cumulativeEff for operator ${operatorId}...`,
+    );
+    const startTime = performance.now();
+
+    // Step 1: Get total actualEff from active drills for this operator
+    const drillAgg = await this.drillModel.aggregate([
+      { $match: { operatorId, active: true } },
+      {
+        $group: {
+          _id: '$operatorId',
+          totalDrillEff: { $sum: '$actualEff' },
+        },
+      },
+    ]);
+
+    if (drillAgg.length === 0) {
+      this.logger.warn(
+        `⚠️ (updateCumulativeEffForOperator) No active drills found for operator ${operatorId}. Skipping update.`,
+      );
+      return;
+    }
+
+    const totalDrillEff = drillAgg[0].totalDrillEff;
+
+    // Step 2: Get effMultiplier and effCredits for the operator
+    const operator = await this.operatorModel
+      .findById(operatorId, { effMultiplier: 1, effCredits: 1 })
+      .lean();
+
+    if (!operator) {
+      this.logger.warn(
+        `⚠️ (updateCumulativeEffForOperator) Operator ${operatorId} not found.`,
+      );
+      return;
+    }
+
+    const effMultiplier = operator.effMultiplier || 1;
+    const effCredits = operator.effCredits || 0;
+
+    // Step 3: Apply luck factor
+    const luckFactor =
+      GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
+      Math.random() *
+        (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
+          GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
+
+    const cumulativeEff =
+      totalDrillEff * effMultiplier * luckFactor + effCredits;
+
+    // Step 4: Update operator
+    await this.operatorModel.updateOne(
+      { _id: operatorId },
+      { $set: { cumulativeEff } },
+    );
+
+    this.logger.log(
+      `✅ (updateCumulativeEffForOperator) Updated cumulativeEff for operator ${operatorId} to ${cumulativeEff.toFixed(
+        2,
+      )}.`,
+    );
+
+    // Step 5: Update pool estimatedEff if this operator is in a pool
+    const poolOperator = await this.poolOperatorModel
+      .findOne({ operatorId })
+      .select('pool')
+      .lean();
+
+    if (poolOperator?.pool) {
+      await this.poolService.updatePoolEstimatedEff(poolOperator.pool, true);
+      this.logger.log(
+        `🔁 Updated estimatedEff for pool ${poolOperator.pool} (operator was part of it).`,
+      );
+    }
+
+    const endTime = performance.now();
+    this.logger.log(
+      `⏱ (updateCumulativeEffForOperator) Execution time: ${(endTime - startTime).toFixed(2)}ms.`,
     );
   }
 

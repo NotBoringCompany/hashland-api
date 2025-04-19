@@ -133,6 +133,11 @@ export class WalletAuthService {
         operatorAuth.operator._id,
       );
 
+      // Update cumulativeEff for the operator
+      await this.operatorService.updateCumulativeEffForSingleOperator(
+        operatorAuth.operator._id,
+      );
+
       // Generate access token
       const accessToken = this.generateToken({
         _id: operatorAuth.operator._id,
