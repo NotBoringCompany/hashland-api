@@ -23,6 +23,7 @@ import {
 } from './dto/telegram-webhook.dto';
 import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
 import { AdminProtected } from 'src/auth/admin';
+import { ApiResponse } from 'src/common/dto/response.dto';
 
 @ApiTags('Telegram')
 @Controller('telegram')
@@ -77,7 +78,7 @@ export class TelegramController {
   @Post('check-channel-membership')
   async checkChannelMembership(
     @Body() dto: CheckChannelMembershipDto,
-  ): Promise<ChannelMembershipResponseDto> {
+  ): Promise<ApiResponse<ChannelMembershipResponseDto>> {
     return this.telegramService.checkChannelMembership(dto);
   }
 

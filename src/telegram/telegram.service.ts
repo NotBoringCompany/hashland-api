@@ -385,7 +385,7 @@ export class TelegramService {
    */
   async checkChannelMembership(
     dto: CheckChannelMembershipDto,
-  ): Promise<ChannelMembershipResponseDto> {
+  ): Promise<ApiResponse<ChannelMembershipResponseDto>> {
     try {
       const { userId, channelId } = dto;
 
@@ -405,11 +405,15 @@ export class TelegramService {
 
       // If we have a recent verification, use that
       if (existingMembership) {
-        return new ChannelMembershipResponseDto({
-          isMember: existingMembership.isMember,
-          lastVerified: existingMembership.lastVerified,
-          channelTitle: existingMembership.channelTitle,
-        });
+        return new ApiResponse(
+          200,
+          'Channel membership checked successfully',
+          new ChannelMembershipResponseDto({
+            isMember: existingMembership.isMember,
+            lastVerified: existingMembership.lastVerified,
+            channelTitle: existingMembership.channelTitle,
+          }),
+        );
       }
 
       // Otherwise, check with Telegram API directly
@@ -439,11 +443,15 @@ export class TelegramService {
         { upsert: true },
       );
 
-      return new ChannelMembershipResponseDto({
-        isMember,
-        lastVerified: new Date(),
-        channelTitle,
-      });
+      return new ApiResponse(
+        200,
+        'Channel membership checked successfully',
+        new ChannelMembershipResponseDto({
+          isMember,
+          lastVerified: new Date(),
+          channelTitle,
+        }),
+      );
     } catch (error) {
       this.logger.error(
         `Error checking channel membership: ${error.message}`,
