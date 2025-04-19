@@ -1442,4 +1442,3 @@ export class OperatorService {
     }
   }
 }
-
