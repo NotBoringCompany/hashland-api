@@ -42,103 +42,91 @@ export class OperatorService {
     @InjectModel(HASHReserve.name) private hashReserveModel: Model<HASHReserve>,
   ) {}
 
-  /**
-   * Creates a batch of operators with wallets, drills, pool operator instances and so on.
-   *
-   * This simulates `operatorCount` amount of operators registering for the game. Only callable by admin and should not be invoked elsewhere.
-   */
-  async adminBatchCreateOperators(operatorCount: number) {
+  async adminBatchCreateOperators(operatorCount: number, batchSize = 10000) {
     try {
-      const operators: Partial<Operator>[] = [];
-      const operatorWallets: Partial<OperatorWallet>[] = [];
-      const drills: Partial<Drill>[] = [];
-      const poolOperators: Partial<PoolOperator>[] = [];
+      let totalCreated = 0;
 
-      for (let i = 0; i < operatorCount; i++) {
-        // Create the Operator documents
-        operators[i] = {
-          _id: new Types.ObjectId(),
-          usernameData: {
-            // Randomize 10 characters
-            username: `test_operator_${Math.random().toString(36).substring(2, 9)}`,
-            lastRenameTimestamp: null,
-          },
-          assetEquity: 0,
-          cumulativeEff: 0,
-          effMultiplier: 1,
-          effCredits: 0,
-          maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
-          currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
-          maxActiveDrillsAllowed:
-            GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
-          totalEarnedHASH: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
+      while (totalCreated < operatorCount) {
+        const currentBatchSize = Math.min(
+          batchSize,
+          operatorCount - totalCreated,
+        );
 
-        // Create the OperatorWallet documents
-        operatorWallets.push({
-          operatorId: operators[i]._id,
-          // Randomize an EVM address
-          address: `0x${randomBytes(20).toString('hex')}`,
-          chain: AllowedChain.BERA,
-          signature: 'testSignature',
-          signatureMessage: 'testSignatureMessage',
-        });
+        const operators: Partial<Operator>[] = [];
+        const operatorWallets: Partial<OperatorWallet>[] = [];
+        const drills: Partial<Drill>[] = [];
+        const poolOperators: Partial<PoolOperator>[] = [];
 
-        // Create the Drill documents
-        // Each operator gets 2 drills: 1 Basic and 1 Bulwark
-        drills.push({
-          operatorId: operators[i]._id,
-          version: DrillVersion.BASIC,
-          config: DrillConfig.BASIC,
-          extractorAllowed: false,
-          active: true,
-          level: 1,
-          actualEff: 0,
-        });
+        for (let i = 0; i < currentBatchSize; i++) {
+          const _id = new Types.ObjectId();
 
-        drills.push({
-          operatorId: operators[i]._id,
-          version: DrillVersion.PREMIUM,
-          config: DrillConfig.BULWARK,
-          extractorAllowed: true,
-          active: true,
-          level: 1,
-          actualEff: 25000,
-        });
+          operators.push({
+            _id,
+            usernameData: {
+              username: `test_operator_${Math.random().toString(36).substring(2, 19)}`,
+              lastRenameTimestamp: null,
+            },
+            assetEquity: 0,
+            cumulativeEff: 0,
+            effMultiplier: 1,
+            effCredits: 0,
+            maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
+            currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
+            maxActiveDrillsAllowed:
+              GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
+            totalEarnedHASH: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
 
-        // Create the PoolOperator document
-        poolOperators.push({
-          operator: operators[i]._id,
-          pool: new Types.ObjectId('67c59119e13cd025d70558f8'),
-          totalRewards: 0,
-        });
+          operatorWallets.push({
+            operatorId: _id,
+            address: `0x${randomBytes(20).toString('hex')}`,
+            chain: AllowedChain.BERA,
+            signature: 'testSignature',
+            signatureMessage: 'testSignatureMessage',
+          });
+
+          drills.push({
+            operatorId: _id,
+            version: DrillVersion.BASIC,
+            config: DrillConfig.BASIC,
+            extractorAllowed: false,
+            active: true,
+            level: 1,
+            actualEff: 0,
+          });
+
+          drills.push({
+            operatorId: _id,
+            version: DrillVersion.PREMIUM,
+            config: DrillConfig.BULWARK,
+            extractorAllowed: true,
+            active: true,
+            level: 1,
+            actualEff: 25000,
+          });
+
+          poolOperators.push({
+            operator: _id,
+            pool: new Types.ObjectId('67c59119e13cd025d70558f8'),
+            totalRewards: 0,
+          });
+        }
+
+        await this.operatorModel.insertMany(operators);
+        await this.operatorWalletModel.insertMany(operatorWallets);
+        await this.drillModel.insertMany(drills);
+        await this.poolOperatorModel.insertMany(poolOperators);
+
+        this.logger.log(
+          `Created ${totalCreated + currentBatchSize} / ${operatorCount}`,
+        );
+        totalCreated += currentBatchSize;
       }
 
-      // Insert all the documents
-      await this.operatorModel.insertMany(operators);
       this.logger.log(
-        `(adminBatchCreateOperators) Created ${operatorCount} operators`,
-      );
-
-      await this.operatorWalletModel.insertMany(operatorWallets);
-      this.logger.log(
-        `(adminBatchCreateOperators) Created ${operatorWallets.length} operator wallets`,
-      );
-
-      await this.drillModel.insertMany(drills);
-      this.logger.log(
-        `(adminBatchCreateOperators) Created ${drills.length} drills`,
-      );
-
-      await this.poolOperatorModel.insertMany(poolOperators);
-      this.logger.log(
-        `(adminBatchCreateOperators) Created ${poolOperators.length} pool operators`,
-      );
-
-      this.logger.log(
-        `(adminBatchCreateOperators) Successfully created ${operatorCount} operators, ${operatorWallets.length} operator wallets, ${drills.length} drills and ${poolOperators.length} pool operators`,
+        `Successfully created ${operatorCount} operators and related documents.`,
       );
     } catch (err: any) {
       throw new InternalServerErrorException(
