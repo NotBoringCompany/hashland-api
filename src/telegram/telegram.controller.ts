@@ -19,7 +19,6 @@ import {
   ChannelMembershipResponseDto,
   CheckChannelMembershipDto,
   SetWebhookDto,
-  TelegramWebhookDto,
 } from './dto/telegram-webhook.dto';
 import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
 import { AdminProtected } from 'src/auth/admin';
@@ -48,7 +47,7 @@ export class TelegramController {
   @Post('webhook')
   @HttpCode(200)
   async handleWebhook(
-    @Body() webhookData: TelegramWebhookDto,
+    @Body() webhookData,
   ): Promise<{ success: boolean; message: string }> {
     return this.telegramService.processWebhook(webhookData);
   }
