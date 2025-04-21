@@ -65,7 +65,11 @@ export class DrillService {
       // Fetch operator and count active drills in parallel
       const [operator, activeDrillCount] = await Promise.all([
         this.operatorModel
-          .findById(operatorId, { maxActiveDrillsAllowed: 1 })
+          .findById(operatorId, {
+            maxActiveDrillsAllowed: 1,
+            effCredits: 1,
+            effMultiplier: 1,
+          })
           .lean(),
         this.drillModel.countDocuments({ operatorId, active: true }),
       ]);
@@ -100,13 +104,31 @@ export class DrillService {
         );
       }
 
-      // ✅ Recalculate cumulativeEff for active drills
-      const totalEff = await this.drillModel.aggregate([
+      // Recalculate cumulativeEff for operator
+      const drillAgg = await this.drillModel.aggregate([
         { $match: { operatorId, active: true } },
-        { $group: { _id: null, cumulativeEff: { $sum: '$actualEff' } } },
+        {
+          $group: {
+            _id: '$operatorId',
+            totalDrillEff: { $sum: '$actualEff' },
+          },
+        },
       ]);
 
-      const cumulativeEff = totalEff[0]?.cumulativeEff || 0;
+      const totalDrillEff = drillAgg[0]?.totalDrillEff || 0;
+
+      const effMultiplier = operator.effMultiplier;
+      const effCredits = operator.effCredits;
+
+      // Get a new luck factor for the operator
+      const luckFactor =
+        GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
+        Math.random() *
+          (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
+            GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
+
+      const cumulativeEff =
+        totalDrillEff * effMultiplier * luckFactor + effCredits;
 
       await this.operatorModel.updateOne(
         { _id: operatorId },
