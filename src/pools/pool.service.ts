@@ -163,38 +163,8 @@ export class PoolService implements OnModuleInit {
    */
   async getAllPools(
     projection?: string | Record<string, 1 | 0>,
-    updateStaleEff: boolean = true,
   ): Promise<ApiResponse<{ pools: Partial<Pool[]> }>> {
     try {
-      // First fetch pools with timestamps to check which ones need updates
-      const poolsWithTimestamps = await this.poolModel
-        .find({}, { _id: 1, lastEffUpdate: 1, estimatedEff: 1 })
-        .lean();
-
-      // Check for pools with stale efficiency data (> 6 hours old)
-      if (updateStaleEff) {
-        const now = Date.now();
-        const staleThreshold = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-
-        const stalePoolPromises = poolsWithTimestamps
-          .filter((pool) => {
-            // If no last update or update is older than threshold
-            return (
-              !pool.lastEffUpdate ||
-              now - new Date(pool.lastEffUpdate).getTime() > staleThreshold
-            );
-          })
-          .map((pool) => this.updatePoolEstimatedEff(pool._id, false));
-
-        // Update stale pools in parallel
-        if (stalePoolPromises.length > 0) {
-          this.logger.log(
-            `Updating efficiency for ${stalePoolPromises.length} stale pools`,
-          );
-          await Promise.all(stalePoolPromises);
-        }
-      }
-
       // Now fetch the pools with the updated data and requested projection
       const pools = await this.poolModel.find().select(projection).lean();
 

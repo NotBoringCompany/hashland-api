@@ -57,7 +57,6 @@ export class PoolController {
   @Get()
   async getAllPools(
     @Query('projection') projection?: string,
-    @Query('updateStaleEff') updateStaleEff?: string,
   ): Promise<AppApiResponse<{ pools: Partial<Pool[]> }>> {
     // Convert query string to Mongoose projection object
     const projectionObj = projection
@@ -66,11 +65,7 @@ export class PoolController {
           .reduce((acc, field) => ({ ...acc, [field]: 1 }), {})
       : undefined;
 
-    // Parse the updateStaleEff parameter
-    const shouldUpdateStaleEff =
-      updateStaleEff === undefined ? true : updateStaleEff === 'true';
-
-    return this.poolService.getAllPools(projectionObj, shouldUpdateStaleEff);
+    return this.poolService.getAllPools(projectionObj);
   }
 
   @ApiOperation({
