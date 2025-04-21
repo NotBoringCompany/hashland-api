@@ -86,17 +86,6 @@ export class Drill extends Document {
   active: boolean;
 
   /**
-   * The level of the drill.
-   */
-  @ApiProperty({
-    description: 'The level of the drill',
-    example: 1,
-    minimum: 1,
-  })
-  @Prop({ type: Number, required: true, default: 1 })
-  level: number;
-
-  /**
    * The current EFF rating of the drill.
    */
   @ApiProperty({

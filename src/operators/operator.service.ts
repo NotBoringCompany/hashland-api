@@ -93,7 +93,6 @@ export class OperatorService {
             config: DrillConfig.BASIC,
             extractorAllowed: false,
             active: true,
-            level: 1,
             actualEff: 0,
           });
 
@@ -103,7 +102,6 @@ export class OperatorService {
             config: DrillConfig.BULWARK,
             extractorAllowed: true,
             active: true,
-            level: 1,
             actualEff: 25000,
           });
 
