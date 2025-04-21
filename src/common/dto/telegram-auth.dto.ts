@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TelegramAuthDto {
@@ -16,8 +16,8 @@ export class TelegramAuthDto {
     example: '1234567890',
   })
   @IsString()
-  @IsNotEmpty()
-  referralCode: string;
+  @IsOptional()
+  referralCode?: string;
 }
 
 export class TelegramCreds {
