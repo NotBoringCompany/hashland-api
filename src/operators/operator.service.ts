@@ -450,9 +450,7 @@ export class OperatorService {
       for (let i = 0; i < operatorIdsInPools.length; i += poolBatchSize) {
         const batchPromises = operatorIdsInPools
           .slice(i, i + poolBatchSize)
-          .map((pool) =>
-            this.poolService.updatePoolEstimatedEff(pool._id, true),
-          );
+          .map((pool) => this.poolService.updatePoolEstimatedEff(pool._id));
 
         await Promise.all(batchPromises);
 
@@ -544,7 +542,7 @@ export class OperatorService {
       .lean();
 
     if (poolOperator?.pool) {
-      await this.poolService.updatePoolEstimatedEff(poolOperator.pool, true);
+      await this.poolService.updatePoolEstimatedEff(poolOperator.pool);
       this.logger.log(
         `🔁 Updated estimatedEff for pool ${poolOperator.pool} (operator was part of it).`,
       );

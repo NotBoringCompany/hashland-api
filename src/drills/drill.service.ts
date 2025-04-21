@@ -373,4 +373,3 @@ export class DrillService {
     return 1 + Math.log(1 + 0.0000596 * equity);
   }
 }
-
