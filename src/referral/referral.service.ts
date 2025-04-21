@@ -15,10 +15,8 @@ import {
 } from './dto/referral.dto';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
-import {
-  ReferredUserDto,
-  ReferredUsersResponseDto,
-} from './dto/referred-users.dto';
+import { ReferredUserDto } from './dto/referred-users.dto';
+import { PaginatedResponse } from 'src/common/dto/paginated-response.dto';
 
 /**
  * Service for managing referrals
@@ -424,7 +422,7 @@ export class ReferralService {
     page: number = 1,
     limit: number = 20,
     projection?: string | Record<string, 1 | 0>,
-  ): Promise<ApiResponse<ReferredUsersResponseDto>> {
+  ): Promise<PaginatedResponse<ReferredUserDto>> {
     try {
       // Validate pagination parameters
       if (page < 1) {
@@ -458,17 +456,12 @@ export class ReferralService {
       });
 
       if (totalCount === 0) {
-        return new ApiResponse(
-          200,
-          'No referred users found',
-          new ReferredUsersResponseDto({
-            referredUsers: [],
-            totalCount: 0,
-            page,
-            limit,
-            pages: 0,
-          }),
-        );
+        return new PaginatedResponse(200, 'No referred users found', {
+          items: [],
+          page,
+          limit,
+          total: 0,
+        });
       }
 
       // Find all referrals where this operator is the referrer with pagination
@@ -523,19 +516,15 @@ export class ReferralService {
         });
       });
 
-      // Calculate total pages
-      const totalPages = Math.ceil(totalCount / limit);
-
-      return new ApiResponse(
+      return new PaginatedResponse(
         200,
         'Referred users retrieved successfully',
-        new ReferredUsersResponseDto({
-          referredUsers,
-          totalCount,
+        {
+          items: referredUsers,
           page,
           limit,
-          pages: totalPages,
-        }),
+          total: totalCount,
+        },
       );
     } catch (error) {
       this.logger.error(
@@ -544,14 +533,14 @@ export class ReferralService {
       );
 
       if (error instanceof NotFoundException) {
-        return new ApiResponse(404, error.message, null);
+        return new PaginatedResponse(404, error.message, null);
       }
 
       if (error instanceof BadRequestException) {
-        return new ApiResponse(400, error.message, null);
+        return new PaginatedResponse(400, error.message, null);
       }
 
-      return new ApiResponse(
+      return new PaginatedResponse(
         500,
         `Error retrieving referred users: ${error.message}`,
         null,

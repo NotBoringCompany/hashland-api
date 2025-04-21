@@ -19,8 +19,9 @@ import { ReferralService } from './referral.service';
 import { Types } from 'mongoose';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { ReferralStatsResponseDto } from './dto/referral.dto';
-import { ReferredUsersResponseDto } from './dto/referred-users.dto';
+import { ReferredUserDto } from './dto/referred-users.dto';
 import { PaginationQueryDto } from './dto/pagination.dto';
+import { PaginatedResponse } from 'src/common/dto/paginated-response.dto';
 
 /**
  * Controller for handling referral-related HTTP requests
@@ -108,7 +109,7 @@ export class ReferralController {
   @SwaggerResponse({
     status: 200,
     description: 'Successfully retrieved referred users',
-    type: ReferredUsersResponseDto,
+    type: () => PaginatedResponse.withType(ReferredUserDto),
   })
   @SwaggerResponse({
     status: 404,
@@ -121,7 +122,7 @@ export class ReferralController {
   async getOperatorReferredList(
     @Param('id') id: string,
     @Query() query: PaginationQueryDto,
-  ): Promise<ApiResponse<ReferredUsersResponseDto>> {
+  ): Promise<PaginatedResponse<ReferredUserDto>> {
     const operatorId = new Types.ObjectId(id);
     return this.referralService.getReferredUsers(
       operatorId,
