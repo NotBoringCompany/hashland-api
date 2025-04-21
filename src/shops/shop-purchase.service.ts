@@ -231,7 +231,7 @@ export class ShopPurchaseService {
           config: shopItemEffects.drillData.config,
           extractorAllowed: true,
           active,
-          level: 1,
+          lastActiveStateToggle: null,
           actualEff: shopItemEffects.drillData.baseEff,
         });
 

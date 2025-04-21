@@ -60,19 +60,36 @@ export class DrillService {
       }
 
       // Try to update the drill, skipping BASIC version
+      // Also includes the requirement that the drill has not been toggled in the last `ACTIVE_STATE_TOGGLE_COOLDOWN` seconds.
       const updatedDrill = await this.drillModel.findOneAndUpdate(
         {
           _id: drillId,
           operatorId,
           version: { $ne: DrillVersion.BASIC },
+          $or: [
+            { lastActiveStateToggle: null },
+            {
+              lastActiveStateToggle: {
+                $lt: new Date(
+                  Date.now() -
+                    GAME_CONSTANTS.DRILLS.ACTIVE_STATE_TOGGLE_COOLDOWN * 1000,
+                ),
+              },
+            },
+          ],
         },
-        { active: state },
+        {
+          $set: {
+            active: state,
+            lastActiveStateToggle: new Date(),
+          },
+        },
         { new: true },
       );
 
       if (!updatedDrill) {
         throw new BadRequestException(
-          `(toggleDrillActiveState) Drill not found, does not belong to operator, or is a Basic Drill (non-toggleable).`,
+          `(toggleDrillActiveState) Either one of these errors occured: Drill not found, does not belong to operator, is a Basic Drill (non-toggleable) or has already been toggled in the last ${GAME_CONSTANTS.DRILLS.ACTIVE_STATE_TOGGLE_COOLDOWN / 60 / 60} hours.`,
         );
       }
 

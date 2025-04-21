@@ -102,6 +102,10 @@ export const GAME_CONSTANTS = {
      */
     MAX_ACTIVE_DRILLS_ALLOWED: 10,
     /**
+     * The cooldown time (in seconds) for toggling the active state of a drill.
+     */
+    ACTIVE_STATE_TOGGLE_COOLDOWN: 28_800, // 8 hours
+    /**
      * The prerequisites for purchasing a Bulwark drill from the shop.
      */
     BULWARK_DRILL_PURCHASE_PREREQUISITES: {
