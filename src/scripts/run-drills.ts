@@ -6,5 +6,13 @@ export async function runDrills() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const drillService = app.get(DrillService);
 
-  await drillService.addDrillActiveStateAndMaxActiveLimit();
+  try {
+    await drillService.equityToEffMultiplier(1111);
+  } catch (err: any) {
+    console.error(err);
+  }
 }
+
+runDrills().catch((err) => {
+  console.error('❌ Error running function:', err);
+});

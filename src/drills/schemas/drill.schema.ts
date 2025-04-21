@@ -86,15 +86,14 @@ export class Drill extends Document {
   active: boolean;
 
   /**
-   * The level of the drill.
+   * The last time `active` was updated/toggled.
    */
   @ApiProperty({
-    description: 'The level of the drill',
-    example: 1,
-    minimum: 1,
+    description: 'The last time `active` was updated/toggled',
+    example: '2021-01-01T00:00:00.000Z',
   })
-  @Prop({ type: Number, required: true, default: 1 })
-  level: number;
+  @Prop({ type: Date, required: true, default: null })
+  lastActiveStateToggle: Date | null;
 
   /**
    * The current EFF rating of the drill.

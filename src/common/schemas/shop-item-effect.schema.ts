@@ -28,13 +28,6 @@ export class ShopItemEffectDrillData {
   })
   @Prop({ required: true, default: 0 })
   baseEff: number;
-
-  @ApiProperty({
-    description: 'The maximum level that the drill can reach',
-    example: 5,
-  })
-  @Prop({ required: true, default: 0 })
-  maxLevel: number;
 }
 
 /**

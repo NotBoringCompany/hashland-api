@@ -23,34 +23,6 @@ export class DrillService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
   ) {}
 
-  async addDrillActiveStateAndMaxActiveLimit(): Promise<void> {
-    try {
-      await this.drillModel.updateMany(
-        { active: { $exists: false } },
-        { $set: { active: true } },
-      );
-
-      await this.operatorModel.updateMany(
-        {},
-        {
-          $set: {
-            maxActiveDrillsAllowed:
-              GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
-          },
-        },
-      );
-
-      console.log(
-        `✅ (addDrillActiveStateAndMaxActiveLimit) Updated drills and operators.`,
-      );
-    } catch (err: any) {
-      this.logger.error(`(activateAllDrills) Error: ${err.message}`, err.stack);
-      throw new InternalServerErrorException(
-        `(activateAllDrills) Error: ${err.message}`,
-      );
-    }
-  }
-
   /**
    * Activates or deactivates a drill for an operator.
    *
@@ -88,19 +60,36 @@ export class DrillService {
       }
 
       // Try to update the drill, skipping BASIC version
+      // Also includes the requirement that the drill has not been toggled in the last `ACTIVE_STATE_TOGGLE_COOLDOWN` seconds.
       const updatedDrill = await this.drillModel.findOneAndUpdate(
         {
           _id: drillId,
           operatorId,
           version: { $ne: DrillVersion.BASIC },
+          $or: [
+            { lastActiveStateToggle: null },
+            {
+              lastActiveStateToggle: {
+                $lt: new Date(
+                  Date.now() -
+                    GAME_CONSTANTS.DRILLS.ACTIVE_STATE_TOGGLE_COOLDOWN * 1000,
+                ),
+              },
+            },
+          ],
         },
-        { active: state },
+        {
+          $set: {
+            active: state,
+            lastActiveStateToggle: new Date(),
+          },
+        },
         { new: true },
       );
 
       if (!updatedDrill) {
         throw new BadRequestException(
-          `(toggleDrillActiveState) Drill not found, does not belong to operator, or is a Basic Drill (non-toggleable).`,
+          `(toggleDrillActiveState) Either one of these errors occured: Drill not found, does not belong to operator, is a Basic Drill (non-toggleable) or has already been toggled in the last ${GAME_CONSTANTS.DRILLS.ACTIVE_STATE_TOGGLE_COOLDOWN / 60 / 60} hours.`,
         );
       }
 
@@ -231,7 +220,6 @@ export class DrillService {
         // Basic drills will always be active since they are given at the beginning
         // They CANNOT be deactivated.
         active: version === DrillVersion.BASIC ? true : false,
-        level,
         actualEff,
       };
 
