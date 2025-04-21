@@ -3,46 +3,24 @@ import {
   InternalServerErrorException,
   NotFoundException,
   Logger,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolOperator } from './schemas/pool-operator.schema';
-import { RedisService } from 'src/common/redis.service';
 import { performance } from 'perf_hooks';
 
 @Injectable()
-export class PoolService implements OnModuleInit {
+export class PoolService {
   private readonly logger = new Logger(PoolService.name);
-  private readonly redisCachePrefix = 'pool:estimatedEff:';
-  private readonly effCacheDuration = 6 * 60 * 60; // 6 hours in seconds
 
   constructor(
-    @InjectModel(Pool.name) private poolModel: Model<Pool>,
+    @InjectModel(Pool.name)
+    private poolModel: Model<Pool>,
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
-    private readonly redisService: RedisService,
   ) {}
-
-  /**
-   * Initialize pools' estimated efficiency on module initialization
-   */
-  async onModuleInit() {
-    try {
-      this.logger.log('Initializing pool estimated efficiency values...');
-      await this.updateAllPoolsEstimatedEff();
-      this.logger.log(
-        'Pool estimated efficiency values initialized successfully',
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to initialize pool estimated efficiency: ${error.message}`,
-        error.stack,
-      );
-    }
-  }
 
   /**
    * Join a pool. Ensures:
@@ -190,7 +168,6 @@ export class PoolService implements OnModuleInit {
   async getPoolById(
     poolId: string,
     projection?: string | Record<string, 1 | 0>,
-    updateStaleEff: boolean = true,
   ): Promise<ApiResponse<{ pool: Pool | null }>> {
     try {
       // First check if the pool exists and get its last update time
@@ -205,21 +182,6 @@ export class PoolService implements OnModuleInit {
             `(getPoolById) Pool with ID ${poolId} not found`,
           ),
         );
-      }
-
-      // Update efficiency if it's stale or missing
-      if (updateStaleEff) {
-        const now = Date.now();
-        const staleThreshold = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-
-        if (
-          !poolWithTimestamp.lastEffUpdate ||
-          now - new Date(poolWithTimestamp.lastEffUpdate).getTime() >
-            staleThreshold
-        ) {
-          this.logger.log(`Updating stale efficiency for pool ${poolId}`);
-          await this.updatePoolEstimatedEff(poolId, false);
-        }
       }
 
       // Now fetch the pool with the updated efficiency and requested projection
@@ -288,7 +250,6 @@ export class PoolService implements OnModuleInit {
    */
   async updatePoolEstimatedEff(
     poolId: string | Types.ObjectId,
-    forceUpdate: boolean = false,
   ): Promise<number> {
     try {
       // Early return if poolId is null
@@ -299,12 +260,6 @@ export class PoolService implements OnModuleInit {
         return 0;
       }
 
-      const poolIdObj =
-        typeof poolId === 'string' ? new Types.ObjectId(poolId) : poolId;
-      // Try to get from cache first
-      const cacheKey = `${this.redisCachePrefix}${poolId}`;
-      const cachedEff = await this.redisService.get(cacheKey);
-
       // Check if pool exists
       const pool = await this.poolModel.findById(poolId, { lastEffUpdate: 1 });
       if (!pool) {
@@ -313,21 +268,10 @@ export class PoolService implements OnModuleInit {
         );
       }
 
-      // If cache is valid and not forcing update, return cached value
-      if (cachedEff && !forceUpdate && pool.lastEffUpdate) {
-        const lastUpdate = pool.lastEffUpdate.getTime();
-        const now = Date.now();
-        const hoursSinceLastUpdate = (now - lastUpdate) / (1000 * 60 * 60);
-
-        if (hoursSinceLastUpdate < 6) {
-          return parseFloat(cachedEff);
-        }
-      }
-
       // Use aggregation to efficiently calculate the weighted efficiency in a single query
       const aggregationResult = await this.poolOperatorModel.aggregate([
         // Step 1: Match operators in this pool
-        { $match: { pool: poolIdObj } },
+        { $match: { pool: poolId } },
 
         // Step 2: Lookup operator details
         {
@@ -376,13 +320,6 @@ export class PoolService implements OnModuleInit {
         lastEffUpdate: new Date(),
       });
 
-      // Store in Redis cache
-      await this.redisService.set(
-        cacheKey,
-        totalWeightedEff.toString(),
-        this.effCacheDuration,
-      );
-
       this.logger.log(
         `Updated estimatedEff for pool ${poolId}: ${totalWeightedEff} from ${operatorCount} operators`,
       );
@@ -423,7 +360,7 @@ export class PoolService implements OnModuleInit {
       for (let i = 0; i < pools.length; i += batchSize) {
         const batch = pools.slice(i, i + batchSize);
         await Promise.all(
-          batch.map((pool) => this.updatePoolEstimatedEff(pool._id, true)),
+          batch.map((pool) => this.updatePoolEstimatedEff(pool._id)),
         );
         this.logger.log(
           `Processed batch ${Math.ceil((i + 1) / batchSize)}/${Math.ceil(pools.length / batchSize)}`,
