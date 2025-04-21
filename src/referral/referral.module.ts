@@ -8,6 +8,7 @@ import {
   OperatorSchema,
 } from 'src/operators/schemas/operator.schema';
 import { RedisModule } from 'src/common/redis.module';
+import { ReferralController } from './referral.controller';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RedisModule } from 'src/common/redis.module';
       { name: Operator.name, schema: OperatorSchema },
     ]),
   ],
+  controllers: [ReferralController],
   providers: [ReferralService],
   exports: [ReferralService],
 })

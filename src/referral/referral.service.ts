@@ -3,6 +3,7 @@ import {
   Logger,
   InternalServerErrorException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -14,6 +15,10 @@ import {
 } from './dto/referral.dto';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import {
+  ReferredUserDto,
+  ReferredUsersResponseDto,
+} from './dto/referred-users.dto';
 
 /**
  * Service for managing referrals
@@ -75,6 +80,14 @@ export class ReferralService {
         `(getOperatorReferralCode) Error: ${error.message}`,
         error.stack,
       );
+
+      if (error instanceof NotFoundException) {
+        return {
+          referralCode: '',
+          isNew: false,
+        } as ReferralCodeResponseDto;
+      }
+
       throw new InternalServerErrorException(
         `Error generating referral code: ${error.message}`,
       );
@@ -115,14 +128,14 @@ export class ReferralService {
       );
 
       if (!referrer) {
-        return new ApiResponse(404, 'Invalid referral code', null);
+        throw new NotFoundException('Invalid referral code');
       }
 
       const referrerId = referrer._id;
 
       // Make sure the new operator isn't already referred and isn't referring themselves
       if (newOperatorId.equals(referrerId)) {
-        return new ApiResponse(400, 'Cannot refer yourself', null);
+        throw new BadRequestException('Cannot refer yourself');
       }
 
       const newOperator = await this.operatorModel.findById(newOperatorId, {
@@ -130,11 +143,11 @@ export class ReferralService {
       });
 
       if (!newOperator) {
-        return new ApiResponse(404, 'New operator not found', null);
+        throw new NotFoundException('New operator not found');
       }
 
       if (newOperator.referralData?.referredBy) {
-        return new ApiResponse(400, 'Operator already has a referrer', null);
+        throw new BadRequestException('Operator already has a referrer');
       }
 
       // Check if a referral record already exists
@@ -144,7 +157,7 @@ export class ReferralService {
       });
 
       if (existingReferral) {
-        return new ApiResponse(400, 'Referral already exists', { referrerId });
+        throw new BadRequestException('Referral already exists');
       }
 
       // Create a new referral record
@@ -183,8 +196,19 @@ export class ReferralService {
         `(processReferral) Error: ${error.message}`,
         error.stack,
       );
-      throw new InternalServerErrorException(
+
+      if (error instanceof NotFoundException) {
+        return new ApiResponse(404, error.message, null);
+      }
+
+      if (error instanceof BadRequestException) {
+        return new ApiResponse(400, error.message, null);
+      }
+
+      return new ApiResponse(
+        500,
         `Error processing referral: ${error.message}`,
+        null,
       );
     }
   }
@@ -333,18 +357,19 @@ export class ReferralService {
         .lean();
 
       if (!operator) {
-        return new ApiResponse(404, 'Operator not found', null);
+        throw new NotFoundException('Operator not found');
       }
 
       // If the operator doesn't have a referral code yet, generate one
       if (!operator.referralData?.referralCode) {
-        const { referralCode } = await this.getOperatorReferralCode(operatorId);
+        const referralCodeResponse =
+          await this.getOperatorReferralCode(operatorId);
 
         return new ApiResponse(
           200,
           'Referral stats retrieved successfully',
           new ReferralStatsResponseDto({
-            referralCode,
+            referralCode: referralCodeResponse.referralCode,
             totalReferrals: 0,
             rewards: { effCredits: 0, hashBonus: 0 },
           }),
@@ -373,8 +398,163 @@ export class ReferralService {
         `(getReferralStats) Error: ${error.message}`,
         error.stack,
       );
-      throw new InternalServerErrorException(
+
+      if (error instanceof NotFoundException) {
+        return new ApiResponse(404, error.message, null);
+      }
+
+      return new ApiResponse(
+        500,
         `Error retrieving referral stats: ${error.message}`,
+        null,
+      );
+    }
+  }
+
+  /**
+   * Get a list of users referred by a specific operator with pagination
+   * @param operatorId Operator ID of the referrer
+   * @param page Page number (starts from 1)
+   * @param limit Maximum number of items per page
+   * @param projection Optional fields to include in response
+   * @returns Paginated list of referred users with their details
+   */
+  async getReferredUsers(
+    operatorId: Types.ObjectId,
+    page: number = 1,
+    limit: number = 20,
+    projection?: string | Record<string, 1 | 0>,
+  ): Promise<ApiResponse<ReferredUsersResponseDto>> {
+    try {
+      // Validate pagination parameters
+      if (page < 1) {
+        throw new BadRequestException(`Invalid page number: ${page}`);
+      }
+
+      if (limit < 1 || limit > 100) {
+        throw new BadRequestException(`Invalid limit: ${limit}`);
+      }
+
+      // Check if operator exists
+      const operator = await this.operatorModel.findById(operatorId);
+
+      if (!operator) {
+        throw new NotFoundException('Operator not found');
+      }
+
+      // Convert string projection to object if provided
+      let projectionObj: Record<string, 1> | undefined;
+      if (typeof projection === 'string') {
+        projectionObj = projection
+          .split(',')
+          .reduce((acc, field) => ({ ...acc, [field.trim()]: 1 }), {});
+      } else {
+        projectionObj = projection as Record<string, 1> | undefined;
+      }
+
+      // Count total documents first for pagination
+      const totalCount = await this.referralModel.countDocuments({
+        referrerId: operatorId,
+      });
+
+      if (totalCount === 0) {
+        return new ApiResponse(
+          200,
+          'No referred users found',
+          new ReferredUsersResponseDto({
+            referredUsers: [],
+            totalCount: 0,
+            page,
+            limit,
+            pages: 0,
+          }),
+        );
+      }
+
+      // Find all referrals where this operator is the referrer with pagination
+      const referrals = await this.referralModel
+        .find({ referrerId: operatorId })
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
+
+      // Get referred user details
+      const referredUserIds = referrals.map((referral) => referral.referredId);
+
+      // Verify that the referred users exist
+      await this.operatorModel.find({ _id: { $in: referredUserIds } });
+
+      // Map referrals to referredUserDto objects
+      const referredUsers = referrals.map((referral) => {
+        // If we have specific fields to include, apply them here
+        if (projectionObj) {
+          const userData: any = {};
+
+          // Always include userId as a minimum
+          userData.userId = referral.referredId;
+
+          if (projectionObj.username || !Object.keys(projectionObj).length) {
+            userData.username = `User-${referral.referredId.toString().substring(0, 8)}`;
+          }
+
+          if (
+            projectionObj.referredDate ||
+            !Object.keys(projectionObj).length
+          ) {
+            userData.referredDate = referral.createdAt;
+          }
+
+          if (
+            projectionObj.rewardsProcessed ||
+            !Object.keys(projectionObj).length
+          ) {
+            userData.rewardsProcessed = referral.rewardsProcessed;
+          }
+
+          return new ReferredUserDto(userData);
+        }
+
+        return new ReferredUserDto({
+          userId: referral.referredId,
+          username: `User-${referral.referredId.toString().substring(0, 8)}`,
+          referredDate: referral.createdAt,
+          rewardsProcessed: referral.rewardsProcessed,
+        });
+      });
+
+      // Calculate total pages
+      const totalPages = Math.ceil(totalCount / limit);
+
+      return new ApiResponse(
+        200,
+        'Referred users retrieved successfully',
+        new ReferredUsersResponseDto({
+          referredUsers,
+          totalCount,
+          page,
+          limit,
+          pages: totalPages,
+        }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `(getReferredUsers) Error: ${error.message}`,
+        error.stack,
+      );
+
+      if (error instanceof NotFoundException) {
+        return new ApiResponse(404, error.message, null);
+      }
+
+      if (error instanceof BadRequestException) {
+        return new ApiResponse(400, error.message, null);
+      }
+
+      return new ApiResponse(
+        500,
+        `Error retrieving referred users: ${error.message}`,
+        null,
       );
     }
   }
