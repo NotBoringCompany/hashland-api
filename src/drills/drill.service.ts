@@ -117,8 +117,8 @@ export class DrillService {
 
       const totalDrillEff = drillAgg[0]?.totalDrillEff || 0;
 
-      const effMultiplier = operator.effMultiplier;
-      const effCredits = operator.effCredits;
+      const effMultiplier = operator.effMultiplier || 1;
+      const effCredits = operator.effCredits || 0;
 
       // Get a new luck factor for the operator
       const luckFactor =
@@ -126,6 +126,10 @@ export class DrillService {
         Math.random() *
           (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
             GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
+
+      this.logger.error(
+        `(toggleDrillActiveState) Luck factor: ${luckFactor}, effMultiplier: ${effMultiplier}, effCredits: ${effCredits}, totalDrillEff: ${totalDrillEff}`,
+      );
 
       const cumulativeEff =
         totalDrillEff * effMultiplier * luckFactor + effCredits;
@@ -369,3 +373,4 @@ export class DrillService {
     return 1 + Math.log(1 + 0.0000596 * equity);
   }
 }
+
