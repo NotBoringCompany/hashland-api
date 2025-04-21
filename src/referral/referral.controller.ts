@@ -57,41 +57,6 @@ export class ReferralController {
   }
 
   /**
-   * Get list of users referred by the current user
-   */
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @Get('referred-users/me')
-  @ApiOperation({
-    summary: 'Get users referred by the current user',
-    description: 'Retrieves a list of users referred by the authenticated user',
-  })
-  @ApiQuery({
-    type: PaginationQueryDto,
-  })
-  @SwaggerResponse({
-    status: 200,
-    description: 'Successfully retrieved referred users',
-    type: ReferredUsersResponseDto,
-  })
-  @SwaggerResponse({
-    status: 400,
-    description: 'Invalid pagination parameters',
-  })
-  async getCurrentUserReferredList(
-    @Request() req,
-    @Query() query: PaginationQueryDto,
-  ): Promise<ApiResponse<ReferredUsersResponseDto>> {
-    const operatorId = new Types.ObjectId(req.user.userId);
-    return this.referralService.getReferredUsers(
-      operatorId,
-      query.page,
-      query.limit,
-      query.projection,
-    );
-  }
-
-  /**
    * Get referral data for a specific user
    */
   @ApiBearerAuth()
