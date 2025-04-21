@@ -30,6 +30,12 @@ export class PaginationMetadata {
   count: number;
 
   @ApiProperty({
+    description: 'Total number of pages',
+    example: 3,
+  })
+  totalPages: number;
+
+  @ApiProperty({
     description: 'Whether there is a next page available',
     example: true,
   })
@@ -51,7 +57,8 @@ export class PaginationMetadata {
     this.limit = data.limit;
     this.total = data.total;
     this.count = data.count;
-    this.hasNext = this.page * this.limit < this.total;
+    this.totalPages = Math.ceil(this.total / this.limit);
+    this.hasNext = this.page < this.totalPages;
     this.hasPrev = this.page > 1;
   }
 }

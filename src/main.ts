@@ -12,6 +12,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './logger/winston.config';
+import { ValidationPipe } from '@nestjs/common';
 
 // ✅ Ensure logs folder exists before Winston tries to write to it
 import * as fs from 'fs';
@@ -36,6 +37,18 @@ async function bootstrap() {
 
   // Register global exception filter
   app.useGlobalFilters(new HttpExceptionFilter());
+
+  // Register ValidationPipe for automatic DTO validation and transformation
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true, // Transform payloads to DTO instances
+      whitelist: true, // Strip properties that don't have decorators
+      forbidNonWhitelisted: true, // Throw error if non-whitelisted properties are present
+      transformOptions: {
+        enableImplicitConversion: false, // Don't convert implicitly, use @Type() decorators
+      },
+    }),
+  );
 
   // Enable CORS
   app.enableCors({
