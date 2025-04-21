@@ -255,7 +255,10 @@ export class TelegramService {
               inline_keyboard: [
                 [
                   {
-                    text: 'Open Game',
+                    text: `Open Game ${
+                      this.hashlandUrl +
+                      (referralCode ? `?ref=${referralCode}` : '')
+                    }`,
                     web_app: {
                       url:
                         this.hashlandUrl +
