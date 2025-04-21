@@ -10,6 +10,14 @@ export class TelegramAuthDto {
   @IsString()
   @IsNotEmpty()
   initData: string;
+
+  @ApiProperty({
+    description: 'Referral code',
+    example: '1234567890',
+  })
+  @IsString()
+  @IsNotEmpty()
+  referralCode: string;
 }
 
 export class TelegramCreds {

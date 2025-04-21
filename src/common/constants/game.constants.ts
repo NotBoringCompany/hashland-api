@@ -10,6 +10,46 @@ export const GAME_CONSTANTS = {
   },
 
   /**
+   * Referral system constants.
+   */
+  REFERRAL: {
+    /**
+     *
+     */
+    REFERRAL_REWARDS_THRESHOLD: 5,
+    /**
+     * Rewards given to the referrer when a new user signs up using their code.
+     */
+    REFERRER_REWARDS: {
+      /**
+       * Efficiency credits given to the referrer.
+       */
+      EFF_CREDITS: 25,
+      /**
+       * Hash bonus given to the referrer.
+       */
+      HASH_BONUS: 0,
+    },
+    /**
+     * Rewards given to the referred user when signing up with a referral code.
+     */
+    REFERRED_REWARDS: {
+      /**
+       * Efficiency credits given to the referred user.
+       */
+      EFF_CREDITS: 10,
+      /**
+       * Hash bonus given to the referred user.
+       */
+      HASH_BONUS: 0,
+    },
+    /**
+     * Length of the generated referral code.
+     */
+    CODE_LENGTH: 8,
+  },
+
+  /**
    * Cycle constants.
    */
   CYCLES: {

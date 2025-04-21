@@ -95,12 +95,16 @@ export class WalletAuthService {
         const username = `user_${walletLoginData.address.toLowerCase().substring(0, 8).toLowerCase()}`;
 
         // Create a new operator
-        operatorAuth = await this.operatorService.findOrCreateOperator({
-          id: walletLoginData.address.toLowerCase().substring(0, 8),
-          username,
-          walletAddress: walletLoginData.address.toLowerCase(),
-          walletChain: walletLoginData.chain,
-        });
+        operatorAuth = await this.operatorService.findOrCreateOperator(
+          {
+            id: walletLoginData.address.toLowerCase().substring(0, 8),
+            username,
+            walletAddress: walletLoginData.address.toLowerCase(),
+            walletChain: walletLoginData.chain,
+          },
+          {},
+          walletLoginData.referralCode,
+        );
 
         // Create wallet record
         wallet = await this.operatorWalletModel.create({
@@ -127,11 +131,6 @@ export class WalletAuthService {
           type: 'login',
         };
       }
-
-      // Update asset equity
-      await this.operatorWalletService.updateAssetEquityForOperator(
-        operatorAuth.operator._id,
-      );
 
       // Update cumulativeEff for the operator
       await this.operatorService.updateCumulativeEffForSingleOperator(

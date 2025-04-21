@@ -73,10 +73,14 @@ export class TelegramAuthService {
       }
 
       const { operator, type } =
-        await this.operatorService.findOrCreateOperator({
-          id: parsedAuthData.user.id.toString(),
-          username: parsedAuthData.user.username,
-        });
+        await this.operatorService.findOrCreateOperator(
+          {
+            id: parsedAuthData.user.id.toString(),
+            username: parsedAuthData.user.username,
+          },
+          {},
+          authData.referralCode,
+        );
 
       if (!operator) {
         throw new HttpException('Failed to create operator', 500);

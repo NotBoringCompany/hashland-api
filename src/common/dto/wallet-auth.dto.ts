@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { AllowedChain } from '../enums/chain.enum';
 import { ApiResponse } from './response.dto';
 
@@ -41,6 +41,15 @@ export class WalletLoginDto {
   @IsString()
   @IsNotEmpty()
   chain: string;
+
+  @ApiProperty({
+    description: 'Referral code used during registration (optional)',
+    example: 'ABC123XY',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  referralCode?: string;
 }
 
 /**

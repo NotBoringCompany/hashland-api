@@ -13,6 +13,7 @@ import {
   ReferralStatsResponseDto,
 } from './dto/referral.dto';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 
 /**
  * Service for managing referrals
@@ -92,7 +93,7 @@ export class ReferralService {
     return buffer
       .toString('base64')
       .replace(/[/+=]/g, '')
-      .substring(0, 8)
+      .substring(0, GAME_CONSTANTS.REFERRAL.CODE_LENGTH)
       .toUpperCase();
   }
 
@@ -166,8 +167,13 @@ export class ReferralService {
         { $set: { 'referralData.referredBy': referrerId } },
       );
 
-      // Apply referral rewards here
-      await this.applyReferralRewards(referrerId, newOperatorId);
+      // Apply referral rewards if the operator has enough asset equity
+      if (
+        newOperator.assetEquity >=
+        GAME_CONSTANTS.REFERRAL.REFERRAL_REWARDS_THRESHOLD
+      ) {
+        await this.applyReferralRewards(referrerId, newOperatorId);
+      }
 
       return new ApiResponse(200, 'Referral processed successfully', {
         referrerId,
@@ -188,7 +194,7 @@ export class ReferralService {
    * @param referrerId ID of the referring operator
    * @param referredId ID of the referred operator
    */
-  private async applyReferralRewards(
+  async applyReferralRewards(
     referrerId: Types.ObjectId,
     referredId: Types.ObjectId,
   ): Promise<void> {
@@ -203,15 +209,15 @@ export class ReferralService {
         return; // Skip if already processed or not found
       }
 
-      // Example rewards (customize based on your game mechanics)
+      // Get rewards from constants
       const referrerRewards = {
-        effCredits: 25,
-        hashBonus: 0,
+        effCredits: GAME_CONSTANTS.REFERRAL.REFERRER_REWARDS.EFF_CREDITS,
+        hashBonus: GAME_CONSTANTS.REFERRAL.REFERRER_REWARDS.HASH_BONUS,
       };
 
       const referredRewards = {
-        effCredits: 10,
-        hashBonus: 0,
+        effCredits: GAME_CONSTANTS.REFERRAL.REFERRED_REWARDS.EFF_CREDITS,
+        hashBonus: GAME_CONSTANTS.REFERRAL.REFERRED_REWARDS.HASH_BONUS,
       };
 
       // Apply referrer rewards
