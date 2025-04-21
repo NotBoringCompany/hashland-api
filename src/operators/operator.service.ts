@@ -334,13 +334,38 @@ export class OperatorService {
         .findOne({ operator: operatorId }, { pool: 1 })
         .lean();
 
+      // Input operator's EFF-related data
+      const extendedEffData = () => {
+        const cumulativeDrillEff = drills.reduce(
+          (acc, drill) => acc + drill.actualEff,
+          0,
+        );
+
+        const effMultiplier = operator.effMultiplier;
+        const effCredits = operator.effCredits;
+
+        // To calculate this, we will rework the formula to isolate luckFactor
+        const luckFactor =
+          (operator.cumulativeEff - operator.effCredits) /
+          (cumulativeDrillEff * effMultiplier);
+
+        return {
+          cumulativeDrillEff,
+          effMultiplier,
+          effCredits,
+          luckFactor,
+        };
+      };
+
       return new ApiResponse<{
         operator: Operator;
+        extendedOperatorEffData: ReturnType<typeof extendedEffData>;
         wallets: OperatorWallet[];
         drills: Drill[];
         poolId?: Types.ObjectId;
       }>(200, `(fetchOperatorData) Operator data fetched successfully`, {
         operator,
+        extendedOperatorEffData: extendedEffData(),
         wallets,
         drills,
         poolId: poolId?.pool,
