@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Operator } from './schemas/operator.schema';
@@ -13,6 +19,9 @@ import { OperatorWallet } from './schemas/operator-wallet.schema';
 import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { HASHReserve } from 'src/hash-reserve/schemas/hash-reserve.schema';
+import { randomBytes } from 'crypto';
+import { AllowedChain } from 'src/common/enums/chain.enum';
+import { ReferralService } from 'src/referral/referral.service';
 
 @Injectable()
 export class OperatorService {
@@ -29,8 +38,191 @@ export class OperatorService {
     private readonly poolService: PoolService,
     private readonly drillService: DrillService,
     private readonly redisService: RedisService,
+    private readonly referralService: ReferralService,
     @InjectModel(HASHReserve.name) private hashReserveModel: Model<HASHReserve>,
   ) {}
+
+  async adminBatchCreateOperators(operatorCount: number, batchSize = 10000) {
+    try {
+      let totalCreated = 0;
+
+      while (totalCreated < operatorCount) {
+        const currentBatchSize = Math.min(
+          batchSize,
+          operatorCount - totalCreated,
+        );
+
+        const operators: Partial<Operator>[] = [];
+        const operatorWallets: Partial<OperatorWallet>[] = [];
+        const drills: Partial<Drill>[] = [];
+        const poolOperators: Partial<PoolOperator>[] = [];
+
+        for (let i = 0; i < currentBatchSize; i++) {
+          const _id = new Types.ObjectId();
+
+          operators.push({
+            _id,
+            usernameData: {
+              username: `test_operator_${Math.random().toString(36).substring(2, 19)}`,
+              lastRenameTimestamp: null,
+            },
+            assetEquity: 0,
+            cumulativeEff: 0,
+            effMultiplier: 1,
+            effCredits: 0,
+            maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
+            currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
+            maxActiveDrillsAllowed:
+              GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
+            totalEarnedHASH: 0,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+
+          operatorWallets.push({
+            operatorId: _id,
+            address: `0x${randomBytes(20).toString('hex')}`,
+            chain: AllowedChain.BERA,
+            signature: 'testSignature',
+            signatureMessage: 'testSignatureMessage',
+          });
+
+          drills.push({
+            operatorId: _id,
+            version: DrillVersion.BASIC,
+            config: DrillConfig.BASIC,
+            extractorAllowed: false,
+            active: true,
+            actualEff: 0,
+          });
+
+          drills.push({
+            operatorId: _id,
+            version: DrillVersion.PREMIUM,
+            config: DrillConfig.BULWARK,
+            extractorAllowed: true,
+            active: true,
+            actualEff: 25000,
+          });
+
+          poolOperators.push({
+            operator: _id,
+            pool: new Types.ObjectId('67c59119e13cd025d70558f8'),
+            totalRewards: 0,
+          });
+        }
+
+        await this.operatorModel.insertMany(operators);
+        await this.operatorWalletModel.insertMany(operatorWallets);
+        await this.drillModel.insertMany(drills);
+        await this.poolOperatorModel.insertMany(poolOperators);
+
+        this.logger.log(
+          `Created ${totalCreated + currentBatchSize} / ${operatorCount}`,
+        );
+        totalCreated += currentBatchSize;
+      }
+
+      this.logger.log(
+        `Successfully created ${operatorCount} operators and related documents.`,
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        `(adminBatchCreateOperators) Error batch creating operators: ${err.message}`,
+      );
+    }
+  }
+
+  /**
+   * Renames an operator's username.
+   */
+  async renameUsername(
+    operatorId: Types.ObjectId,
+    newUsername: string,
+  ): Promise<ApiResponse<null>> {
+    try {
+      if (!newUsername) {
+        throw new ForbiddenException(
+          `(renameUsername) New username is required.`,
+        );
+      }
+
+      // ENsure that the new username meets the following requirements:
+      // Max 16 characters, only `-_` and alphanumeric characters allowed
+      const usernameRegex = /^[a-zA-Z0-9-_]{1,16}$/;
+
+      if (!usernameRegex.test(newUsername)) {
+        throw new ForbiddenException(
+          `(renameUsername) Invalid username format. Only alphanumeric characters, dashes, and underscores are allowed.`,
+        );
+      }
+
+      // Check if the username already exists
+      const existingOperator = await this.operatorModel.exists({
+        'usernameData.username': newUsername,
+      });
+
+      if (existingOperator) {
+        throw new ForbiddenException(
+          `(renameUsername) Username already taken.`,
+        );
+      }
+
+      // Ensure that the 7 day cooldown has passed and that the username isn't the same
+      const operator = await this.operatorModel.findOne(
+        { _id: operatorId },
+        { usernameData: 1 },
+      );
+
+      if (!operator) {
+        throw new NotFoundException(`(renameUsername) Operator not found`);
+      }
+
+      if (operator.usernameData.username === newUsername) {
+        throw new ForbiddenException(
+          `(renameUsername) New username is the same as the current one.`,
+        );
+      }
+
+      const lastRenameTimestamp = operator.usernameData.lastRenameTimestamp;
+      const currentTime = new Date();
+
+      if (
+        lastRenameTimestamp &&
+        currentTime.getTime() - lastRenameTimestamp.getTime() <
+          GAME_CONSTANTS.OPERATORS.RENAME_COOLDOWN
+      ) {
+        throw new ForbiddenException(
+          `(renameUsername) You can only change your username once every 7 days.`,
+        );
+      }
+
+      this.logger.debug(
+        `(renameUsername) Checks complete. Operator ${operatorId} is changing username from ${operator.usernameData.username} to ${newUsername}`,
+      );
+
+      // Update the operator's username
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        {
+          $set: {
+            'usernameData.username': newUsername,
+            'usernameData.lastRenameTimestamp': new Date(),
+          },
+        },
+      );
+
+      return new ApiResponse<null>(
+        200,
+        `(renameUsername) Username changed successfully`,
+        null,
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        `(renameUsername) Error renaming operator username: ${err.message}`,
+      );
+    }
+  }
 
   /**
    * Fetches the overview data for all operators in Hashland.
@@ -133,9 +325,7 @@ export class OperatorService {
         .lean();
 
       // Fetch operator's drills
-      const drills = await this.drillModel
-        .find({ operatorId }, { _id: 0 })
-        .lean();
+      const drills = await this.drillModel.find({ operatorId }).lean();
 
       // Fetch operator's pool ID if in a pool
       const poolId = await this.poolOperatorModel
@@ -161,9 +351,8 @@ export class OperatorService {
   }
 
   /**
-   * Updates cumulativeEff for all operators by summing their drills' actualEff values.
-   *
-   * This is called periodically to keep the cumulativeEff values up-to-date.
+   * Updates cumulativeEff for all operators by summing their drills' actualEff values
+   * and applying luck factor, effMultiplier and effCredits.
    */
   async updateCumulativeEff() {
     this.logger.log(
@@ -171,32 +360,67 @@ export class OperatorService {
     );
     const startTime = performance.now();
 
-    // ✅ Step 1: Aggregate Total `actualEff` per Operator
-    const operatorEffData = await this.drillModel.aggregate([
+    // ✅ Step 1: Aggregate active drills' actualEff per operator
+    const drillEffs = await this.drillModel.aggregate([
+      { $match: { active: true } },
       {
         $group: {
           _id: '$operatorId',
-          totalEff: { $sum: '$actualEff' },
+          totalDrillEff: { $sum: '$actualEff' },
         },
       },
     ]);
 
-    if (operatorEffData.length === 0) {
+    if (drillEffs.length === 0) {
       this.logger.warn(
-        '⚠️ (updateCumulativeEff) No drills found. Skipping update.',
+        '⚠️ (updateCumulativeEff) No active drills found. Skipping update.',
       );
       return;
     }
 
-    // ✅ Step 2: Prepare Bulk Updates
-    const bulkUpdates = operatorEffData.map(({ _id, totalEff }) => ({
-      updateOne: {
-        filter: { _id },
-        update: { $set: { cumulativeEff: totalEff } },
-      },
-    }));
+    // ✅ Step 2: Get operator data (effMultiplier and effCredits)
+    const operatorIds = drillEffs.map((d) => d._id);
+    const operators = await this.operatorModel
+      .find({ _id: { $in: operatorIds } }, { effMultiplier: 1, effCredits: 1 })
+      .lean();
 
-    // ✅ Step 3: Batch Process Updates for Large Datasets
+    const operatorMap = new Map<
+      string,
+      { effMultiplier: number; effCredits: number }
+    >();
+    for (const op of operators) {
+      operatorMap.set(op._id.toString(), {
+        effMultiplier: op.effMultiplier || 1,
+        effCredits: op.effCredits || 0,
+      });
+    }
+
+    // ✅ Step 3: Compute final cumulativeEff with Luck Factor
+    const bulkUpdates = drillEffs
+      .map(({ _id, totalDrillEff }) => {
+        const operatorData = operatorMap.get(_id.toString());
+        if (!operatorData) return null;
+
+        const luckFactor =
+          GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
+          Math.random() *
+            (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
+              GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
+
+        const cumulativeEff =
+          totalDrillEff * operatorData.effMultiplier * luckFactor +
+          operatorData.effCredits;
+
+        return {
+          updateOne: {
+            filter: { _id },
+            update: { $set: { cumulativeEff } },
+          },
+        };
+      })
+      .filter(Boolean);
+
+    // ✅ Step 4: Process in batches
     const batchSize = 1000;
     for (let i = 0; i < bulkUpdates.length; i += batchSize) {
       await this.operatorModel.bulkWrite(bulkUpdates.slice(i, i + batchSize));
@@ -205,50 +429,126 @@ export class OperatorService {
       );
     }
 
-    // ✅ Step 4: Get operators that are in pools
+    // ✅ Step 5: Update estimated pool efficiency
     const operatorIdsInPools = await this.poolOperatorModel.aggregate([
       {
         $group: {
-          _id: '$poolId',
+          _id: '$pool',
           operatorIds: { $push: '$operatorId' },
         },
       },
     ]);
 
-    // ✅ Step 5: If there are operators in pools, update pool estimated efficiency
     if (operatorIdsInPools.length > 0) {
       this.logger.log(
-        `Updating estimated efficiency for ${operatorIdsInPools.length} pools...`,
+        `🔁 Updating estimated efficiency for ${operatorIdsInPools.length} pools...`,
       );
 
-      try {
-        // Process in batches to avoid overloading the system
-        const poolBatchSize = 5;
-        for (let i = 0; i < operatorIdsInPools.length; i += poolBatchSize) {
-          const batchPromises = operatorIdsInPools
-            .slice(i, i + poolBatchSize)
-            .map((pool) =>
-              this.poolService.updatePoolEstimatedEff(pool._id, true),
-            );
+      const poolBatchSize = 5;
+      for (let i = 0; i < operatorIdsInPools.length; i += poolBatchSize) {
+        const batchPromises = operatorIdsInPools
+          .slice(i, i + poolBatchSize)
+          .map((pool) => this.poolService.updatePoolEstimatedEff(pool._id));
 
-          await Promise.all(batchPromises);
+        await Promise.all(batchPromises);
 
-          this.logger.log(
-            `Processed pool estimatedEff update batch ${Math.floor(i / poolBatchSize) + 1}/${Math.ceil(operatorIdsInPools.length / poolBatchSize)}`,
-          );
-        }
-      } catch (error) {
-        this.logger.error(
-          `Error updating pool estimated efficiency: ${error.message}`,
-          error.stack,
+        this.logger.log(
+          `✅ Processed pool estimatedEff update batch ${Math.floor(i / poolBatchSize) + 1}/${Math.ceil(operatorIdsInPools.length / poolBatchSize)}`,
         );
-        // Continue execution as this is a non-critical operation
       }
     }
 
     const endTime = performance.now();
     this.logger.log(
-      `✅ (updateCumulativeEff) Updated cumulativeEff for ${operatorEffData.length} operators in ${(endTime - startTime).toFixed(2)}ms.`,
+      `✅ (updateCumulativeEff) Updated cumulativeEff for ${bulkUpdates.length} operators in ${(endTime - startTime).toFixed(2)}ms.`,
+    );
+  }
+
+  /**
+   * Updates cumulativeEff for a specific operator by summing their active drills' actualEff values
+   * and applying luck factor, effMultiplier, and effCredits.
+   */
+  async updateCumulativeEffForSingleOperator(
+    operatorId: Types.ObjectId,
+  ): Promise<void> {
+    this.logger.log(
+      `🔄 (updateCumulativeEffForOperator) Updating cumulativeEff for operator ${operatorId}...`,
+    );
+    const startTime = performance.now();
+
+    // Step 1: Get total actualEff from active drills for this operator
+    const drillAgg = await this.drillModel.aggregate([
+      { $match: { operatorId, active: true } },
+      {
+        $group: {
+          _id: '$operatorId',
+          totalDrillEff: { $sum: '$actualEff' },
+        },
+      },
+    ]);
+
+    if (drillAgg.length === 0) {
+      this.logger.warn(
+        `⚠️ (updateCumulativeEffForOperator) No active drills found for operator ${operatorId}. Skipping update.`,
+      );
+      return;
+    }
+
+    const totalDrillEff = drillAgg[0].totalDrillEff;
+
+    // Step 2: Get effMultiplier and effCredits for the operator
+    const operator = await this.operatorModel
+      .findById(operatorId, { effMultiplier: 1, effCredits: 1 })
+      .lean();
+
+    if (!operator) {
+      this.logger.warn(
+        `⚠️ (updateCumulativeEffForOperator) Operator ${operatorId} not found.`,
+      );
+      return;
+    }
+
+    const effMultiplier = operator.effMultiplier || 1;
+    const effCredits = operator.effCredits || 0;
+
+    // Step 3: Apply luck factor
+    const luckFactor =
+      GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
+      Math.random() *
+        (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
+          GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
+
+    const cumulativeEff =
+      totalDrillEff * effMultiplier * luckFactor + effCredits;
+
+    // Step 4: Update operator
+    await this.operatorModel.updateOne(
+      { _id: operatorId },
+      { $set: { cumulativeEff } },
+    );
+
+    this.logger.log(
+      `✅ (updateCumulativeEffForOperator) Updated cumulativeEff for operator ${operatorId} to ${cumulativeEff.toFixed(
+        2,
+      )}.`,
+    );
+
+    // Step 5: Update pool estimatedEff if this operator is in a pool
+    const poolOperator = await this.poolOperatorModel
+      .findOne({ operatorId })
+      .select('pool')
+      .lean();
+
+    if (poolOperator?.pool) {
+      await this.poolService.updatePoolEstimatedEff(poolOperator.pool);
+      this.logger.log(
+        `🔁 Updated estimatedEff for pool ${poolOperator.pool} (operator was part of it).`,
+      );
+    }
+
+    const endTime = performance.now();
+    this.logger.log(
+      `⏱ (updateCumulativeEffForOperator) Execution time: ${(endTime - startTime).toFixed(2)}ms.`,
     );
   }
 
@@ -333,35 +633,35 @@ export class OperatorService {
 
   /**
    * Finds an operator by their Telegram ID
-   * @param id - The operator's ID
-   * @returns The operator document or null if not found
+   * @param telegramId The Telegram user ID to find
+   * @param projection Optional fields to project
+   * @returns The operator or null if not found
    */
   async findByTelegramId(
-    id: Types.ObjectId,
+    telegramId: string,
     projection?: Record<string, number>,
   ): Promise<Operator | null> {
-    const operator = await this.operatorModel
-      .findOne(
-        {
-          'tgProfile.tgId': id,
-        },
-        projection,
-      )
-      .lean();
-
-    if (!operator) {
-      throw new NotFoundException('Operator not found');
+    try {
+      return await this.operatorModel
+        .findOne({ 'tgProfile.tgId': telegramId }, projection)
+        .lean();
+    } catch (err: any) {
+      this.logger.error(
+        `(findByTelegramId) Error finding operator by Telegram ID: ${err.message}`,
+        err.stack,
+      );
+      return null;
     }
-
-    return operator;
   }
 
   /**
-   * Finds an existing operator by Telegram ID or creates a new one if none exists.
+   * Finds an existing operator by Telegram ID or wallet address; creates a new one if none exists.
    * The operator will be associated with a random public pool and granted a basic drill.
    *
    * Also assigns the operator to a random public pool if still applicable.
    * @param authData - Authentication data (Telegram or Wallet)
+   * @param projection - Optional projection for fields to include
+   * @param referralCode - Optional referral code used during registration
    * @returns The operator's data (or null if not found)
    */
   async findOrCreateOperator(
@@ -370,27 +670,48 @@ export class OperatorService {
       username?: string;
       walletAddress?: string;
       walletChain?: string;
-      // Optional projection
     },
     projection?: Record<string, number>,
-  ): Promise<Operator | null> {
+    referralCode?: string,
+  ): Promise<{ operator: Operator; type: 'login' | 'register' } | null> {
     if (authData.walletAddress) {
       // This is a wallet-based authentication
       this.logger.log(
         `🔍 (findOrCreateOperator) Searching for operator with wallet address: ${authData.walletAddress}`,
       );
 
-      // Try to find by wallet profile first
+      // Check if the wallet is already linked to an operator in the OperatorWallets collection
+      const existingWallet = await this.operatorWalletModel.findOne({
+        address: authData.walletAddress,
+        chain: authData.walletChain,
+      });
+
+      if (existingWallet) {
+        // Found the wallet, now get the operator it belongs to
+        const operator = await this.operatorModel.findById(
+          existingWallet.operatorId,
+          projection,
+        );
+
+        if (operator) {
+          this.logger.log(
+            `✅ (findOrCreateOperator) Found existing operator by wallet in OperatorWallets: ${operator.usernameData.username}`,
+          );
+          return { operator, type: 'login' };
+        }
+      }
+
+      // If we didn't find in OperatorWallets, check the legacy walletProfile as a fallback
       const operator = await this.operatorModel.findOne(
-        { 'walletProfile.address': authData.walletAddress },
+        { 'walletProfile.address': authData.walletAddress.toLowerCase() },
         projection,
       );
 
       if (operator) {
         this.logger.log(
-          `✅ (findOrCreateOperator) Found existing operator by wallet: ${operator.username}`,
+          `✅ (findOrCreateOperator) Found existing operator by walletProfile: ${operator.usernameData.username}`,
         );
-        return operator;
+        return { operator, type: 'login' };
       }
     } else {
       // This is a Telegram-based authentication
@@ -408,9 +729,9 @@ export class OperatorService {
 
       if (operator) {
         this.logger.log(
-          `✅ (findOrCreateOperator) Found existing operator: ${operator.username}`,
+          `✅ (findOrCreateOperator) Found existing operator: ${operator.usernameData.username}`,
         );
-        return operator;
+        return { operator, type: 'login' };
       }
     }
 
@@ -424,19 +745,36 @@ export class OperatorService {
     let username = baseUsername;
     let counter = 1;
 
-    while (await this.operatorModel.exists({ username })) {
+    while (
+      await this.operatorModel.exists({ 'usernameData.username': username })
+    ) {
       username = `${baseUsername}_${counter}`;
       counter++;
     }
 
-    const operatorData: any = {
-      username,
+    const operatorData: Partial<Operator> = {
+      usernameData: {
+        username,
+        lastRenameTimestamp: null,
+      },
       assetEquity: 0,
-      cumulativeEff: GAME_CONSTANTS.DRILLS.BASIC_DRILL_STARTING_ACTUAL_EFF,
+      cumulativeEff: 0,
       effMultiplier: 1,
+      effCredits: 0,
       maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
+      maxActiveDrillsAllowed: 5,
       totalEarnedHASH: 0,
+      referralData: {
+        referralCode: null,
+        referredBy: null,
+        totalReferrals: 0,
+        referralRewards: {
+          effCredits: 0,
+          fuelBonus: 0,
+          hashBonus: 0,
+        },
+      },
     };
 
     // Add the appropriate profile based on authentication method
@@ -455,6 +793,18 @@ export class OperatorService {
     }
 
     const operator = await this.operatorModel.create(operatorData);
+
+    // Process referral code if provided
+    if (referralCode) {
+      this.logger.log(
+        `Processing referral code for new operator: ${referralCode}`,
+      );
+      await this.referralService
+        .processReferral(referralCode, operator._id)
+        .catch((err) => {
+          this.logger.warn(`Error processing referral: ${err.message}`);
+        });
+    }
 
     // Pick a random pool to join
     const poolId = this.poolService.fetchRandomPublicPoolId();
@@ -482,7 +832,7 @@ export class OperatorService {
         DrillConfig.BASIC,
         false,
         1,
-        GAME_CONSTANTS.DRILLS.BASIC_DRILL_STARTING_ACTUAL_EFF,
+        0,
       )
       .catch((err: any) => {
         this.logger.warn(
@@ -490,10 +840,15 @@ export class OperatorService {
         );
       });
 
+    // Generate a referral code for the new operator
+    this.referralService.getOperatorReferralCode(operator._id).catch((err) => {
+      this.logger.warn(`Error generating referral code: ${err.message}`);
+    });
+
     this.logger.log(
       `🆕(findOrCreateOperator) Created new operator: ${username}`,
     );
-    return operator;
+    return { operator, type: 'register' };
   }
 
   /**
@@ -702,8 +1057,10 @@ export class OperatorService {
 
     // Execute operations in parallel
     await Promise.all([
-      // Batch cache fuel values in Redis
-      this.batchCacheFuelValues(operatorFuelData),
+      // Cache fuel values in Redis (handle each operator individually)
+      ...operatorFuelData.map((data) =>
+        this.cacheFuelValues(data.operatorId, data.currentFuel, data.maxFuel),
+      ),
 
       // Execute bulk write if there are operations
       bulkWriteOperations.length > 0
@@ -774,33 +1131,43 @@ export class OperatorService {
       // Calculate new fuel value (capped at max fuel)
       const newFuel = Math.min(maxFuel, currentFuel + fuelGained);
 
-      // Add to fuel data for batch caching
-      operatorFuelData.push({
-        operatorId: operator._id,
-        currentFuel: newFuel,
-        maxFuel,
-      });
+      // Only include operators whose fuel actually changed
+      if (newFuel > currentFuel) {
+        // Add to fuel data for batch caching
+        operatorFuelData.push({
+          operatorId: operator._id,
+          currentFuel: newFuel,
+          maxFuel,
+        });
 
-      // Add to bulk write operations
-      bulkWriteOperations.push({
-        updateOne: {
-          filter: { _id: operator._id },
-          update: { $set: { currentFuel: newFuel } },
-        },
-      });
+        // Add to bulk write operations
+        bulkWriteOperations.push({
+          updateOne: {
+            filter: { _id: operator._id },
+            update: { $set: { currentFuel: newFuel } },
+          },
+        });
 
-      // Add to notification list - all operators get notified for real-time updates
-      updatedOperators.push({
-        operatorId: operator._id,
-        currentFuel: newFuel,
-        maxFuel,
-      });
+        // Add to notification list - all operators get notified for real-time updates
+        updatedOperators.push({
+          operatorId: operator._id,
+          currentFuel: newFuel,
+          maxFuel,
+        });
+      }
+    }
+
+    // Skip if there are no operators to update
+    if (updatedOperators.length === 0) {
+      return [];
     }
 
     // Execute operations in parallel
     await Promise.all([
-      // Batch cache fuel values in Redis
-      this.batchCacheFuelValues(operatorFuelData),
+      // Cache fuel values in Redis (handle each operator individually)
+      ...operatorFuelData.map((data) =>
+        this.cacheFuelValues(data.operatorId, data.currentFuel, data.maxFuel),
+      ),
 
       // Execute bulk write if there are operations
       bulkWriteOperations.length > 0
@@ -908,6 +1275,241 @@ export class OperatorService {
       };
     } catch (error) {
       this.logger.error(`(getOperatorFuelStatus) Error: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Generates or retrieves a unique referral code for an operator
+   * @param operatorId The operator's ID
+   * @returns The referral code
+   */
+  async getOperatorReferralCode(
+    operatorId: Types.ObjectId,
+  ): Promise<{ referralCode: string; isNew: boolean }> {
+    try {
+      // Check if operator already has a referral code
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { 'referralData.referralCode': 1 })
+        .lean();
+
+      if (!operator) {
+        throw new NotFoundException(
+          '(getOperatorReferralCode) Operator not found',
+        );
+      }
+
+      // If operator already has a referral code, return it
+      if (operator.referralData?.referralCode) {
+        return {
+          referralCode: operator.referralData.referralCode,
+          isNew: false,
+        };
+      }
+
+      // Generate a new referral code
+      const referralCode = this.generateReferralCode(operatorId.toString());
+
+      // Save the referral code to the operator
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        {
+          $set: { 'referralData.referralCode': referralCode },
+        },
+      );
+
+      return { referralCode, isNew: true };
+    } catch (error) {
+      this.logger.error(
+        `(getOperatorReferralCode) Error: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        `Error generating referral code: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Generate a unique referral code for a user
+   * @param userId - The operator ID to encode
+   * @returns A unique referral code
+   */
+  private generateReferralCode(userId: string): string {
+    // Simple encoding to generate a unique code based on user ID and timestamp
+    const timestamp = Date.now().toString().slice(-6);
+    const buffer = Buffer.from(userId + timestamp);
+    return buffer
+      .toString('base64')
+      .replace(/[/+=]/g, '')
+      .substring(0, 8)
+      .toUpperCase();
+  }
+
+  /**
+   * Process a referral when a new user signs up using a referral code
+   * @param referralCode The referral code used
+   * @param newOperatorId The ID of the newly registered operator
+   * @returns Success status and message
+   */
+  async processReferral(
+    referralCode: string,
+    newOperatorId: Types.ObjectId,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    referrerId?: Types.ObjectId;
+  }> {
+    try {
+      // Find the referring operator
+      const referrer = await this.operatorModel.findOne(
+        { 'referralData.referralCode': referralCode },
+        { _id: 1 },
+      );
+
+      if (!referrer) {
+        return { success: false, message: 'Invalid referral code' };
+      }
+
+      const referrerId = referrer._id;
+
+      // Make sure the new operator isn't already referred and isn't referring themselves
+      if (newOperatorId.equals(referrerId)) {
+        return { success: false, message: 'Cannot refer yourself' };
+      }
+
+      const newOperator = await this.operatorModel.findById(newOperatorId, {
+        'referralData.referredBy': 1,
+      });
+
+      if (!newOperator) {
+        return { success: false, message: 'New operator not found' };
+      }
+
+      if (newOperator.referralData?.referredBy) {
+        return { success: false, message: 'Operator already has a referrer' };
+      }
+
+      // Update the referrer's stats (increment total referrals)
+      await this.operatorModel.updateOne(
+        { _id: referrerId },
+        { $inc: { 'referralData.totalReferrals': 1 } },
+      );
+
+      // Update the new operator with the referrer ID
+      await this.operatorModel.updateOne(
+        { _id: newOperatorId },
+        { $set: { 'referralData.referredBy': referrerId } },
+      );
+
+      // Apply referral rewards here (customize based on your needs)
+      await this.applyReferralRewards(referrerId, newOperatorId);
+
+      return {
+        success: true,
+        message: 'Referral processed successfully',
+        referrerId,
+      };
+    } catch (error) {
+      this.logger.error(
+        `(processReferral) Error: ${error.message}`,
+        error.stack,
+      );
+      return {
+        success: false,
+        message: `Error processing referral: ${error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Apply rewards to both referrer and referred user
+   * @param referrerId ID of the referring operator
+   * @param referredId ID of the referred operator
+   */
+  private async applyReferralRewards(
+    referrerId: Types.ObjectId,
+    referredId: Types.ObjectId,
+  ): Promise<void> {
+    try {
+      // Example rewards (customize based on your game mechanics)
+      const referrerRewards = {
+        effCredits: 25,
+        fuelBonus: 10,
+        hashBonus: 0,
+      };
+
+      const referredRewards = {
+        effCredits: 10,
+        fuelBonus: 5,
+        hashBonus: 0,
+      };
+
+      // Apply referrer rewards
+      await this.operatorModel.updateOne(
+        { _id: referrerId },
+        {
+          $inc: {
+            'referralData.referralRewards.effCredits':
+              referrerRewards.effCredits,
+            'referralData.referralRewards.fuelBonus': referrerRewards.fuelBonus,
+            'referralData.referralRewards.hashBonus': referrerRewards.hashBonus,
+            effCredits: referrerRewards.effCredits,
+            maxFuel: referrerRewards.fuelBonus,
+            currentFuel: referrerRewards.fuelBonus,
+          },
+        },
+      );
+
+      // Apply referred user rewards
+      await this.operatorModel.updateOne(
+        { _id: referredId },
+        {
+          $inc: {
+            effCredits: referredRewards.effCredits,
+            maxFuel: referredRewards.fuelBonus,
+            currentFuel: referredRewards.fuelBonus,
+          },
+        },
+      );
+
+      // Clear any cached fuel values since we modified them
+      await this.redisService.del(this.getOperatorFuelCacheKey(referrerId));
+      await this.redisService.del(this.getOperatorFuelCacheKey(referredId));
+
+      this.logger.log(
+        `Applied referral rewards: Referrer ${referrerId} (+${referrerRewards.effCredits} EFF, +${referrerRewards.fuelBonus} fuel), ` +
+          `Referred ${referredId} (+${referredRewards.effCredits} EFF, +${referredRewards.fuelBonus} fuel)`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `(applyReferralRewards) Error: ${error.message}`,
+        error.stack,
+      );
+      // Don't throw - we don't want to break the referral process if rewards fail
+    }
+  }
+
+  /**
+   * Get user ID from a referral code by finding the operator with that code
+   * @param referralCode The referral code to look up
+   * @returns The operator ID that owns the referral code, or null if not found
+   */
+  async getUserIdFromReferralCode(
+    referralCode: string,
+  ): Promise<Types.ObjectId | null> {
+    try {
+      const operator = await this.operatorModel.findOne(
+        { 'referralData.referralCode': referralCode },
+        { _id: 1 },
+      );
+
+      return operator ? operator._id : null;
+    } catch (error) {
+      this.logger.error(
+        `(getUserIdFromReferralCode) Error: ${error.message}`,
+        error.stack,
+      );
       return null;
     }
   }

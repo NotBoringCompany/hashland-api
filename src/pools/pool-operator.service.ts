@@ -5,6 +5,8 @@ import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolService } from './pool.service';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 @Injectable()
 export class PoolOperatorService {
@@ -13,6 +15,7 @@ export class PoolOperatorService {
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private readonly poolModel: Model<Pool>,
     private readonly poolService: PoolService,
+    private readonly mixpanelService: MixpanelService,
   ) {}
 
   /**
@@ -25,6 +28,14 @@ export class PoolOperatorService {
     poolId: Types.ObjectId,
   ): Promise<ApiResponse<null>> {
     try {
+      // Validate inputs to prevent null values
+      if (!operatorId || !poolId) {
+        return new ApiResponse<null>(
+          400,
+          `(createPoolOperator) Invalid operatorId or poolId.`,
+        );
+      }
+
       // ✅ Step 1: Fetch pool details + check if operator is already in a pool
       const [operatorInPool, pool] = await Promise.all([
         this.poolOperatorModel.exists({ operator: operatorId }),
@@ -56,18 +67,21 @@ export class PoolOperatorService {
       // TO DO IN THE FUTURE:
       // Ensure that the pool prerequisites are met before joining.
 
-      // ✅ Step 3: Insert operator into the pool **atomically** (prevent race conditions)
-      const result = await this.poolOperatorModel.updateOne(
-        { operator: operatorId }, // Ensure operatorId is unique
-        { $setOnInsert: { operator: operatorId, pool: poolId } }, // Insert only if it doesn't exist
-        { upsert: true }, // Insert if not exists
-      );
-
-      if (result.upsertedCount === 0) {
-        return new ApiResponse<null>(
-          400,
-          `(createPoolOperator) Operator already joined this pool.`,
-        );
+      // ✅ Step 3: Insert operator into the pool using direct creation to avoid field name issues
+      try {
+        await this.poolOperatorModel.create({
+          operator: operatorId,
+          pool: poolId,
+        });
+      } catch (createError) {
+        if (createError.code === 11000) {
+          // Duplicate key error
+          return new ApiResponse<null>(
+            400,
+            `(createPoolOperator) Operator already joined this pool.`,
+          );
+        }
+        throw createError;
       }
 
       // ✅ Step 4: Update pool's estimated efficiency
@@ -79,6 +93,11 @@ export class PoolOperatorService {
           `Error updating pool efficiency after join: ${effError.message}`,
         );
       }
+
+      this.mixpanelService.track(EVENT_CONSTANTS.POOL_JOIN, {
+        distinct_id: operatorId,
+        pool,
+      });
 
       return new ApiResponse<null>(
         200,
@@ -132,6 +151,11 @@ export class PoolOperatorService {
           `Error updating pool efficiency after leave: ${effError.message}`,
         );
       }
+
+      this.mixpanelService.track(EVENT_CONSTANTS.POOL_LEAVE, {
+        distinct_id: operatorId,
+        poolId,
+      });
 
       return new ApiResponse<null>(
         200,

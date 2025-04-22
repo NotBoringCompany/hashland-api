@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
+import { Operator } from 'src/operators/schemas/operator.schema';
 
 /**
  * `PoolOperator` keeps track of an operator's pool, in case they've joined one.
@@ -38,7 +39,7 @@ export class PoolOperator extends Document {
     unique: true,
     index: true,
   })
-  operator: Types.ObjectId;
+  operator: Types.ObjectId | Operator;
 
   /**
    * The database ID of the pool the operator belongs to.

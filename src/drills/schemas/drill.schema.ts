@@ -74,15 +74,26 @@ export class Drill extends Document {
   extractorAllowed: boolean;
 
   /**
-   * The level of the drill.
+   * If this drill is active.
+   *
+   * NOTE: Only active drills can receive $HASH rewards (extractor/active operator rewards).
    */
   @ApiProperty({
-    description: 'The level of the drill',
-    example: 1,
-    minimum: 1,
+    description: 'Whether this drill is active',
+    example: true,
   })
-  @Prop({ type: Number, required: true, default: 1 })
-  level: number;
+  @Prop({ type: Boolean, required: true, default: false })
+  active: boolean;
+
+  /**
+   * The last time `active` was updated/toggled.
+   */
+  @ApiProperty({
+    description: 'The last time `active` was updated/toggled',
+    example: '2021-01-01T00:00:00.000Z',
+  })
+  @Prop({ type: Date, required: true, default: null })
+  lastActiveStateToggle: Date | null;
 
   /**
    * The current EFF rating of the drill.

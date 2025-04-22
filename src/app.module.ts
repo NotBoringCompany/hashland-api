@@ -17,6 +17,9 @@ import { TonModule } from './ton/ton.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { AlchemyModule } from './alchemy/alchemy.module';
 import { TaskModule } from './tasks/task.module';
+import { AdminModule } from './admin/admin.module';
+import { MixpanelModule } from './mixpanel/mixpanel.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
@@ -39,6 +42,9 @@ import { TaskModule } from './tasks/task.module';
     LeaderboardModule,
     AlchemyModule,
     TaskModule,
+    AdminModule,
+    MixpanelModule,
+    TelegramModule,
   ],
   controllers: [AppController],
   providers: [AppService],

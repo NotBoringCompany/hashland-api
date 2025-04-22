@@ -13,7 +13,7 @@ The shop offers various items with different effects:
 - **Max Fuel Increase**: Items that increase an operator's maximum fuel capacity
 
 Each item has specific effects defined by the `ShopItemEffects` schema, which may include:
-- `drillData`: Information about a drill (version, config, baseEff, maxLevel)
+- `drillData`: Information about a drill (version, config, baseEff)
 - `maxFuelIncrease`: Value to increase max fuel capacity
 - `replenishFuelRatio`: Ratio of max fuel to replenish (0-1)
 

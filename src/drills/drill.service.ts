@@ -1,10 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Drill } from './schemas/drill.schema';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { ApiResponse } from 'src/common/dto/response.dto';
 
 @Injectable()
 export class DrillService {
@@ -15,6 +22,127 @@ export class DrillService {
     private drillModel: Model<Drill>,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
   ) {}
+
+  /**
+   * Activates or deactivates a drill for an operator.
+   *
+   * If `state` is true, the drill will be activated and vice versa.
+   */
+  async toggleDrillActiveState(
+    operatorId: Types.ObjectId,
+    drillId: Types.ObjectId,
+    state: boolean,
+  ): Promise<ApiResponse<null>> {
+    try {
+      // Fetch operator and count active drills in parallel
+      const [operator, activeDrillCount] = await Promise.all([
+        this.operatorModel
+          .findById(operatorId, {
+            maxActiveDrillsAllowed: 1,
+            effCredits: 1,
+            effMultiplier: 1,
+          })
+          .lean(),
+        this.drillModel.countDocuments({ operatorId, active: true }),
+      ]);
+
+      if (!operator) {
+        throw new NotFoundException(
+          `(toggleDrillActiveState) Operator ${operatorId} not found.`,
+        );
+      }
+
+      // Prevent activating if max active drill count is reached
+      if (state && activeDrillCount >= operator.maxActiveDrillsAllowed) {
+        throw new BadRequestException(
+          `(toggleDrillActiveState) Operator has reached the max active drill limit.`,
+        );
+      }
+
+      // Try to update the drill, skipping BASIC version
+      // Also includes the requirement that the drill has not been toggled in the last `ACTIVE_STATE_TOGGLE_COOLDOWN` seconds.
+      const updatedDrill = await this.drillModel.findOneAndUpdate(
+        {
+          _id: drillId,
+          operatorId,
+          version: { $ne: DrillVersion.BASIC },
+          $or: [
+            { lastActiveStateToggle: null },
+            {
+              lastActiveStateToggle: {
+                $lt: new Date(
+                  Date.now() -
+                    GAME_CONSTANTS.DRILLS.ACTIVE_STATE_TOGGLE_COOLDOWN * 1000,
+                ),
+              },
+            },
+          ],
+        },
+        {
+          $set: {
+            active: state,
+            lastActiveStateToggle: new Date(),
+          },
+        },
+        { new: true },
+      );
+
+      if (!updatedDrill) {
+        throw new BadRequestException(
+          `(toggleDrillActiveState) Either one of these errors occured: Drill not found, does not belong to operator, is a Basic Drill (non-toggleable) or has already been toggled in the last ${GAME_CONSTANTS.DRILLS.ACTIVE_STATE_TOGGLE_COOLDOWN / 60 / 60} hours.`,
+        );
+      }
+
+      // Recalculate cumulativeEff for operator
+      const drillAgg = await this.drillModel.aggregate([
+        { $match: { operatorId, active: true } },
+        {
+          $group: {
+            _id: '$operatorId',
+            totalDrillEff: { $sum: '$actualEff' },
+          },
+        },
+      ]);
+
+      const totalDrillEff = drillAgg[0]?.totalDrillEff || 0;
+
+      const effMultiplier = operator.effMultiplier || 1;
+      const effCredits = operator.effCredits || 0;
+
+      // Get a new luck factor for the operator
+      const luckFactor =
+        GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
+        Math.random() *
+          (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
+            GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
+
+      this.logger.error(
+        `(toggleDrillActiveState) Luck factor: ${luckFactor}, effMultiplier: ${effMultiplier}, effCredits: ${effCredits}, totalDrillEff: ${totalDrillEff}`,
+      );
+
+      const cumulativeEff =
+        totalDrillEff * effMultiplier * luckFactor + effCredits;
+
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        { cumulativeEff },
+      );
+
+      this.logger.log(
+        `✅ (toggleDrillActiveState) Drill ${drillId} ${state ? 'activated' : 'deactivated'} for operator ${operatorId}. New cumulative EFF: ${cumulativeEff}.`,
+      );
+
+      return new ApiResponse(200, 'Drill state updated successfully', null);
+    } catch (err: any) {
+      this.logger.error(
+        `(toggleDrillActiveState) Error: ${err.message}`,
+        err.stack,
+      );
+      throw new InternalServerErrorException(
+        `(toggleDrillActiveState) Error: ${err.message}`,
+      );
+    }
+  }
 
   /**
    * Calculates the total weighted cumulative EFF from all operators
@@ -84,16 +212,44 @@ export class DrillService {
     actualEff: number,
   ): Promise<Types.ObjectId> {
     try {
-      const drill = await this.drillModel.create({
+      const drill: Partial<Drill> = {
         operatorId,
         version,
         config,
         extractorAllowed,
-        level,
+        // Basic drills will always be active since they are given at the beginning
+        // They CANNOT be deactivated.
+        active: version === DrillVersion.BASIC ? true : false,
         actualEff,
+      };
+
+      // Check how many drills the operator already has that are active.
+      // If the drill's `active` property is set to false and the operator's active drill count is less than the allowed amount for the operator,
+      // then set the drill's `active` property to true.
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { maxActiveDrillsAllowed: 1 })
+        .lean();
+      if (!operator) {
+        throw new Error(
+          `(createDrill) Operator with ID ${operatorId} not found.`,
+        );
+      }
+
+      const activeDrillCount = await this.drillModel.countDocuments({
+        operatorId,
+        active: true,
       });
 
-      return drill._id;
+      if (
+        drill.active === false &&
+        activeDrillCount < operator.maxActiveDrillsAllowed
+      ) {
+        drill.active = true;
+      }
+
+      const insertedDrill = await this.drillModel.create(drill);
+
+      return insertedDrill._id;
     } catch (err: any) {
       throw new Error(`(createDrill) Error creating drill: ${err.message}`);
     }
@@ -113,7 +269,8 @@ export class DrillService {
 
   /**
    * Selects an extractor using weighted probability.
-   * Uses a dice roll between 0 and the cumulative sum of all (actualEff × effMultiplier × Luck Factor).
+   * Uses a dice roll between 0 and the cumulative sum of all (actualEff × Luck Factor).
+   * No operator-based effMultiplier or effCredits are used.
    */
   async selectExtractor(): Promise<{
     drillId: Types.ObjectId;
@@ -123,34 +280,21 @@ export class DrillService {
   } | null> {
     const selectionStartTime = performance.now();
 
-    // ✅ Step 1: Aggregate Eligible Operators & Their Drills in ONE Query
-    const eligibleOperators = await this.drillModel.aggregate([
-      { $match: { extractorAllowed: true } }, // ✅ Filter drills that are allowed
-      {
-        $lookup: {
-          from: 'operators', // ✅ Join with the Operator collection
-          localField: 'operatorId',
-          foreignField: '_id',
-          as: 'operatorData',
-        },
-      },
-      { $unwind: '$operatorData' }, // ✅ Unwind operatorData array
-      {
-        $group: {
-          _id: '$operatorId',
-          effMultiplier: { $first: '$operatorData.effMultiplier' }, // ✅ Get operator's effMultiplier
-          drills: { $push: { _id: '$_id', actualEff: '$actualEff' } }, // ✅ Store drill details
-        },
-      },
-    ]);
+    // ✅ Step 1: Fetch all eligible drills directly (must have `extractorAllowed` set to true and be active)
+    const eligibleDrills = await this.drillModel
+      .find(
+        { extractorAllowed: true, active: true },
+        { _id: 1, actualEff: 1, operatorId: 1 },
+      )
+      .lean();
 
-    if (eligibleOperators.length === 0) {
-      this.logger.warn(`⚠️ (selectExtractor) No eligible operators found.`);
+    if (eligibleDrills.length === 0) {
+      this.logger.warn(`⚠️ (selectExtractor) No eligible drills found.`);
       return null;
     }
 
-    // ✅ Step 2: Apply Luck Factor & Compute Weighted EFF
-    const operatorsWithLuck = eligibleOperators.map((operator) => {
+    // ✅ Step 2: Apply luck factor and compute weighted EFF for each drill
+    const drillsWithWeight = eligibleDrills.map((drill) => {
       const luckFactor =
         GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
         Math.random() *
@@ -158,19 +302,16 @@ export class DrillService {
             GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
 
       return {
-        operatorId: operator._id,
-        weightedEff: operator.drills.reduce(
-          (sum, drill) =>
-            sum + drill.actualEff * operator.effMultiplier * luckFactor,
-          0,
-        ),
-        drills: operator.drills,
+        drillId: drill._id,
+        drillOperatorId: drill.operatorId,
+        eff: drill.actualEff,
+        weightedEff: drill.actualEff * luckFactor,
       };
     });
 
-    // ✅ Step 3: Compute Total Weighted Eff Sum & Dice Roll
-    const totalWeightedEff = operatorsWithLuck.reduce(
-      (sum, op) => sum + op.weightedEff,
+    // ✅ Step 3: Calculate total weighted EFF and roll the dice
+    const totalWeightedEff = drillsWithWeight.reduce(
+      (sum, drill) => sum + drill.weightedEff,
       0,
     );
 
@@ -180,63 +321,31 @@ export class DrillService {
     }
 
     const diceRoll = Math.random() * totalWeightedEff;
-    let cumulativeWeightedEff = 0;
-    let selectedOperator: { operatorId: Types.ObjectId; drills: any[] } | null =
-      null;
+    let cumulativeEff = 0;
 
-    for (const operator of operatorsWithLuck) {
-      cumulativeWeightedEff += operator.weightedEff;
-      if (diceRoll <= cumulativeWeightedEff) {
-        selectedOperator = operator;
-        break;
-      }
-    }
+    for (const drill of drillsWithWeight) {
+      cumulativeEff += drill.weightedEff;
+      if (diceRoll <= cumulativeEff) {
+        const selectionEndTime = performance.now();
 
-    if (!selectedOperator) {
-      this.logger.warn(
-        `⚠️ (selectExtractor) Unexpected error in operator selection.`,
-      );
-      return null;
-    }
-
-    // ✅ Step 4: Select Drill Using Weighted `actualEff`
-    const selectedDrills = selectedOperator.drills;
-
-    if (selectedDrills.length === 0) {
-      this.logger.warn(
-        `⚠️ (selectExtractor) No valid drills found for selected operator.`,
-      );
-      return null;
-    }
-
-    const totalDrillEff = selectedDrills.reduce(
-      (sum, drill) => sum + drill.actualEff,
-      0,
-    );
-    const drillDiceRoll = Math.random() * totalDrillEff;
-    let cumulativeDrillEff = 0;
-
-    for (const drill of selectedDrills) {
-      cumulativeDrillEff += drill.actualEff;
-      if (drillDiceRoll <= cumulativeDrillEff) {
         this.logger.log(
-          `✅ (selectExtractor) Selected extractor: Drill ${drill._id.toString()} with ${drill.actualEff.toFixed(2)} EFF. Cumulative EFF this cycle: ${totalWeightedEff.toFixed(2)}.`,
+          `✅ (selectExtractor) Selected extractor: Drill ${drill.drillId.toString()} with ${drill.eff.toFixed(2)} EFF. Cumulative EFF this cycle: ${totalWeightedEff.toFixed(2)}.`,
         );
 
-        const selectionEndTime = performance.now();
         this.logger.log(
           `⏳ (selectExtractor) Extractor selection took ${(selectionEndTime - selectionStartTime).toFixed(2)}ms.`,
         );
 
         return {
-          drillId: drill._id,
-          drillOperatorId: selectedOperator.operatorId,
-          eff: drill.actualEff,
+          drillId: drill.drillId,
+          drillOperatorId: drill.drillOperatorId,
+          eff: drill.eff,
           totalWeightedEff,
         };
       }
     }
 
+    // Fallback return, should not happen unless there's floating-point edge case
     return {
       drillId: null,
       drillOperatorId: null,

@@ -23,14 +23,29 @@ export class Operator extends Document {
   _id: Types.ObjectId;
 
   /**
-   * A unique username accompanying the operator.
+   * Username and last rename timestamp data for the operator.
    */
   @ApiProperty({
-    description: 'A unique username for the operator',
-    example: 'hashland_operator',
+    description: 'Username-related data for the operator',
+    example: {
+      username: 'hashland_operator',
+      lastRenameTimestamp: '1234',
+    },
   })
-  @Prop({ required: true, unique: true, index: true })
-  username: string;
+  @Prop({
+    type: {
+      username: { type: String, required: true, unique: true, index: true },
+      lastRenameTimestamp: { type: Date, required: false, default: null },
+    },
+    required: false,
+    default: null,
+  })
+  usernameData?: {
+    /** A unique username accompanying the operator. */
+    username: string;
+    /** When the username was last renamed */
+    lastRenameTimestamp: Date | null;
+  } | null;
 
   /**
    * The operator's latest asset equity value (in USD).
@@ -70,6 +85,19 @@ export class Operator extends Document {
   effMultiplier: number;
 
   /**
+   * A bonus 'credit' towards the operator's final EFF calculation.
+   *
+   * This may be earned from events, giveaways and so on.
+   */
+  @ApiProperty({
+    description:
+      "A bonus 'credit' towards the operator's final EFF calculation",
+    example: 100,
+  })
+  @Prop({ required: true, default: 0 })
+  effCredits: number;
+
+  /**
    * The maximum fuel capacity of the operator's drills.
    */
   @ApiProperty({
@@ -94,6 +122,19 @@ export class Operator extends Document {
     default: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
   })
   currentFuel: number;
+
+  /**
+   * The max number of active drills (drills that can extract $HASH) allowed.
+   */
+  @ApiProperty({
+    description: 'The max number of active drills allowed',
+    example: 5,
+  })
+  @Prop({
+    required: true,
+    default: GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
+  })
+  maxActiveDrillsAllowed: number;
 
   /**
    * The total $HASH earned by the operator across all sessions so far.
@@ -152,6 +193,56 @@ export class Operator extends Document {
     address: string;
     chain: string;
   } | null;
+
+  /**
+   * Referral details for the operator
+   */
+  @ApiProperty({
+    description: "The operator's referral information",
+    required: false,
+    example: {
+      referralCode: 'abc123xyz',
+      referredBy: '507f1f77bcf86cd799439011',
+      totalReferrals: 5,
+      referralRewards: {
+        effCredits: 250,
+        fuelBonus: 50,
+      },
+    },
+  })
+  @Prop({
+    type: {
+      referralCode: { type: String, required: false, index: true },
+      referredBy: { type: Types.ObjectId, ref: 'Operators', required: false },
+      totalReferrals: { type: Number, default: 0 },
+      referralRewards: {
+        effCredits: { type: Number, default: 0 },
+        fuelBonus: { type: Number, default: 0 },
+        hashBonus: { type: Number, default: 0 },
+      },
+    },
+    required: false,
+    default: {
+      referralCode: null,
+      referredBy: null,
+      totalReferrals: 0,
+      referralRewards: {
+        effCredits: 0,
+        fuelBonus: 0,
+        hashBonus: 0,
+      },
+    },
+  })
+  referralData?: {
+    referralCode: string | null;
+    referredBy: Types.ObjectId | null;
+    totalReferrals: number;
+    referralRewards: {
+      effCredits: number;
+      fuelBonus: number;
+      hashBonus: number;
+    };
+  };
 
   /**
    * The timestamp when the operator was created

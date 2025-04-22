@@ -20,7 +20,9 @@ import {
   OperatorWallet,
   OperatorWalletSchema,
 } from 'src/operators/schemas/operator-wallet.schema';
-
+import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
+import { AdminGuard } from './admin/admin.guard';
+import { ReferralModule } from 'src/referral/referral.module';
 @Module({
   imports: [
     ConfigModule,
@@ -29,6 +31,8 @@ import {
     PoolOperatorModule,
     PoolModule,
     DrillModule,
+    MixpanelModule,
+    ReferralModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -55,7 +59,14 @@ import {
     JwtStrategy,
     OperatorService,
     WalletAuthService,
+    AdminGuard,
   ],
-  exports: [TelegramAuthService, WalletAuthService, JwtStrategy, JwtModule],
+  exports: [
+    TelegramAuthService,
+    WalletAuthService,
+    JwtStrategy,
+    JwtModule,
+    AdminGuard,
+  ],
 })
 export class AuthModule {}

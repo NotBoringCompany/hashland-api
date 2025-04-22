@@ -16,6 +16,10 @@ jobs:
         run: |
           docker rm -f hashland-api || true
 
+      - name: Remove perf.log for Winston (fix permission issue)
+        run: |
+          echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rm -f /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/logs/perf.log
+
       - name: Remove artifacts
         run: |
           echo "${{ secrets.SUDO_PASSWORD }}" | sudo -S rm -rf /home/githubrunner/actions-runner/_work/hashland-api/hashland-api/dist
@@ -23,6 +27,9 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Ensure logs folder exists # For Winston logs
+        run: mkdir -p ./logs
 
       - name: Create .env file
         run: |
@@ -44,7 +51,11 @@ jobs:
           echo "NODE_ENV=development" >> .env
           echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
           echo "EVM_RECEIVER_ADDRESS=${{ secrets.EVM_RECEIVER_ADDRESS }}" >> .env
-      
+          echo "MIXPANEL_PROJECT_TOKEN=${{ secrets.MIXPANEL_PROJECT_TOKEN }}" >> .env
+          echo "ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}" >> .env
+          echo "HASHLAND_URL=${{ secrets.HASHLAND_URL }}" >> .env
+  
+      # /logs folder is mounted in the container
       - name: Build and deploy with Docker
         run: |
           docker build -t hashland-api:dev .
@@ -52,5 +63,6 @@ jobs:
             --name hashland-api \
             -p 8080:8080 \
             --env-file .env \
+            -v ${{ github.workspace }}/logs:/app/logs \
             --restart unless-stopped \
             hashland-api:dev 
