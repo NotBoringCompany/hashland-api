@@ -478,19 +478,8 @@ export class DrillingCycleService {
     const endTime = performance.now();
     const totalExecutionTime = endTime - startTime;
 
-    // Log a performance summary
     this.logger.log(
-      `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${totalExecutionTime.toFixed(2)}ms.
-      Performance breakdown:
-      - Check cycle existence: ${(cycleExistsTime - startTime).toFixed(2)}ms
-      - Fetch issued HASH: ${(fetchHashTime - cycleExistsTime).toFixed(2)}ms
-      - Select extractor: ${(selectExtractorTime - fetchHashTime).toFixed(2)}ms
-      - Distribute rewards: ${(distributeRewardsTime - selectExtractorTime).toFixed(2)}ms
-      - Process fuel: ${(processFuelTime - distributeRewardsTime).toFixed(2)}ms
-      - Update cycle and rewards: ${(updateCycleTime - processFuelTime).toFixed(2)}ms
-      - Recalibrate counters: ${(recalibrateTime - updateCycleTime).toFixed(2)}ms
-      - Complete sessions: ${(completeSessionsTime - recalibrateTime).toFixed(2)}ms
-      - WebSocket notifications: ${(notificationsTime - completeSessionsTime).toFixed(2)}ms`,
+      `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${totalExecutionTime.toFixed(2)}ms.`,
     );
   }
 
