@@ -171,7 +171,7 @@ export class DrillingGateway
   /**
    * Saves active drilling operators to Redis.
    */
-  private async saveActiveDrillingOperatorsToRedis() {
+  async saveActiveDrillingOperatorsToRedis() {
     try {
       const activeDrillingOperatorsArray = Array.from(
         this.activeDrillingOperators.entries(),
@@ -430,7 +430,7 @@ export class DrillingGateway
    * Emits the updated online operator count to all connected clients.
    * - Helps frontend display real-time active user count.
    */
-  private broadcastOnlineOperators() {
+  broadcastOnlineOperators() {
     this.server.emit('online-operator-update', {
       onlineOperatorCount: this.getOnlineOperatorCount(),
       activeDrillingOperatorCount: this.getActiveDrillingOperatorCount(),
@@ -765,65 +765,126 @@ export class DrillingGateway
     }
   }
 
-  /**
-   * Broadcasts stop drilling event to multiple operators due to fuel depletion.
-   *
-   * @param operatorIds Array of operator IDs to stop drilling
-   * @param payload The payload to emit to clients
-   */
+  // /**
+  //  * Broadcasts stop drilling event to multiple operators due to fuel depletion.
+  //  *
+  //  * @param operatorIds Array of operator IDs to stop drilling
+  //  * @param payload The payload to emit to clients
+  //  */
+  // async broadcastStopDrilling(
+  //   operatorIds: Types.ObjectId[],
+  //   payload: BroadcastStopDrillingPayload,
+  // ) {
+  //   // Get current cycle number
+  //   const cycleNumberStr = await this.redisService.get(
+  //     'drilling-cycle:current',
+  //   );
+  //   const cycleNumber = cycleNumberStr ? parseInt(cycleNumberStr, 10) : 0;
+
+  //   for (const operatorId of operatorIds) {
+  //     const operatorIdStr = operatorId.toString();
+
+  //     // Check if this operator is actively drilling
+  //     if (this.activeDrillingOperators.has(operatorIdStr)) {
+  //       try {
+  //         // Force end the drilling session
+  //         await this.drillingSessionService.forceEndDrillingSession(
+  //           operatorId,
+  //           cycleNumber,
+  //         );
+
+  //         // Get all connected sockets for this operator
+  //         const allSockets = this.getAllSocketsForOperator(operatorIdStr);
+
+  //         // Remove from active drilling operators
+  //         this.activeDrillingOperators.delete(operatorIdStr);
+
+  //         // Notify all connected sockets
+  //         const stoppedMessage = {
+  //           ...payload,
+  //           operatorId: operatorIdStr,
+  //           status: DrillingSessionStatus.COMPLETED,
+  //         } as DrillingStoppedResponse;
+
+  //         for (const socketId of allSockets) {
+  //           if (this.server.sockets.sockets.has(socketId)) {
+  //             this.server.to(socketId).emit('drilling-stopped', stoppedMessage);
+  //           }
+  //         }
+
+  //         this.logger.log(
+  //           `⚠️ Operator ${operatorIdStr} stopped drilling due to fuel depletion (notified on ${allSockets.length} connections)`,
+  //         );
+  //       } catch (error) {
+  //         this.logger.error(
+  //           `Error stopping drilling due to fuel depletion for ${operatorIdStr}: ${error.message}`,
+  //         );
+  //       }
+  //     }
+  //   }
+
+  //   // Save active drilling operators to Redis and broadcast once after processing all operators
+  //   await this.saveActiveDrillingOperatorsToRedis();
+  //   this.broadcastOnlineOperators();
+  // }
+
   async broadcastStopDrilling(
     operatorIds: Types.ObjectId[],
     payload: BroadcastStopDrillingPayload,
   ) {
-    // Get current cycle number
+    // 1️⃣ get the current cycle
     const cycleNumberStr = await this.redisService.get(
       'drilling-cycle:current',
     );
     const cycleNumber = cycleNumberStr ? parseInt(cycleNumberStr, 10) : 0;
 
-    for (const operatorId of operatorIds) {
-      const operatorIdStr = operatorId.toString();
+    // 2️⃣ only work on those still marked active
+    const toStop = operatorIds.filter((id) =>
+      this.activeDrillingOperators.has(id.toString()),
+    );
 
-      // Check if this operator is actively drilling
-      if (this.activeDrillingOperators.has(operatorIdStr)) {
-        try {
-          // Force end the drilling session
-          await this.drillingSessionService.forceEndDrillingSession(
-            operatorId,
-            cycleNumber,
-          );
+    if (toStop.length === 0) return;
 
-          // Get all connected sockets for this operator
-          const allSockets = this.getAllSocketsForOperator(operatorIdStr);
+    // 3️⃣ force-end all sessions *in parallel*
+    await Promise.all(
+      toStop.map((operatorId) =>
+        this.drillingSessionService.forceEndDrillingSession(
+          operatorId,
+          cycleNumber,
+        ),
+      ),
+    );
 
-          // Remove from active drilling operators
-          this.activeDrillingOperators.delete(operatorIdStr);
+    // 4️⃣ remove them from the in-memory set
+    toStop.forEach((id) => this.activeDrillingOperators.delete(id.toString()));
 
-          // Notify all connected sockets
-          const stoppedMessage = {
-            ...payload,
-            operatorId: operatorIdStr,
-            status: DrillingSessionStatus.COMPLETED,
-          } as DrillingStoppedResponse;
+    // 5️⃣ notify all sockets *in parallel*
+    await Promise.all(
+      toStop.map((operatorId) => {
+        const operatorIdStr = operatorId.toString();
+        const sockets = this.getAllSocketsForOperator(operatorIdStr);
 
-          for (const socketId of allSockets) {
+        const stoppedMessage = {
+          ...payload,
+          operatorId: operatorIdStr,
+          status: DrillingSessionStatus.COMPLETED,
+        } as DrillingStoppedResponse;
+
+        return Promise.all(
+          sockets.map((socketId) => {
             if (this.server.sockets.sockets.has(socketId)) {
               this.server.to(socketId).emit('drilling-stopped', stoppedMessage);
             }
-          }
+          }),
+        );
+      }),
+    );
 
-          this.logger.log(
-            `⚠️ Operator ${operatorIdStr} stopped drilling due to fuel depletion (notified on ${allSockets.length} connections)`,
-          );
-        } catch (error) {
-          this.logger.error(
-            `Error stopping drilling due to fuel depletion for ${operatorIdStr}: ${error.message}`,
-          );
-        }
-      }
-    }
+    this.logger.log(
+      `⚠️ Stopped drilling for ${toStop.length} operators due to fuel depletion`,
+    );
 
-    // Save active drilling operators to Redis and broadcast once after processing all operators
+    // 6️⃣ persist the updated active-operators map & broadcast counts
     await this.saveActiveDrillingOperatorsToRedis();
     this.broadcastOnlineOperators();
   }
