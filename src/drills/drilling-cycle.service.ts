@@ -498,12 +498,8 @@ export class DrillingCycleService {
     }[] = [];
 
     // ✅ Step 1: Fetch All Active Operators' IDs
-    const fetchOperatorsTime = performance.now();
     const allActiveOperatorIds =
       await this.drillingSessionService.fetchActiveDrillingSessionOperatorIds();
-    this.logger.debug(
-      `⏱️ (distributeCycleRewards) Step 1 - Fetch active operators: ${(performance.now() - fetchOperatorsTime).toFixed(2)}ms`,
-    );
 
     if (allActiveOperatorIds.length === 0) {
       this.logger.warn(
@@ -512,7 +508,6 @@ export class DrillingCycleService {
     }
 
     // ✅ Step 2: Fetch Active Operators' Data (Cumulative Eff, Eff Multiplier)
-    const fetchOperatorDataTime = performance.now();
     const activeOperators = await this.operatorModel
       .find(
         { _id: { $in: allActiveOperatorIds } },
@@ -523,9 +518,6 @@ export class DrillingCycleService {
         },
       )
       .lean();
-    this.logger.debug(
-      `⏱️ (distributeCycleRewards) Step 2 - Fetch operator data: ${(performance.now() - fetchOperatorDataTime).toFixed(2)}ms`,
-    );
 
     if (activeOperators.length === 0) {
       this.logger.warn(
@@ -534,13 +526,9 @@ export class DrillingCycleService {
     }
 
     // ✅ Step 3: Compute Total Cumulative EFF
-    const computeEffTime = performance.now();
     const totalCumulativeEff = activeOperators.reduce(
       (sum, op) => sum + op.cumulativeEff,
       0,
-    );
-    this.logger.debug(
-      `⏱️ (distributeCycleRewards) Step 3 - Compute total EFF: ${(performance.now() - computeEffTime).toFixed(2)}ms`,
     );
 
     if (totalCumulativeEff === 0) {
@@ -554,7 +542,6 @@ export class DrillingCycleService {
     const poolOperatorRewards = new Map<string, number>();
 
     // ✅ Step 4: Calculate rewards based on extractor status
-    const calculateRewardsTime = performance.now();
     if (extractorOperatorId === null) {
       // No extractor operator reward, send this to reserve.
       // We will just proceed with the active operators' rewards.
@@ -579,14 +566,10 @@ export class DrillingCycleService {
       );
     } else {
       // ✅ Step 5: Check If Extractor is in a Pool
-      const checkPoolTime = performance.now();
       const poolOperator = await this.poolOperatorModel
         .findOne({ operator: extractorOperatorId })
         .select('pool')
         .lean();
-      this.logger.debug(
-        `⏱️ (distributeCycleRewards) Step 5 - Check extractor pool: ${(performance.now() - checkPoolTime).toFixed(2)}ms`,
-      );
 
       const isSoloOperator = !poolOperator;
 
@@ -636,7 +619,6 @@ export class DrillingCycleService {
         let totalPoolReward = 0;
 
         // ✅ Step 6: Get Active Pool Operators
-        const getPoolOperatorsTime = performance.now();
         const activePoolOperators = await this.poolOperatorModel
           .find(
             {
@@ -646,16 +628,12 @@ export class DrillingCycleService {
             { operator: 1 },
           )
           .lean();
-        this.logger.debug(
-          `⏱️ (distributeCycleRewards) Step 6 - Get active pool operators: ${(performance.now() - getPoolOperatorsTime).toFixed(2)}ms`,
-        );
 
         const activePoolOperatorIds = new Set(
           activePoolOperators.map((op) => op.operator.toString()),
         );
 
         // ✅ Step 7: Compute Rewards Based on Cumulative Eff (Only for Active Pool Operators)
-        const computePoolRewardsTime = performance.now();
         const weightedPoolOperators = activeOperators.filter((op) =>
           activePoolOperatorIds.has(op._id.toString()),
         );
@@ -724,9 +702,6 @@ export class DrillingCycleService {
             amount: opReward,
           };
         });
-        this.logger.debug(
-          `⏱️ (distributeCycleRewards) Step 7 - Compute pool rewards: ${(performance.now() - computePoolRewardsTime).toFixed(2)}ms`,
-        );
 
         // Create an array to hold all rewards that should be added to rewardData
         const poolRewardsToAdd = [
@@ -752,28 +727,16 @@ export class DrillingCycleService {
         );
       }
     }
-    this.logger.debug(
-      `⏱️ (distributeCycleRewards) Step 4 - Calculate rewards: ${(performance.now() - calculateRewardsTime).toFixed(2)}ms`,
-    );
 
     // ✅ Step 8: Batch Issue Rewards
-    const issueRewardsTime = performance.now();
     await this.batchIssueHashRewards(rewardData);
-    this.logger.debug(
-      `⏱️ (distributeCycleRewards) Step 8 - Issue rewards: ${(performance.now() - issueRewardsTime).toFixed(2)}ms`,
-    );
 
     // ✅ Step 9: Update total rewards for pools and pool operators
-    const updatePoolsTime = performance.now();
     if (poolRewards.size > 0 || poolOperatorRewards.size > 0) {
       await this.updatePoolAndOperatorRewards(poolRewards, poolOperatorRewards);
     }
-    this.logger.debug(
-      `⏱️ (distributeCycleRewards) Step 9 - Update pools: ${(performance.now() - updatePoolsTime).toFixed(2)}ms`,
-    );
 
     // ✅ Step 10: Group rewards by operator ID and remove null entries
-    const groupRewardsTime = performance.now();
     const groupedRewardMap = new Map<string, number>();
 
     // Count how many invalid rewards are filtered out
@@ -820,12 +783,8 @@ export class DrillingCycleService {
         // Continue with other reward shares
       }
     }
-    this.logger.debug(
-      `⏱️ (distributeCycleRewards) Step 10 - Group rewards: ${(performance.now() - groupRewardsTime).toFixed(2)}ms`,
-    );
 
     // Step 11: Send to Hash Reserve if there are any unissued rewards
-    const hashReserveTime = performance.now();
     // Loop through the reward data again and check how much HASH is sent compared to the `issuedHash`.
     // If the total is less than the issuedHash, add the difference to the reserve.
     const totalIssuedHash = rewardData.reduce(
@@ -848,24 +807,12 @@ export class DrillingCycleService {
 
       await this.hashReserveService.addToHASHReserve(toSendToHashReserve);
     }
-    this.logger.debug(
-      `⏱️ (distributeCycleRewards) Step 11 - Hash reserve: ${(performance.now() - hashReserveTime).toFixed(2)}ms`,
-    );
 
     const endTime = performance.now();
     const totalExecutionTime = endTime - startTime;
 
-    this.logger.log(
-      `✅ (distributeCycleRewards) Rewards distributed in ${totalExecutionTime.toFixed(2)}ms.
-      Performance breakdown:
-      - Fetch active operators: ${(fetchOperatorsTime - startTime).toFixed(2)}ms
-      - Fetch operator data: ${(fetchOperatorDataTime - fetchOperatorsTime).toFixed(2)}ms
-      - Compute total EFF: ${(computeEffTime - fetchOperatorDataTime).toFixed(2)}ms
-      - Calculate rewards: ${(calculateRewardsTime - computeEffTime).toFixed(2)}ms
-      - Issue rewards: ${(issueRewardsTime - calculateRewardsTime).toFixed(2)}ms
-      - Update pools: ${(updatePoolsTime - issueRewardsTime).toFixed(2)}ms
-      - Group rewards: ${(groupRewardsTime - updatePoolsTime).toFixed(2)}ms
-      - Hash reserve: ${(hashReserveTime - groupRewardsTime).toFixed(2)}ms`,
+    this.logger.debug(
+      `✅ (distributeCycleRewards) Distribute cycle rewards completed in ${totalExecutionTime.toFixed(2)}ms.`,
     );
 
     return rewardShares;
