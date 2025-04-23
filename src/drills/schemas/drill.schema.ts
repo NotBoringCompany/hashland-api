@@ -70,7 +70,7 @@ export class Drill extends Document {
     description: 'Whether this drill is allowed to be an extractor',
     example: false,
   })
-  @Prop({ type: Boolean, required: true, default: false })
+  @Prop({ type: Boolean, required: true, default: false, index: true })
   extractorAllowed: boolean;
 
   /**
@@ -82,7 +82,7 @@ export class Drill extends Document {
     description: 'Whether this drill is active',
     example: true,
   })
-  @Prop({ type: Boolean, required: true, default: false })
+  @Prop({ type: Boolean, required: true, default: false, index: true })
   active: boolean;
 
   /**
@@ -102,7 +102,7 @@ export class Drill extends Document {
     description: 'The current EFF rating of the drill',
     example: 100,
   })
-  @Prop({ type: Number, required: true, default: 0 })
+  @Prop({ type: Number, required: true, default: 0, index: true })
   actualEff: number;
 }
 

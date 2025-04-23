@@ -267,95 +267,10 @@ export class DrillService {
       .lean();
   }
 
-  // /**
-  //  * Selects an extractor using weighted probability.
-  //  * Uses a dice roll between 0 and the cumulative sum of all (actualEff × Luck Factor).
-  //  * No operator-based effMultiplier or effCredits are used.
-  //  */
-  // async selectExtractor(): Promise<{
-  //   drillId: Types.ObjectId;
-  //   drillOperatorId: Types.ObjectId;
-  //   eff: number;
-  //   totalWeightedEff: number;
-  // } | null> {
-  //   const selectionStartTime = performance.now();
-
-  //   // ✅ Step 1: Fetch all eligible drills directly (must have `extractorAllowed` set to true and be active)
-  //   const eligibleDrills = await this.drillModel
-  //     .find(
-  //       { extractorAllowed: true, active: true },
-  //       { _id: 1, actualEff: 1, operatorId: 1 },
-  //     )
-  //     .lean();
-
-  //   if (eligibleDrills.length === 0) {
-  //     this.logger.warn(`⚠️ (selectExtractor) No eligible drills found.`);
-  //     return null;
-  //   }
-
-  //   // ✅ Step 2: Apply luck factor and compute weighted EFF for each drill
-  //   const drillsWithWeight = eligibleDrills.map((drill) => {
-  //     const luckFactor =
-  //       GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
-  //       Math.random() *
-  //         (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
-  //           GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
-
-  //     return {
-  //       drillId: drill._id,
-  //       drillOperatorId: drill.operatorId,
-  //       eff: drill.actualEff,
-  //       weightedEff: drill.actualEff * luckFactor,
-  //     };
-  //   });
-
-  //   // ✅ Step 3: Calculate total weighted EFF and roll the dice
-  //   const totalWeightedEff = drillsWithWeight.reduce(
-  //     (sum, drill) => sum + drill.weightedEff,
-  //     0,
-  //   );
-
-  //   if (totalWeightedEff === 0) {
-  //     this.logger.warn(`⚠️ (selectExtractor) No valid weighted EFF found.`);
-  //     return null;
-  //   }
-
-  //   const diceRoll = Math.random() * totalWeightedEff;
-  //   let cumulativeEff = 0;
-
-  //   for (const drill of drillsWithWeight) {
-  //     cumulativeEff += drill.weightedEff;
-  //     if (diceRoll <= cumulativeEff) {
-  //       const selectionEndTime = performance.now();
-
-  //       this.logger.log(
-  //         `✅ (selectExtractor) Selected extractor: Drill ${drill.drillId.toString()} with ${drill.eff.toFixed(2)} EFF. Cumulative EFF this cycle: ${totalWeightedEff.toFixed(2)}.`,
-  //       );
-
-  //       this.logger.log(
-  //         `⏳ (selectExtractor) Extractor selection took ${(selectionEndTime - selectionStartTime).toFixed(2)}ms.`,
-  //       );
-
-  //       return {
-  //         drillId: drill.drillId,
-  //         drillOperatorId: drill.drillOperatorId,
-  //         eff: drill.eff,
-  //         totalWeightedEff,
-  //       };
-  //     }
-  //   }
-
-  //   // Fallback return, should not happen unless there's floating-point edge case
-  //   return {
-  //     drillId: null,
-  //     drillOperatorId: null,
-  //     eff: null,
-  //     totalWeightedEff,
-  //   };
-  // }
-
   /**
-   * Fetches one eligible drill to be the extractor of the current cycle.
+   * Selects an extractor using weighted probability.
+   * Uses a dice roll between 0 and the cumulative sum of all (actualEff × Luck Factor).
+   * No operator-based effMultiplier or effCredits are used.
    */
   async selectExtractor(): Promise<{
     drillId: Types.ObjectId;
@@ -365,111 +280,78 @@ export class DrillService {
   } | null> {
     const selectionStartTime = performance.now();
 
-    // pull in your luck constants once
-    const minLuck = GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER;
-    const maxLuck = GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER;
-    const luckRange = maxLuck - minLuck;
-    const drillsColl = this.drillModel.collection.name; // e.g. "drills"
+    // ✅ Step 1: Fetch all eligible drills directly (must have `extractorAllowed` set to true and be active)
+    const eligibleDrills = await this.drillModel
+      .find(
+        { extractorAllowed: true, active: true },
+        { _id: 1, actualEff: 1, operatorId: 1 },
+      )
+      .lean();
 
-    // one aggregation to compute totalWeighted, pick a random threshold, then find the doc
-    const [selected] = await this.drillModel
-      .aggregate([
-        // 1) limit to eligible drills
-        { $match: { extractorAllowed: true, active: true } },
-
-        // 2) in one go compute each drill's contribution into the total
-        {
-          $group: {
-            _id: null,
-            totalWeighted: {
-              $sum: {
-                $multiply: [
-                  '$actualEff',
-                  {
-                    $add: [minLuck, { $multiply: [{ $rand: {} }, luckRange] }],
-                  },
-                ],
-              },
-            },
-          },
-        },
-
-        // 3) roll the dice against the total
-        {
-          $addFields: {
-            diceRoll: { $multiply: ['$totalWeighted', { $rand: {} }] },
-          },
-        },
-
-        // 4) re‐scan the same eligible drills, recompute luck & weightedEff,
-        //    build a running cumulative sum, and take the first over the threshold
-        {
-          $lookup: {
-            from: drillsColl,
-            let: { dice: '$diceRoll' },
-            pipeline: [
-              { $match: { extractorAllowed: true, active: true } },
-              {
-                $addFields: {
-                  luck: {
-                    $add: [minLuck, { $multiply: [{ $rand: {} }, luckRange] }],
-                  },
-                },
-              },
-              {
-                $addFields: {
-                  weightedEff: { $multiply: ['$actualEff', '$luck'] },
-                },
-              },
-              {
-                $setWindowFields: {
-                  sortBy: { _id: 1 },
-                  output: {
-                    cumulativeEff: {
-                      $sum: '$weightedEff',
-                      window: { documents: ['unbounded', 'current'] },
-                    },
-                  },
-                },
-              },
-              { $match: { $expr: { $gte: ['$cumulativeEff', '$$dice'] } } },
-              { $limit: 1 },
-              {
-                $project: {
-                  drillId: '$_id',
-                  drillOperatorId: '$operatorId',
-                  eff: '$actualEff',
-                },
-              },
-            ],
-            as: 'selection',
-          },
-        },
-
-        // 5) unwind and attach the total for logging/return
-        { $unwind: '$selection' },
-        { $addFields: { totalWeightedEff: '$totalWeighted' } },
-        { $replaceRoot: { newRoot: '$selection' } },
-      ])
-      .allowDiskUse(true)
-      .exec();
-
-    if (!selected) {
-      this.logger.warn(
-        `⚠️ (selectExtractor) No eligible drills or selection failed.`,
-      );
+    if (eligibleDrills.length === 0) {
+      this.logger.warn(`⚠️ (selectExtractor) No eligible drills found.`);
       return null;
     }
 
-    const selectionEndTime = performance.now();
-    this.logger.log(
-      `✅ (selectExtractor) Selected extractor: Drill ${selected.drillId.toString()} with ${selected.eff.toFixed(2)} EFF. Total weighted EFF: ${selected.totalWeightedEff.toFixed(2)}.`,
-    );
-    this.logger.log(
-      `⏳ (selectExtractor) Extractor selection took ${(selectionEndTime - selectionStartTime).toFixed(2)}ms.`,
+    // ✅ Step 2: Apply luck factor and compute weighted EFF for each drill
+    const drillsWithWeight = eligibleDrills.map((drill) => {
+      const luckFactor =
+        GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
+        Math.random() *
+          (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
+            GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
+
+      return {
+        drillId: drill._id,
+        drillOperatorId: drill.operatorId,
+        eff: drill.actualEff,
+        weightedEff: drill.actualEff * luckFactor,
+      };
+    });
+
+    // ✅ Step 3: Calculate total weighted EFF and roll the dice
+    const totalWeightedEff = drillsWithWeight.reduce(
+      (sum, drill) => sum + drill.weightedEff,
+      0,
     );
 
-    return selected;
+    if (totalWeightedEff === 0) {
+      this.logger.warn(`⚠️ (selectExtractor) No valid weighted EFF found.`);
+      return null;
+    }
+
+    const diceRoll = Math.random() * totalWeightedEff;
+    let cumulativeEff = 0;
+
+    for (const drill of drillsWithWeight) {
+      cumulativeEff += drill.weightedEff;
+      if (diceRoll <= cumulativeEff) {
+        const selectionEndTime = performance.now();
+
+        this.logger.log(
+          `✅ (selectExtractor) Selected extractor: Drill ${drill.drillId.toString()} with ${drill.eff.toFixed(2)} EFF. Cumulative EFF this cycle: ${totalWeightedEff.toFixed(2)}.`,
+        );
+
+        this.logger.log(
+          `⏳ (selectExtractor) Extractor selection took ${(selectionEndTime - selectionStartTime).toFixed(2)}ms.`,
+        );
+
+        return {
+          drillId: drill.drillId,
+          drillOperatorId: drill.drillOperatorId,
+          eff: drill.eff,
+          totalWeightedEff,
+        };
+      }
+    }
+
+    // Fallback return, should not happen unless there's floating-point edge case
+    return {
+      drillId: null,
+      drillOperatorId: null,
+      eff: null,
+      totalWeightedEff,
+    };
   }
 
   /**
