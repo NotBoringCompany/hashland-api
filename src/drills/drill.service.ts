@@ -15,6 +15,7 @@ import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { DrillingSession } from './schemas/drilling-session.schema';
 
 /**
  * Type for the change stream events for the drills collection.
@@ -42,6 +43,8 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
     @InjectModel(Drill.name)
     private drillModel: Model<Drill>,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    @InjectModel(DrillingSession.name)
+    private drillingSessionModel: Model<DrillingSession>,
   ) {}
 
   /**
@@ -176,93 +179,6 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  // /**
-  //  * Selects an extractor using weighted probability.
-  //  * Uses a dice roll between 0 and the cumulative sum of all (actualEff × Luck Factor).
-  //  * No operator-based effMultiplier or effCredits are used.
-  //  */
-  // async selectExtractor(): Promise<{
-  //   drillId: Types.ObjectId;
-  //   drillOperatorId: Types.ObjectId;
-  //   eff: number;
-  //   totalWeightedEff: number;
-  // } | null> {
-  //   const selectionStartTime = performance.now();
-
-  //   // ✅ Step 1: Fetch all eligible drills directly (must have `extractorAllowed` set to true and be active)
-  //   const eligibleDrills = await this.drillModel
-  //     .find(
-  //       { extractorAllowed: true, active: true },
-  //       { _id: 1, actualEff: 1, operatorId: 1 },
-  //     )
-  //     .lean();
-
-  //   if (eligibleDrills.length === 0) {
-  //     this.logger.warn(`⚠️ (selectExtractor) No eligible drills found.`);
-  //     return null;
-  //   }
-
-  //   // ✅ Step 2: Apply luck factor and compute weighted EFF for each drill
-  //   const drillsWithWeight = eligibleDrills.map((drill) => {
-  //     const luckFactor =
-  //       GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
-  //       Math.random() *
-  //         (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
-  //           GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
-
-  //     return {
-  //       drillId: drill._id,
-  //       drillOperatorId: drill.operatorId,
-  //       eff: drill.actualEff,
-  //       weightedEff: drill.actualEff * luckFactor,
-  //     };
-  //   });
-
-  //   // ✅ Step 3: Calculate total weighted EFF and roll the dice
-  //   const totalWeightedEff = drillsWithWeight.reduce(
-  //     (sum, drill) => sum + drill.weightedEff,
-  //     0,
-  //   );
-
-  //   if (totalWeightedEff === 0) {
-  //     this.logger.warn(`⚠️ (selectExtractor) No valid weighted EFF found.`);
-  //     return null;
-  //   }
-
-  //   const diceRoll = Math.random() * totalWeightedEff;
-  //   let cumulativeEff = 0;
-
-  //   for (const drill of drillsWithWeight) {
-  //     cumulativeEff += drill.weightedEff;
-  //     if (diceRoll <= cumulativeEff) {
-  //       const selectionEndTime = performance.now();
-
-  //       this.logger.log(
-  //         `✅ (selectExtractor) Selected extractor: Drill ${drill.drillId.toString()} with ${drill.eff.toFixed(2)} EFF. Cumulative EFF this cycle: ${totalWeightedEff.toFixed(2)}.`,
-  //       );
-
-  //       this.logger.log(
-  //         `⏳ (selectExtractor) Extractor selection took ${(selectionEndTime - selectionStartTime).toFixed(2)}ms.`,
-  //       );
-
-  //       return {
-  //         drillId: drill.drillId,
-  //         drillOperatorId: drill.drillOperatorId,
-  //         eff: drill.eff,
-  //         totalWeightedEff,
-  //       };
-  //     }
-  //   }
-
-  //   // Fallback return, should not happen unless there's floating-point edge case
-  //   return {
-  //     drillId: null,
-  //     drillOperatorId: null,
-  //     eff: null,
-  //     totalWeightedEff,
-  //   };
-  // }
-
   /**
    * Activates or deactivates a drill for an operator.
    *
@@ -296,6 +212,25 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
       if (state && activeDrillCount >= operator.maxActiveDrillsAllowed) {
         throw new BadRequestException(
           `(toggleDrillActiveState) Operator has reached the max active drill limit.`,
+        );
+      }
+
+      // Prevent toggling if the operator has an active drilling session
+      const activeDrillingSession = await this.drillingSessionModel.exists({
+        operatorId,
+        startTime: { $lte: new Date() },
+        endTime: null,
+      });
+
+      if (activeDrillingSession) {
+        throw new BadRequestException(
+          `(toggleDrillActiveState) Operator has an active drilling session.`,
+        );
+      }
+
+      if (activeDrillingSession) {
+        throw new BadRequestException(
+          `(toggleDrillActiveState) Operator has an active drilling session.`,
         );
       }
 
