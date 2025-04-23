@@ -347,7 +347,12 @@ export class DrillingCycleService {
     this.logger.log(`⏳ (endCurrentCycle) Ending cycle #${cycleNumber}...`);
 
     // Check if the cycle exists in the database before proceeding
+    const cycleExistsTime = performance.now();
     const cycleExists = await this.drillingCycleModel.exists({ cycleNumber });
+    this.logger.debug(
+      `⏱️ Step 0 (Check cycle existence): ${(performance.now() - cycleExistsTime).toFixed(2)}ms`,
+    );
+
     if (!cycleExists) {
       this.logger.warn(
         `⚠️ (endCurrentCycle) Cycle #${cycleNumber} not found in database. Skipping cycle processing.`,
@@ -356,12 +361,17 @@ export class DrillingCycleService {
     }
 
     // ✅ Step 1: Fetch issued HASH from Redis
+    const fetchHashTime = performance.now();
     const issuedHASHStr = await this.redisService.get(
       `drilling-cycle:${cycleNumber}:issuedHASH`,
     );
     const issuedHASH = issuedHASHStr ? parseFloat(issuedHASHStr) : 0; // Ensure it's a number
+    this.logger.debug(
+      `⏱️ Step 1 (Fetch issued HASH): ${(performance.now() - fetchHashTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 2: Select extractor
+    const selectExtractorTime = performance.now();
     const extractorData = await this.drillService.selectExtractor();
     // Store the total weighted efficiency from extractor selection
     const totalWeightedEff = extractorData?.totalWeightedEff || 0;
@@ -375,17 +385,29 @@ export class DrillingCycleService {
         `(endCurrentCycle) No valid extractor drill found. Skipping extractor distribution.`,
       );
     }
+    this.logger.debug(
+      `⏱️ Step 2 (Select extractor): ${(performance.now() - selectExtractorTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 3: Distribute rewards to extractor operator and active operators (extractorOperatorId could be null)
+    const distributeRewardsTime = performance.now();
     const rewardShares = await this.distributeCycleRewards(
       extractorOperatorId,
       issuedHASH,
     );
+    this.logger.debug(
+      `⏱️ Step 3 (Distribute rewards): ${(performance.now() - distributeRewardsTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 4: Process Fuel for ALL Operators
+    const processFuelTime = performance.now();
     await this.processFuelForAllOperators(cycleNumber);
+    this.logger.debug(
+      `⏱️ Step 4 (Process fuel): ${(performance.now() - processFuelTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 5: Update the cycle
+    const updateCycleTime = performance.now();
     const latestCycle = await this.drillingCycleModel.findOneAndUpdate(
       { cycleNumber },
       {
@@ -404,6 +426,9 @@ export class DrillingCycleService {
     }));
 
     await this.drillingCycleRewardShareModel.insertMany(rewardShareDocs);
+    this.logger.debug(
+      `⏱️ Step 5 (Update cycle and store reward shares): ${(performance.now() - updateCycleTime).toFixed(2)}ms`,
+    );
 
     // Check if the cycle document was found and updated
     if (!latestCycle) {
@@ -415,9 +440,14 @@ export class DrillingCycleService {
     }
 
     // Recalibrate session counters to ensure accuracy
+    const recalibrateTime = performance.now();
     await this.drillingSessionService.recalibrateSessionCounters();
+    this.logger.debug(
+      `⏱️ Step 5.1 (Recalibrate session counters): ${(performance.now() - recalibrateTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 6: Complete any stopping sessions
+    const completeSessionsTime = performance.now();
     const completionResult =
       await this.drillingSessionService.completeStoppingSessionsForEndCycle(
         cycleNumber,
@@ -431,16 +461,36 @@ export class DrillingCycleService {
         completionResult.earnedHASH,
       );
     }
+    this.logger.debug(
+      `⏱️ Step 6 (Complete stopping sessions): ${(performance.now() - completeSessionsTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 7: Send WebSocket notification about the latest cycle
+    const notificationsTime = performance.now();
     await this.drillingGateway.storeLatestCycleInRedis(latestCycle);
 
     // Send WebSocket notification with reward shares for each operator
     await this.drillingGatewayService.notifyNewCycle(latestCycle, rewardShares);
+    this.logger.debug(
+      `⏱️ Step 7 (Send WebSocket notifications): ${(performance.now() - notificationsTime).toFixed(2)}ms`,
+    );
 
     const endTime = performance.now();
+    const totalExecutionTime = endTime - startTime;
+
+    // Log a performance summary
     this.logger.log(
-      `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${(endTime - startTime).toFixed(2)}ms.`,
+      `✅ (endCurrentCycle) Cycle #${cycleNumber} processing completed in ${totalExecutionTime.toFixed(2)}ms.
+      Performance breakdown:
+      - Check cycle existence: ${(cycleExistsTime - startTime).toFixed(2)}ms
+      - Fetch issued HASH: ${(fetchHashTime - cycleExistsTime).toFixed(2)}ms
+      - Select extractor: ${(selectExtractorTime - fetchHashTime).toFixed(2)}ms
+      - Distribute rewards: ${(distributeRewardsTime - selectExtractorTime).toFixed(2)}ms
+      - Process fuel: ${(processFuelTime - distributeRewardsTime).toFixed(2)}ms
+      - Update cycle and rewards: ${(updateCycleTime - processFuelTime).toFixed(2)}ms
+      - Recalibrate counters: ${(recalibrateTime - updateCycleTime).toFixed(2)}ms
+      - Complete sessions: ${(completeSessionsTime - recalibrateTime).toFixed(2)}ms
+      - WebSocket notifications: ${(notificationsTime - completeSessionsTime).toFixed(2)}ms`,
     );
   }
 
@@ -451,7 +501,7 @@ export class DrillingCycleService {
     extractorOperatorId: Types.ObjectId | null, // ✅ Extractor operator ID can be null
     issuedHash: number,
   ): Promise<{ operatorId: Types.ObjectId; amount: number }[]> {
-    const now = performance.now();
+    const startTime = performance.now();
     const rewardData: { operatorId: Types.ObjectId; amount: number }[] = [];
     const rewardShares: {
       operatorId: Types.ObjectId;
@@ -459,8 +509,13 @@ export class DrillingCycleService {
     }[] = [];
 
     // ✅ Step 1: Fetch All Active Operators' IDs
+    const fetchOperatorsTime = performance.now();
     const allActiveOperatorIds =
       await this.drillingSessionService.fetchActiveDrillingSessionOperatorIds();
+    this.logger.debug(
+      `⏱️ (distributeCycleRewards) Step 1 - Fetch active operators: ${(performance.now() - fetchOperatorsTime).toFixed(2)}ms`,
+    );
+
     if (allActiveOperatorIds.length === 0) {
       this.logger.warn(
         `⚠️ (distributeCycleRewards) No active operators found for reward distribution.`,
@@ -468,6 +523,7 @@ export class DrillingCycleService {
     }
 
     // ✅ Step 2: Fetch Active Operators' Data (Cumulative Eff, Eff Multiplier)
+    const fetchOperatorDataTime = performance.now();
     const activeOperators = await this.operatorModel
       .find(
         { _id: { $in: allActiveOperatorIds } },
@@ -478,6 +534,9 @@ export class DrillingCycleService {
         },
       )
       .lean();
+    this.logger.debug(
+      `⏱️ (distributeCycleRewards) Step 2 - Fetch operator data: ${(performance.now() - fetchOperatorDataTime).toFixed(2)}ms`,
+    );
 
     if (activeOperators.length === 0) {
       this.logger.warn(
@@ -486,9 +545,13 @@ export class DrillingCycleService {
     }
 
     // ✅ Step 3: Compute Total Cumulative EFF
+    const computeEffTime = performance.now();
     const totalCumulativeEff = activeOperators.reduce(
       (sum, op) => sum + op.cumulativeEff,
       0,
+    );
+    this.logger.debug(
+      `⏱️ (distributeCycleRewards) Step 3 - Compute total EFF: ${(performance.now() - computeEffTime).toFixed(2)}ms`,
     );
 
     if (totalCumulativeEff === 0) {
@@ -501,6 +564,8 @@ export class DrillingCycleService {
     const poolRewards = new Map<string, number>();
     const poolOperatorRewards = new Map<string, number>();
 
+    // ✅ Step 4: Calculate rewards based on extractor status
+    const calculateRewardsTime = performance.now();
     if (extractorOperatorId === null) {
       // No extractor operator reward, send this to reserve.
       // We will just proceed with the active operators' rewards.
@@ -525,15 +590,20 @@ export class DrillingCycleService {
       );
     } else {
       // ✅ Step 5: Check If Extractor is in a Pool
+      const checkPoolTime = performance.now();
       const poolOperator = await this.poolOperatorModel
         .findOne({ operator: extractorOperatorId })
         .select('pool')
         .lean();
+      this.logger.debug(
+        `⏱️ (distributeCycleRewards) Step 5 - Check extractor pool: ${(performance.now() - checkPoolTime).toFixed(2)}ms`,
+      );
 
       const isSoloOperator = !poolOperator;
 
       if (isSoloOperator) {
         // 🟢 **SOLO OPERATOR REWARD LOGIC**
+        const soloRewardTime = performance.now();
         const extractorReward =
           issuedHash *
           GAME_CONSTANTS.REWARDS.SOLO_OPERATOR_REWARD_SYSTEM.extractorOperator;
@@ -553,12 +623,16 @@ export class DrillingCycleService {
           { operatorId: extractorOperatorId, amount: extractorReward }, // Extractor Reward
           ...weightedRewards, // Active Operators' Rewards
         );
+        this.logger.debug(
+          `⏱️ (distributeCycleRewards) Step 5a - Calculate SOLO rewards: ${(performance.now() - soloRewardTime).toFixed(2)}ms`,
+        );
 
         this.logger.log(
           `✅ (distributeCycleRewards) SOLO rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH.`,
         );
       } else {
         // 🟢 **POOL OPERATOR REWARD LOGIC**
+        const poolRewardTime = performance.now();
         const pool = await this.poolModel
           .findById(poolOperator.pool)
           .select('leaderId rewardSystem')
@@ -573,6 +647,7 @@ export class DrillingCycleService {
         let totalPoolReward = 0;
 
         // ✅ Step 6: Get Active Pool Operators
+        const getPoolOperatorsTime = performance.now();
         const activePoolOperators = await this.poolOperatorModel
           .find(
             {
@@ -582,12 +657,16 @@ export class DrillingCycleService {
             { operator: 1 },
           )
           .lean();
+        this.logger.debug(
+          `⏱️ (distributeCycleRewards) Step 6 - Get active pool operators: ${(performance.now() - getPoolOperatorsTime).toFixed(2)}ms`,
+        );
 
         const activePoolOperatorIds = new Set(
           activePoolOperators.map((op) => op.operator.toString()),
         );
 
         // ✅ Step 7: Compute Rewards Based on Cumulative Eff (Only for Active Pool Operators)
+        const computePoolRewardsTime = performance.now();
         const weightedPoolOperators = activeOperators.filter((op) =>
           activePoolOperatorIds.has(op._id.toString()),
         );
@@ -656,6 +735,9 @@ export class DrillingCycleService {
             amount: opReward,
           };
         });
+        this.logger.debug(
+          `⏱️ (distributeCycleRewards) Step 7 - Compute pool rewards: ${(performance.now() - computePoolRewardsTime).toFixed(2)}ms`,
+        );
 
         // Create an array to hold all rewards that should be added to rewardData
         const poolRewardsToAdd = [
@@ -672,22 +754,37 @@ export class DrillingCycleService {
 
         // Add all poolRewardsToAdd along with the weighted pool rewards
         rewardData.push(...poolRewardsToAdd, ...weightedPoolRewards);
+        this.logger.debug(
+          `⏱️ (distributeCycleRewards) Step 5b - Calculate POOL rewards: ${(performance.now() - poolRewardTime).toFixed(2)}ms`,
+        );
 
         this.logger.log(
           `✅ (distributeCycleRewards) POOL rewards issued. Extractor ${extractorOperatorId} received ${extractorReward} $HASH. ${pool.leaderId ? `Leader received ${leaderReward} $HASH.` : 'No leader found, reward sent to reserve.'}`,
         );
       }
     }
+    this.logger.debug(
+      `⏱️ (distributeCycleRewards) Step 4 - Calculate rewards: ${(performance.now() - calculateRewardsTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 8: Batch Issue Rewards
+    const issueRewardsTime = performance.now();
     await this.batchIssueHashRewards(rewardData);
+    this.logger.debug(
+      `⏱️ (distributeCycleRewards) Step 8 - Issue rewards: ${(performance.now() - issueRewardsTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 9: Update total rewards for pools and pool operators
+    const updatePoolsTime = performance.now();
     if (poolRewards.size > 0 || poolOperatorRewards.size > 0) {
       await this.updatePoolAndOperatorRewards(poolRewards, poolOperatorRewards);
     }
+    this.logger.debug(
+      `⏱️ (distributeCycleRewards) Step 9 - Update pools: ${(performance.now() - updatePoolsTime).toFixed(2)}ms`,
+    );
 
     // ✅ Step 10: Group rewards by operator ID and remove null entries
+    const groupRewardsTime = performance.now();
     const groupedRewardMap = new Map<string, number>();
 
     // Count how many invalid rewards are filtered out
@@ -734,8 +831,12 @@ export class DrillingCycleService {
         // Continue with other reward shares
       }
     }
+    this.logger.debug(
+      `⏱️ (distributeCycleRewards) Step 10 - Group rewards: ${(performance.now() - groupRewardsTime).toFixed(2)}ms`,
+    );
 
     // Step 11: Send to Hash Reserve if there are any unissued rewards
+    const hashReserveTime = performance.now();
     // Loop through the reward data again and check how much HASH is sent compared to the `issuedHash`.
     // If the total is less than the issuedHash, add the difference to the reserve.
     const totalIssuedHash = rewardData.reduce(
@@ -758,10 +859,24 @@ export class DrillingCycleService {
 
       await this.hashReserveService.addToHASHReserve(toSendToHashReserve);
     }
+    this.logger.debug(
+      `⏱️ (distributeCycleRewards) Step 11 - Hash reserve: ${(performance.now() - hashReserveTime).toFixed(2)}ms`,
+    );
 
-    const end = performance.now();
+    const endTime = performance.now();
+    const totalExecutionTime = endTime - startTime;
+
     this.logger.log(
-      `✅ (distributeCycleRewards) Rewards distributed in ${(end - now).toFixed(2)}ms.`,
+      `✅ (distributeCycleRewards) Rewards distributed in ${totalExecutionTime.toFixed(2)}ms.
+      Performance breakdown:
+      - Fetch active operators: ${(fetchOperatorsTime - startTime).toFixed(2)}ms
+      - Fetch operator data: ${(fetchOperatorDataTime - fetchOperatorsTime).toFixed(2)}ms
+      - Compute total EFF: ${(computeEffTime - fetchOperatorDataTime).toFixed(2)}ms
+      - Calculate rewards: ${(calculateRewardsTime - computeEffTime).toFixed(2)}ms
+      - Issue rewards: ${(issueRewardsTime - calculateRewardsTime).toFixed(2)}ms
+      - Update pools: ${(updatePoolsTime - issueRewardsTime).toFixed(2)}ms
+      - Group rewards: ${(groupRewardsTime - updatePoolsTime).toFixed(2)}ms
+      - Hash reserve: ${(hashReserveTime - groupRewardsTime).toFixed(2)}ms`,
     );
 
     return rewardShares;
@@ -1062,10 +1177,15 @@ export class DrillingCycleService {
 
     try {
       // Fetch active operator IDs
+      const fetchOperatorsTime = performance.now();
       const activeOperatorIds =
         await this.drillingSessionService.fetchActiveOperatorIds();
+      this.logger.debug(
+        `⏱️ (processFuelForAllOperators) Step 1 - Fetch active operators: ${(performance.now() - fetchOperatorsTime).toFixed(2)}ms`,
+      );
 
       // Generate random fuel values based on game constants
+      const genFuelValuesTime = performance.now();
       let fuelUsed = this.operatorService.getRandomFuelValue(
         GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.minUnits,
         GAME_CONSTANTS.FUEL.BASE_FUEL_DEPLETION_RATE.maxUnits,
@@ -1082,12 +1202,16 @@ export class DrillingCycleService {
         fuelUsed = 600;
         fuelGained = 10;
       }
+      this.logger.debug(
+        `⏱️ (processFuelForAllOperators) Step 2 - Generate fuel values: ${(performance.now() - genFuelValuesTime).toFixed(2)}ms`,
+      );
 
       this.logger.log(
         `Processing fuel: depleting ${fuelUsed} from active operators, replenishing ${fuelGained} to inactive operators`,
       );
 
       // Process fuel updates in parallel - only operators that need notifications are returned
+      const processFuelUpdatesTime = performance.now();
       let depletedOperators = [],
         replenishedOperators = [],
         depletedOperatorIds = [];
@@ -1113,8 +1237,12 @@ export class DrillingCycleService {
         replenishedOperators = [];
         depletedOperatorIds = [];
       }
+      this.logger.debug(
+        `⏱️ (processFuelForAllOperators) Step 3 - Process fuel updates: ${(performance.now() - processFuelUpdatesTime).toFixed(2)}ms`,
+      );
 
       // Notify operators about fuel updates - send to all operators for real-time updates
+      const notifyOperatorsTime = performance.now();
       try {
         await Promise.all([
           // Notify active operators about fuel depletion
@@ -1138,8 +1266,12 @@ export class DrillingCycleService {
         );
         // Continue execution as notifications are not critical
       }
+      this.logger.debug(
+        `⏱️ (processFuelForAllOperators) Step 4 - Notify fuel updates: ${(performance.now() - notifyOperatorsTime).toFixed(2)}ms`,
+      );
 
       // Handle depleted operators
+      const handleDepletedTime = performance.now();
       if (depletedOperatorIds.length > 0) {
         try {
           await Promise.all([
@@ -1162,6 +1294,9 @@ export class DrillingCycleService {
           );
         }
       }
+      this.logger.debug(
+        `⏱️ (processFuelForAllOperators) Step 5 - Handle depleted operators: ${(performance.now() - handleDepletedTime).toFixed(2)}ms`,
+      );
 
       const endTime = performance.now();
       const executionTime = (endTime - startTime).toFixed(2);
@@ -1172,7 +1307,13 @@ export class DrillingCycleService {
          🔋 Replenished ${fuelGained} fuel for inactive operators.
          🛑 Stopped drilling for ${depletedOperatorIds.length} operators below fuel threshold.
          📢 Sent fuel update notifications to ${depletedOperators.length + replenishedOperators.length} operators.
-         ⏱ Execution Time: ${executionTime}ms`,
+         ⏱ Execution Time: ${executionTime}ms
+         ⏱ Performance breakdown:
+           - Fetch active operators: ${(fetchOperatorsTime - startTime).toFixed(2)}ms
+           - Generate fuel values: ${(genFuelValuesTime - fetchOperatorsTime).toFixed(2)}ms
+           - Process fuel updates: ${(processFuelUpdatesTime - genFuelValuesTime).toFixed(2)}ms
+           - Notify operators: ${(notifyOperatorsTime - processFuelUpdatesTime).toFixed(2)}ms
+           - Handle depleted operators: ${(handleDepletedTime - notifyOperatorsTime).toFixed(2)}ms`,
       );
     } catch (error) {
       this.logger.error(
