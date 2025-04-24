@@ -1226,18 +1226,17 @@ export class DrillingCycleService {
       maxFuel: doc.maxFuel,
     }));
 
-    await Promise.all([
-      this.drillingGatewayService.notifyFuelUpdates(
-        depletedUpdates,
-        fuelUsed,
-        'depleted',
-      ),
-      this.drillingGatewayService.notifyFuelUpdates(
-        replenishedUpdates,
-        fuelGained,
-        'replenished',
-      ),
-    ]);
+    this.drillingGatewayService.notifyFuelUpdates(
+      depletedUpdates,
+      fuelUsed,
+      'depleted',
+    );
+
+    this.drillingGatewayService.notifyFuelUpdates(
+      replenishedUpdates,
+      fuelGained,
+      'replenished',
+    );
 
     // 6️⃣ stop depleted sessions in bulk
     const depletedIds = depletedDocs.map((d) => d._id);
