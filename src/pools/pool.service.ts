@@ -213,33 +213,16 @@ export class PoolService {
   }
 
   /**
-   * Fetches all public pool IDs.
-   */
-  fetchPublicPoolIds(): Array<{ poolNumber: number; poolId: string }> {
-    const poolIds: Array<{ poolNumber: number; poolId: string }> = [
-      {
-        poolNumber: 1,
-        poolId: '67c59119e13cd025d70558f8',
-      },
-      {
-        poolNumber: 2,
-        poolId: '67c5913d38219727f71abcc9',
-      },
-      {
-        poolNumber: 3,
-        poolId: '67c59160bcc83377ab6e9201',
-      },
-    ];
-
-    return poolIds;
-  }
-
-  /**
    * Fetches a random public pool ID that still has available slots.
    */
   async fetchAvailableRandomPublicPoolId(): Promise<string | null> {
     try {
-      const publicPoolIds = this.fetchPublicPoolIds();
+      // IDs of public pools 1, 2 and 3
+      const publicPoolIds = [
+        new Types.ObjectId('67c59119e13cd025d70558f8'),
+        new Types.ObjectId('67c5913d38219727f71abcc9'),
+        new Types.ObjectId('67c59160bcc83377ab6e9201'),
+      ];
 
       const pools = await this.poolModel
         .find(
@@ -253,9 +236,15 @@ export class PoolService {
         )
         .lean();
 
-      const poolMemberCounts = await this.poolOperatorModel.countDocuments({
-        pool: { $in: publicPoolIds },
-      });
+      // Get the member counts for each pool
+      const poolMemberCounts = await Promise.all(
+        publicPoolIds.map(async (poolId) => {
+          const count = await this.poolOperatorModel.countDocuments({
+            pool: poolId,
+          });
+          return { poolId: poolId.toString(), count };
+        }),
+      );
 
       this.logger.debug(
         `(fetchAvailableRandomPublicPoolId) Pool member counts: ${JSON.stringify(
@@ -267,6 +256,14 @@ export class PoolService {
 
       const availablePools = pools.filter(
         (pool) => pool.maxOperators > poolMemberCounts[pool._id.toString()],
+      );
+
+      this.logger.debug(
+        `(fetchAvailableRandomPublicPoolId) Available pools: ${JSON.stringify(
+          availablePools,
+          null,
+          2,
+        )}`,
       );
 
       if (availablePools.length > 0) {
