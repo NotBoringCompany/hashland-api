@@ -36,7 +36,7 @@ export class DrillingSessionService {
    * Generates a Redis key for a specific drilling session.
    * @param operatorId The operator ID
    */
-  private getSessionKey(operatorId: Types.ObjectId | string): string {
+  getSessionKey(operatorId: Types.ObjectId | string): string {
     return `${this.redisSessionKeyPrefix}${operatorId.toString()}`;
   }
 

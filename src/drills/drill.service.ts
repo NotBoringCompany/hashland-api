@@ -4,24 +4,180 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import mongoose from 'mongoose';
 import { Drill } from './schemas/drill.schema';
 import { DrillConfig, DrillVersion } from 'src/common/enums/drill.enum';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { ApiResponse } from 'src/common/dto/response.dto';
+import { DrillingSession } from './schemas/drilling-session.schema';
+
+/**
+ * Type for the change stream events for the drills collection.
+ */
+type DrillChangeEvent =
+  | mongoose.mongo.ChangeStreamInsertDocument<Drill>
+  | mongoose.mongo.ChangeStreamUpdateDocument<Drill>
+  | mongoose.mongo.ChangeStreamReplaceDocument<Drill>
+  | mongoose.mongo.ChangeStreamDeleteDocument;
 
 @Injectable()
-export class DrillService {
+export class DrillService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DrillService.name);
+
+  // ⬇️ In-memory cache of eligible drills that can be extractors
+  private eligibleExtractorDrills = new Map<
+    string,
+    { eff: number; operatorId: Types.ObjectId }
+  >();
+
+  // ⬇️ Change stream for the drills collection (to watch for changes)
+  private changeStream: mongoose.mongo.ChangeStream;
 
   constructor(
     @InjectModel(Drill.name)
     private drillModel: Model<Drill>,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    @InjectModel(DrillingSession.name)
+    private drillingSessionModel: Model<DrillingSession>,
   ) {}
+
+  /**
+   * On app start: load all active drills with `extractorAllowed` set to true into memory and
+   * subscribe to changeStream for incremental updates
+   */
+  async onModuleInit() {
+    // 1) initial load (covered by compound index)
+    const cursor = this.drillModel
+      .find(
+        { extractorAllowed: true, active: true },
+        { actualEff: 1, operatorId: 1 },
+      )
+      .lean()
+      .cursor({ batchSize: 20_000 });
+
+    for await (const doc of cursor) {
+      this.eligibleExtractorDrills.set(doc._id.toHexString(), {
+        eff: doc.actualEff,
+        operatorId: doc.operatorId,
+      });
+    }
+
+    // 2) subscribe to changes
+    this.changeStream = this.drillModel.watch([
+      {
+        $match: {
+          operationType: { $in: ['insert', 'update', 'replace', 'delete'] },
+        },
+      },
+    ]);
+
+    this.changeStream.on('change', (change) => {
+      this.handleDrillsChange(change as DrillChangeEvent);
+    });
+  }
+
+  /**
+   * Handle incremental drill updates so the cache stays fresh
+   */
+  private async handleDrillsChange(change: DrillChangeEvent) {
+    const id = change.documentKey._id.toString();
+
+    if (change.operationType === 'delete') {
+      this.eligibleExtractorDrills.delete(id);
+      return;
+    }
+
+    // on insert/replace/update—re-fetch that one doc
+    const doc = await this.drillModel
+      .findById(id, {
+        actualEff: 1,
+        operatorId: 1,
+        extractorAllowed: 1,
+        active: 1,
+      })
+      .lean();
+
+    if (doc && doc.extractorAllowed && doc.active) {
+      this.eligibleExtractorDrills.set(id, {
+        eff: doc.actualEff,
+        operatorId: doc.operatorId,
+      });
+    } else {
+      this.eligibleExtractorDrills.delete(id);
+    }
+  }
+
+  /**
+   * Cleans up the change stream on shutdown.
+   */
+  onModuleDestroy() {
+    this.changeStream?.close();
+  }
+
+  /**
+   * Selects an extractor using weighted probability.
+   * Now runs entirely in-memory over `this.eligibleExtractorDrills`.
+   */
+  selectExtractor(): {
+    drillId: Types.ObjectId;
+    drillOperatorId: Types.ObjectId;
+    eff: number;
+    totalWeightedEff: number;
+  } | null {
+    const MIN = GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER;
+    const MAX = GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER;
+
+    if (this.eligibleExtractorDrills.size === 0) {
+      this.logger.warn(`⚠️ (selectExtractor) No eligible drills found.`);
+      return null;
+    }
+
+    // One-pass streaming weighted sampling
+    let selected: {
+      id: string;
+      eff: number;
+      operatorId: Types.ObjectId;
+    } | null = null;
+    let totalW = 0;
+
+    // Compute a 'seed-always-select first' system.
+    // The first drill will be the first selected, then the second drill has a chance to knock it out of the extractor spot, and the third drill
+    // has a chance to knock either Drill 1 or 2 (whichever remains in place) out, and so on.
+    // This is more efficient than the two-step approach.
+    for (const [id, { eff, operatorId }] of this.eligibleExtractorDrills) {
+      const luck = MIN + Math.random() * (MAX - MIN);
+      const w = eff * luck;
+      totalW += w;
+      // keep this item with probability w/totalW
+      if (Math.random() * totalW < w) {
+        selected = { id, eff, operatorId };
+      }
+    }
+
+    if (!selected) {
+      this.logger.warn(`⚠️ (selectExtractor) Floating-point fallback.`);
+      return null;
+    }
+
+    this.logger.log(
+      `✅ (selectExtractor) Selected extractor: Drill ${selected.id} with ${selected.eff.toFixed(
+        2,
+      )} EFF. Total W: ${totalW.toFixed(2)}.`,
+    );
+
+    return {
+      drillId: new Types.ObjectId(selected.id),
+      drillOperatorId: selected.operatorId,
+      eff: selected.eff,
+      totalWeightedEff: totalW,
+    };
+  }
 
   /**
    * Activates or deactivates a drill for an operator.
@@ -56,6 +212,25 @@ export class DrillService {
       if (state && activeDrillCount >= operator.maxActiveDrillsAllowed) {
         throw new BadRequestException(
           `(toggleDrillActiveState) Operator has reached the max active drill limit.`,
+        );
+      }
+
+      // Prevent toggling if the operator has an active drilling session
+      const activeDrillingSession = await this.drillingSessionModel.exists({
+        operatorId,
+        startTime: { $lte: new Date() },
+        endTime: null,
+      });
+
+      if (activeDrillingSession) {
+        throw new BadRequestException(
+          `(toggleDrillActiveState) Operator has an active drilling session.`,
+        );
+      }
+
+      if (activeDrillingSession) {
+        throw new BadRequestException(
+          `(toggleDrillActiveState) Operator has an active drilling session.`,
         );
       }
 
@@ -265,93 +440,6 @@ export class DrillService {
       .find({ extractorAllowed: true })
       .select('_id actualEff')
       .lean();
-  }
-
-  /**
-   * Selects an extractor using weighted probability.
-   * Uses a dice roll between 0 and the cumulative sum of all (actualEff × Luck Factor).
-   * No operator-based effMultiplier or effCredits are used.
-   */
-  async selectExtractor(): Promise<{
-    drillId: Types.ObjectId;
-    drillOperatorId: Types.ObjectId;
-    eff: number;
-    totalWeightedEff: number;
-  } | null> {
-    const selectionStartTime = performance.now();
-
-    // ✅ Step 1: Fetch all eligible drills directly (must have `extractorAllowed` set to true and be active)
-    const eligibleDrills = await this.drillModel
-      .find(
-        { extractorAllowed: true, active: true },
-        { _id: 1, actualEff: 1, operatorId: 1 },
-      )
-      .lean();
-
-    if (eligibleDrills.length === 0) {
-      this.logger.warn(`⚠️ (selectExtractor) No eligible drills found.`);
-      return null;
-    }
-
-    // ✅ Step 2: Apply luck factor and compute weighted EFF for each drill
-    const drillsWithWeight = eligibleDrills.map((drill) => {
-      const luckFactor =
-        GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER +
-        Math.random() *
-          (GAME_CONSTANTS.LUCK.MAX_LUCK_MULTIPLIER -
-            GAME_CONSTANTS.LUCK.MIN_LUCK_MULTIPLIER);
-
-      return {
-        drillId: drill._id,
-        drillOperatorId: drill.operatorId,
-        eff: drill.actualEff,
-        weightedEff: drill.actualEff * luckFactor,
-      };
-    });
-
-    // ✅ Step 3: Calculate total weighted EFF and roll the dice
-    const totalWeightedEff = drillsWithWeight.reduce(
-      (sum, drill) => sum + drill.weightedEff,
-      0,
-    );
-
-    if (totalWeightedEff === 0) {
-      this.logger.warn(`⚠️ (selectExtractor) No valid weighted EFF found.`);
-      return null;
-    }
-
-    const diceRoll = Math.random() * totalWeightedEff;
-    let cumulativeEff = 0;
-
-    for (const drill of drillsWithWeight) {
-      cumulativeEff += drill.weightedEff;
-      if (diceRoll <= cumulativeEff) {
-        const selectionEndTime = performance.now();
-
-        this.logger.log(
-          `✅ (selectExtractor) Selected extractor: Drill ${drill.drillId.toString()} with ${drill.eff.toFixed(2)} EFF. Cumulative EFF this cycle: ${totalWeightedEff.toFixed(2)}.`,
-        );
-
-        this.logger.log(
-          `⏳ (selectExtractor) Extractor selection took ${(selectionEndTime - selectionStartTime).toFixed(2)}ms.`,
-        );
-
-        return {
-          drillId: drill.drillId,
-          drillOperatorId: drill.drillOperatorId,
-          eff: drill.eff,
-          totalWeightedEff,
-        };
-      }
-    }
-
-    // Fallback return, should not happen unless there's floating-point edge case
-    return {
-      drillId: null,
-      drillOperatorId: null,
-      eff: null,
-      totalWeightedEff,
-    };
   }
 
   /**
