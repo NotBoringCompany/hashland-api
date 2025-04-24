@@ -596,6 +596,21 @@ export class OperatorWalletService {
         return false;
       }
 
+      // Verify domain
+      const appDomain = this.configService.get<string>(
+        'APP_DOMAIN',
+        'hashland.ton.app',
+      );
+      this.logger.debug(
+        `[validateTonProof] Checking domain: expected=${appDomain}, actual=${tonProof.proof.domain.value}`,
+      );
+      if (tonProof.proof.domain.value !== appDomain) {
+        this.logger.warn(
+          `[validateTonProof] Domain mismatch: ${tonProof.proof.domain.value} ≠ ${appDomain}`,
+        );
+        return false;
+      }
+
       // Verify the signature
       const tonAddress = Address.parse(address);
       this.logger.debug(
