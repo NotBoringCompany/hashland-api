@@ -558,31 +558,13 @@ export class OperatorWalletService {
     tonProof: TonProofDto,
     address: string,
   ): Promise<boolean> {
-    this.logger.log(
-      `[validateTonProof] Starting validation for address: ${address}`,
-    );
-
     if (!tonProof) {
-      this.logger.warn(
-        `[validateTonProof] No tonProof data provided for address: ${address}`,
-      );
       return false;
     }
 
     try {
-      this.logger.debug(
-        `[validateTonProof] TON proof data: ${JSON.stringify({
-          tonAddress: tonProof.tonAddress,
-          timestamp: tonProof.proof.timestamp,
-          domain: tonProof.proof.domain,
-        })}`,
-      );
-
       // Verify the address matches
       if (tonProof.tonAddress.toLowerCase() !== address.toLowerCase()) {
-        this.logger.warn(
-          `[validateTonProof] Address mismatch: ${tonProof.tonAddress} ≠ ${address}`,
-        );
         return false;
       }
 
@@ -590,9 +572,6 @@ export class OperatorWalletService {
       const proofTimestamp = tonProof.proof.timestamp;
       const currentTimestamp = Math.floor(Date.now() / 1000);
       if (currentTimestamp - proofTimestamp > 86400) {
-        this.logger.warn(
-          `[validateTonProof] Proof expired: ${currentTimestamp - proofTimestamp}s old (max 86400s)`,
-        );
         return false;
       }
 
@@ -601,46 +580,26 @@ export class OperatorWalletService {
         'APP_DOMAIN',
         'hashland.ton.app',
       );
-      this.logger.debug(
-        `[validateTonProof] Checking domain: expected=${appDomain}, actual=${tonProof.proof.domain.value}`,
-      );
       if (tonProof.proof.domain.value !== appDomain) {
-        this.logger.warn(
-          `[validateTonProof] Domain mismatch: ${tonProof.proof.domain.value} ≠ ${appDomain}`,
-        );
         return false;
       }
 
       // Verify the signature
       const tonAddress = Address.parse(address);
-      this.logger.debug(
-        `[validateTonProof] Parsed TON address: ${tonAddress.toString()}`,
-      );
-
       const publicKey = await this.extractPublicKeyFromContract(tonAddress);
 
       if (!publicKey) {
         this.logger.error(
-          `[validateTonProof] Failed to extract public key for address: ${address}`,
+          `Could not extract public key for address: ${address}`,
         );
         return false;
       }
 
-      this.logger.debug(
-        `[validateTonProof] Extracted public key: ${publicKey.toString('hex')}`,
-      );
-
       // Convert signature from hex to buffer
       const signatureBuffer = Buffer.from(tonProof.proof.signature, 'hex');
-      this.logger.debug(
-        `[validateTonProof] Signature length: ${signatureBuffer.length} bytes`,
-      );
 
       // Create payload hash
       const payloadBuffer = Buffer.from(tonProof.proof.payload);
-      this.logger.debug(
-        `[validateTonProof] Payload length: ${payloadBuffer.length} bytes`,
-      );
 
       // Verify the signature
       const isValid = this.verifySignature(
@@ -649,13 +608,10 @@ export class OperatorWalletService {
         signatureBuffer,
       );
 
-      this.logger.log(
-        `[validateTonProof] Signature validation result for address ${address}: ${isValid}`,
-      );
       return isValid;
     } catch (error) {
       this.logger.error(
-        `[validateTonProof] Error validating TON proof for ${address}: ${error.message}`,
+        `Error validating TON proof: ${error.message}`,
         error.stack,
       );
       return false;
