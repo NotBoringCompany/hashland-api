@@ -217,7 +217,6 @@ export class PoolService {
    */
   async fetchAvailableRandomPublicPoolId(): Promise<string | null> {
     try {
-      // IDs of public pools 1, 2 and 3
       const publicPoolIds = [
         new Types.ObjectId('67c59119e13cd025d70558f8'),
         new Types.ObjectId('67c5913d38219727f71abcc9'),
@@ -225,38 +224,32 @@ export class PoolService {
       ];
 
       const pools = await this.poolModel
-        .find(
-          {
-            _id: { $in: publicPoolIds },
-          },
-          {
-            _id: 1,
-            maxOperators: 1,
-          },
-        )
+        .find({ _id: { $in: publicPoolIds } }, { _id: 1, maxOperators: 1 })
         .lean();
 
-      // Get the member counts for each pool
-      const poolMemberCounts = await Promise.all(
+      const poolMemberCountMap = new Map<string, number>();
+
+      await Promise.all(
         publicPoolIds.map(async (poolId) => {
           const count = await this.poolOperatorModel.countDocuments({
             pool: poolId,
           });
-          return { poolId: poolId.toString(), count };
+          poolMemberCountMap.set(poolId.toString(), count);
         }),
       );
 
       this.logger.debug(
         `(fetchAvailableRandomPublicPoolId) Pool member counts: ${JSON.stringify(
-          poolMemberCounts,
+          Array.from(poolMemberCountMap.entries()),
           null,
           2,
         )}`,
       );
 
-      const availablePools = pools.filter(
-        (pool) => pool.maxOperators > poolMemberCounts[pool._id.toString()],
-      );
+      const availablePools = pools.filter((pool) => {
+        const count = poolMemberCountMap.get(pool._id.toString()) ?? 0;
+        return pool.maxOperators > count;
+      });
 
       this.logger.debug(
         `(fetchAvailableRandomPublicPoolId) Available pools: ${JSON.stringify(
@@ -267,9 +260,8 @@ export class PoolService {
       );
 
       if (availablePools.length > 0) {
-        return availablePools[
-          Math.floor(Math.random() * availablePools.length)
-        ]._id.toString();
+        const randomIndex = Math.floor(Math.random() * availablePools.length);
+        return availablePools[randomIndex]._id.toString();
       }
 
       return null;
@@ -597,3 +589,4 @@ export class PoolService {
     }
   }
 }
+
