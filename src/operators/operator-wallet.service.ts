@@ -575,35 +575,18 @@ export class OperatorWalletService {
         return false;
       }
 
-      // Verify domain
-      const appDomain = this.configService.get<string>(
-        'APP_DOMAIN',
-        'hashland.ton.app',
-      );
-      if (tonProof.proof.domain.value !== appDomain) {
-        return false;
-      }
-
-      // Verify the signature
-      const tonAddress = Address.parse(address);
-      const publicKey = await this.extractPublicKeyFromContract(tonAddress);
-
-      if (!publicKey) {
-        this.logger.error(
-          `Could not extract public key for address: ${address}`,
-        );
-        return false;
-      }
-
       // Convert signature from hex to buffer
       const signatureBuffer = Buffer.from(tonProof.proof.signature, 'hex');
 
       // Create payload hash
       const payloadBuffer = Buffer.from(tonProof.proof.payload);
 
+      // Convert public key from hex to buffer
+      const publicKeyBuffer = Buffer.from(tonProof.publicKey, 'hex');
+
       // Verify the signature
       const isValid = this.verifySignature(
-        publicKey,
+        publicKeyBuffer,
         payloadBuffer,
         signatureBuffer,
       );

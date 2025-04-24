@@ -90,6 +90,14 @@ export class TonProofDto {
   @IsString()
   @IsNotEmpty()
   tonAddress: string;
+
+  @ApiProperty({
+    description: 'Public key associated with the TON wallet',
+    example: '0x789ghi...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  publicKey: string;
 }
 
 /**
