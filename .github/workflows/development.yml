@@ -38,7 +38,7 @@ jobs:
           echo "DATABASE_NAME=main" >> .env
           echo "JWT_EXPIRATION=24h" >> .env
           echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-          echo "MONGO_URI=mongodb://${{ secrets.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@mongo:27017/main?authSource=admin" >> .env
+          echo "MONGO_URI=mongodb://${{ secrets.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@mongo:27017/main?authSource=admin&replicaSet=rs0" >> .env
           echo "MONGO_USERNAME=${{ secrets.MONGO_USERNAME }}" >> .env
           echo "MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }}" >> .env
           echo "PORT=8080" >> .env
