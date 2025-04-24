@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Referral } from './schemas/referral.schema';
+import { Referral, ReferralType } from './schemas/referral.schema';
+import { StarterCode } from './schemas/starter-code.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import {
   ReferralCodeResponseDto,
@@ -17,6 +18,11 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { ReferredUserDto } from './dto/referred-users.dto';
 import { PaginatedResponse } from 'src/common/dto/paginated-response.dto';
+import {
+  CreateStarterCodeDto,
+  StarterCodeResponseDto,
+  UseStarterCodeDto,
+} from './dto/starter-code.dto';
 
 /**
  * Service for managing referrals
@@ -27,6 +33,7 @@ export class ReferralService {
 
   constructor(
     @InjectModel(Referral.name) private referralModel: Model<Referral>,
+    @InjectModel(StarterCode.name) private starterCodeModel: Model<StarterCode>,
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
   ) {}
 
@@ -119,7 +126,30 @@ export class ReferralService {
     newOperatorId: Types.ObjectId,
   ): Promise<ApiResponse<{ referrerId?: Types.ObjectId }>> {
     try {
-      // Find the referring operator
+      // Check if the code is a starter code
+      const starterCode = await this.starterCodeModel.findOne({
+        code: referralCode,
+      });
+
+      if (starterCode) {
+        // Process as a starter code
+        const useStarterCodeDto: UseStarterCodeDto = {
+          starterCode: referralCode,
+          operatorId: newOperatorId,
+        };
+
+        const result = await this.useStarterCode(useStarterCodeDto);
+
+        if (result.status === 200) {
+          return new ApiResponse(200, 'Starter code processed successfully', {
+            referrerId: starterCode.createdBy,
+          });
+        }
+
+        return result as ApiResponse<{ referrerId?: Types.ObjectId }>;
+      }
+
+      // Find the referring operator (regular referral code)
       const referrer = await this.operatorModel.findOne(
         { 'referralData.referralCode': referralCode },
         { _id: 1 },
@@ -163,6 +193,7 @@ export class ReferralService {
         referrerId,
         referredId: newOperatorId,
         referralCode,
+        referralType: ReferralType.OPERATOR,
         rewardsProcessed: false,
       });
 
@@ -544,6 +575,392 @@ export class ReferralService {
         500,
         `Error retrieving referred users: ${error.message}`,
         null,
+      );
+    }
+  }
+
+  /**
+   * Generates a unique starter code that can be used for referrals
+   * @param createStarterCodeDto Data for creating a starter code
+   * @returns The generated starter code
+   */
+  async createStarterCode(
+    createStarterCodeDto: CreateStarterCodeDto,
+  ): Promise<ApiResponse<StarterCodeResponseDto>> {
+    try {
+      let { code } = createStarterCodeDto;
+
+      // If no code is provided, generate a random one
+      if (!code) {
+        code = this.generateStarterCode();
+      } else {
+        // Check if the code already exists
+        const existingCode = await this.starterCodeModel.findOne({ code });
+        if (existingCode) {
+          throw new BadRequestException('Starter code already exists');
+        }
+      }
+
+      // Create the starter code record
+      const starterCode = await this.starterCodeModel.create({
+        ...createStarterCodeDto,
+        code,
+        isUsed: false,
+      });
+
+      return new ApiResponse(
+        200,
+        'Starter code created successfully',
+        new StarterCodeResponseDto({
+          code: starterCode.code,
+          isValid: true,
+          rewards: starterCode.rewards,
+        }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `(createStarterCode) Error: ${error.message}`,
+        error.stack,
+      );
+
+      if (error instanceof BadRequestException) {
+        return new ApiResponse(400, error.message, null);
+      }
+
+      throw new InternalServerErrorException(
+        `Error creating starter code: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Generate a unique starter code
+   * @returns A unique starter code
+   */
+  private generateStarterCode(): string {
+    // Generate a random alphanumeric code (8-10 characters)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = 'START';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  /**
+   * Validates a starter code without using it
+   * @param code The starter code to validate
+   * @returns Information about the starter code
+   */
+  async validateStarterCode(
+    code: string,
+  ): Promise<ApiResponse<StarterCodeResponseDto>> {
+    try {
+      const starterCode = await this.starterCodeModel.findOne({ code });
+
+      if (!starterCode) {
+        return new ApiResponse(
+          404,
+          'Starter code not found',
+          new StarterCodeResponseDto({
+            code,
+            isValid: false,
+          }),
+        );
+      }
+
+      if (starterCode.isUsed) {
+        return new ApiResponse(
+          400,
+          'Starter code has already been used',
+          new StarterCodeResponseDto({
+            code,
+            isValid: false,
+          }),
+        );
+      }
+
+      // Check if expired
+      if (
+        starterCode.expiresAt &&
+        new Date() > new Date(starterCode.expiresAt)
+      ) {
+        return new ApiResponse(
+          400,
+          'Starter code has expired',
+          new StarterCodeResponseDto({
+            code,
+            isValid: false,
+          }),
+        );
+      }
+
+      return new ApiResponse(
+        200,
+        'Starter code is valid',
+        new StarterCodeResponseDto({
+          code,
+          isValid: true,
+          rewards: starterCode.rewards,
+        }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `(validateStarterCode) Error: ${error.message}`,
+        error.stack,
+      );
+
+      throw new InternalServerErrorException(
+        `Error validating starter code: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Process the use of a starter code by an operator
+   * @param useStarterCodeDto Data for using a starter code
+   * @returns Success status and message
+   */
+  async useStarterCode(
+    useStarterCodeDto: UseStarterCodeDto,
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    try {
+      const { starterCode: code, operatorId } = useStarterCodeDto;
+      const operatorObjectId = new Types.ObjectId(operatorId);
+
+      // Check if operator exists
+      const operator = await this.operatorModel.findById(operatorObjectId, {
+        'referralData.referredBy': 1,
+      });
+
+      if (!operator) {
+        throw new NotFoundException('Operator not found');
+      }
+
+      if (operator.referralData?.referredBy) {
+        throw new BadRequestException('Operator already has a referrer');
+      }
+
+      // Find the starter code
+      const starterCode = await this.starterCodeModel.findOne({ code });
+
+      if (!starterCode) {
+        throw new NotFoundException('Starter code not found');
+      }
+
+      if (starterCode.isUsed) {
+        throw new BadRequestException('Starter code has already been used');
+      }
+
+      // Check if expired
+      if (
+        starterCode.expiresAt &&
+        new Date() > new Date(starterCode.expiresAt)
+      ) {
+        throw new BadRequestException('Starter code has expired');
+      }
+
+      // Use the starter code
+      await this.starterCodeModel.updateOne(
+        { _id: starterCode._id },
+        {
+          $set: {
+            isUsed: true,
+            usedBy: operatorObjectId,
+          },
+        },
+      );
+
+      // Get referrer ID if available, otherwise this is just a starter code with no referrer
+      const referrerId = starterCode.createdBy;
+
+      // Update the new operator with the referral data
+      await this.operatorModel.updateOne(
+        { _id: operatorObjectId },
+        {
+          $set: {
+            'referralData.referredBy': referrerId || null,
+            'referralData.startedWithCode': code,
+          },
+        },
+      );
+
+      // If there's a referrer, create a referral record
+      if (referrerId) {
+        // Check if a referral record already exists (shouldn't happen but check anyway)
+        const existingReferral = await this.referralModel.findOne({
+          referrerId,
+          referredId: operatorObjectId,
+        });
+
+        if (!existingReferral) {
+          // Create a new referral record as a starter code type
+          await this.referralModel.create({
+            referrerId,
+            referredId: operatorObjectId,
+            referralCode: code,
+            referralType: ReferralType.STARTER_CODE,
+            rewardsProcessed: false,
+          });
+
+          // Update the referrer's stats (increment total referrals)
+          await this.operatorModel.updateOne(
+            { _id: referrerId },
+            { $inc: { 'referralData.totalReferrals': 1 } },
+          );
+
+          // Apply starter code rewards if configured
+          if (
+            starterCode.rewards &&
+            (starterCode.rewards.effCredits > 0 ||
+              starterCode.rewards.hashBonus > 0)
+          ) {
+            await this.applyStarterCodeRewards(
+              referrerId,
+              operatorObjectId,
+              starterCode.rewards,
+            );
+          } else {
+            // Apply standard referral rewards
+            await this.applyReferralRewards(referrerId, operatorObjectId);
+          }
+        }
+      }
+
+      return new ApiResponse(200, 'Starter code used successfully', {
+        success: true,
+      });
+    } catch (error) {
+      this.logger.error(
+        `(useStarterCode) Error: ${error.message}`,
+        error.stack,
+      );
+
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        return new ApiResponse(
+          error instanceof NotFoundException ? 404 : 400,
+          error.message,
+          { success: false },
+        );
+      }
+
+      throw new InternalServerErrorException(
+        `Error using starter code: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Apply rewards from a starter code
+   * @param referrerId The ID of the referrer
+   * @param referredId The ID of the referred operator
+   * @param rewards The rewards to apply
+   */
+  private async applyStarterCodeRewards(
+    referrerId: Types.ObjectId,
+    referredId: Types.ObjectId,
+    rewards: { effCredits?: number; hashBonus?: number },
+  ): Promise<void> {
+    try {
+      const { effCredits = 0, hashBonus = 0 } = rewards;
+
+      // Update the referrer with the reward
+      if (referrerId) {
+        await this.operatorModel.updateOne(
+          { _id: referrerId },
+          {
+            $inc: {
+              effCredits: effCredits,
+              hashBonus: hashBonus,
+              'referralData.totalReferralRewards.effCredits': effCredits,
+              'referralData.totalReferralRewards.hashBonus': hashBonus,
+            },
+          },
+        );
+      }
+
+      // Update the referred operator with their reward
+      // For starter codes, we give the same reward to the referred user
+      await this.operatorModel.updateOne(
+        { _id: referredId },
+        {
+          $inc: {
+            effCredits: effCredits,
+            hashBonus: hashBonus,
+          },
+        },
+      );
+
+      // Mark the referral as processed
+      await this.referralModel.updateOne(
+        { referrerId, referredId },
+        {
+          $set: {
+            rewardsProcessed: true,
+            referrerRewards: {
+              effCredits: effCredits,
+              hashBonus: hashBonus,
+            },
+            referredRewards: {
+              effCredits: effCredits,
+              hashBonus: hashBonus,
+            },
+          },
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `(applyStarterCodeRewards) Error: ${error.message}`,
+        error.stack,
+      );
+      // Log the error but don't throw to prevent transaction failure
+    }
+  }
+
+  /**
+   * Get all starter codes with pagination
+   * @param page Page number
+   * @param limit Items per page
+   * @returns Paginated list of starter codes
+   */
+  async getStarterCodes(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PaginatedResponse<StarterCode>> {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [starterCodes, totalCount] = await Promise.all([
+        this.starterCodeModel
+          .find()
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        this.starterCodeModel.countDocuments(),
+      ]);
+
+      return new PaginatedResponse(
+        200,
+        'Starter codes retrieved successfully',
+        {
+          items: starterCodes,
+          page,
+          limit,
+          total: totalCount,
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `(getStarterCodes) Error: ${error.message}`,
+        error.stack,
+      );
+
+      throw new InternalServerErrorException(
+        `Error getting starter codes: ${error.message}`,
       );
     }
   }
