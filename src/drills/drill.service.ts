@@ -117,13 +117,20 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
 
     // on insert/replace/update—re-fetch that one doc
     const doc = await this.drillModel
-      .findById(id, {
-        actualEff: 1,
-        operatorId: 1,
-        extractorAllowed: 1,
-        active: 1,
-      })
+      .findOne(
+        { _id: new Types.ObjectId(id) },
+        {
+          actualEff: 1,
+          operatorId: 1,
+          extractorAllowed: 1,
+          active: 1,
+        },
+      )
       .lean();
+
+    this.logger.debug(
+      `(onModuleInit DrillService) Drill doc: ${JSON.stringify(doc, null, 2)}`,
+    );
 
     if (doc && doc.extractorAllowed && doc.active) {
       this.eligibleExtractorDrills.set(id, {
@@ -478,3 +485,4 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
     return 1 + Math.log(1 + 0.0000596 * equity);
   }
 }
+
