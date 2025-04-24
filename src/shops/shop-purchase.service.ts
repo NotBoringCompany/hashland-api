@@ -561,10 +561,10 @@ export class ShopPurchaseService {
 
         // Check if the item name is `UPGRADE_MAX_ACTIVE_DRILLS_(nextLimit)`
         // If not, return an error
-        if (lowercaseItemName !== `UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}`) {
+        if (lowercaseItemName !== `upgrade_max_active_drills_${nextLimit}`) {
           this.logger.error(`
             (checkPurchaseAllowed) Invalid item name for max active drill limit upgrade. 
-            Allowed: UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}, current item: ${lowercaseItemName}  
+            Allowed: upgrade_max_active_drills_${nextLimit}, current item: ${lowercaseItemName}  
           `);
 
           const message =
