@@ -395,6 +395,7 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
         // Basic drills will always be active since they are given at the beginning
         // They CANNOT be deactivated.
         active: version === DrillVersion.BASIC ? true : false,
+        lastActiveStateToggle: null,
         actualEff,
       };
 

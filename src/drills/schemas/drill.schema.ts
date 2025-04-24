@@ -92,7 +92,7 @@ export class Drill extends Document {
     description: 'The last time `active` was updated/toggled',
     example: '2021-01-01T00:00:00.000Z',
   })
-  @Prop({ type: Date, required: true, default: null })
+  @Prop({ type: Date, default: null })
   lastActiveStateToggle: Date | null;
 
   /**

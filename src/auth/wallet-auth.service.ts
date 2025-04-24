@@ -132,7 +132,12 @@ export class WalletAuthService {
         };
       }
 
-      // Update cumulativeEff for the operator
+      // ✅ Update asset equity when the operator logs in
+      await this.operatorWalletService.updateAssetEquityForOperator(
+        operatorAuth.operator._id,
+      );
+
+      // ✅ Update cumulativeEff for the operator
       await this.operatorService.updateCumulativeEffForSingleOperator(
         operatorAuth.operator._id,
       );

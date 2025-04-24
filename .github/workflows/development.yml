@@ -42,8 +42,9 @@ jobs:
           echo "MONGO_USERNAME=${{ secrets.MONGO_USERNAME }}" >> .env
           echo "MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }}" >> .env
           echo "PORT=8080" >> .env
-          echo "REDIS_URI=redis://redis:6379" >> .env
+          echo "REDIS_URI=redis://:${{ secrets.REDIS_PASSWORD }}@redis:6379" >> .env
           echo "REDIS_PRIMARY_ONLY=true" >> .env
+          echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> .env
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
           echo "TON_API_KEY=${{ secrets.TON_API_KEY }}" >> .env
           echo "TON_API_ENDPOINT=${{ secrets.TON_API_ENDPOINT }}" >> .env

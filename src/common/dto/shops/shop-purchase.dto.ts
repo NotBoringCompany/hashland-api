@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
 import { ApiResponse } from '../response.dto';
@@ -132,7 +132,7 @@ export class CheckPurchaseAllowedDto {
     example: 'REPLENISH_FUEL',
     required: false,
   })
-  @IsString()
+  @IsOptional()
   shopItemName?: string;
 
   @ApiProperty({
@@ -140,6 +140,7 @@ export class CheckPurchaseAllowedDto {
     example: true,
     default: false,
   })
+  @IsOptional()
   showShopItemEffects?: boolean;
 
   @ApiProperty({
@@ -147,6 +148,7 @@ export class CheckPurchaseAllowedDto {
     example: true,
     default: false,
   })
+  @IsOptional()
   showShopItemPrice?: boolean;
 }
 

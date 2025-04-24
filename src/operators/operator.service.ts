@@ -763,7 +763,8 @@ export class OperatorService {
       effCredits: 0,
       maxFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
       currentFuel: GAME_CONSTANTS.FUEL.OPERATOR_STARTING_FUEL,
-      maxActiveDrillsAllowed: 5,
+      maxActiveDrillsAllowed:
+        GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
       totalEarnedHASH: 0,
       referralData: {
         referralCode: null,
