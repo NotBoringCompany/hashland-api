@@ -16,7 +16,6 @@ import { Drill } from 'src/drills/schemas/drill.schema';
 import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { TonService } from 'src/ton/ton.service';
-import { DrillConfig } from 'src/common/enums/drill.enum';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
 import { AlchemyService } from 'src/alchemy/alchemy.service';
@@ -24,6 +23,7 @@ import { RedisService } from 'src/common/redis.service';
 import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
 import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
+import { DrillConfig } from 'src/common/enums/drill.enum';
 
 @Injectable()
 export class ShopPurchaseService {
@@ -443,6 +443,7 @@ export class ShopPurchaseService {
 
       const lowercaseItemName = shopItem.item.toLowerCase();
 
+      ////////////////// NOTE: TEMPORARILY DISABLED DRILL PURCHASE PREREQUISITES CHECK!!!!! ///////////////////
       // ✅ Drill purchase prerequisites check
       if (
         lowercaseItemName.includes('drill') &&
