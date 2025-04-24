@@ -4,10 +4,64 @@ import {
   IsString,
   IsOptional,
   ValidateNested,
+  ValidateIf,
+  IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { Types } from 'mongoose';
+
+/**
+ * DTO for domain in TON proof
+ */
+class TonProofDomainDto {
+  @ApiProperty({
+    description: 'Length of domain in bytes',
+    example: 17,
+  })
+  @IsNumber()
+  lengthBytes: number;
+
+  @ApiProperty({
+    description: 'Domain value',
+    example: 'hashland.ton.app',
+  })
+  @IsString()
+  value: string;
+}
+
+/**
+ * DTO for proof data in TON proof
+ */
+class TonProofDataDto {
+  @ApiProperty({
+    description: 'Timestamp of the proof',
+    example: 1646146412,
+  })
+  @IsNumber()
+  timestamp: number;
+
+  @ApiProperty({
+    description: 'Domain information',
+  })
+  @ValidateNested()
+  @Type(() => TonProofDomainDto)
+  domain: TonProofDomainDto;
+
+  @ApiProperty({
+    description: 'Signature value',
+    example: '0x123abc...',
+  })
+  @IsString()
+  signature: string;
+
+  @ApiProperty({
+    description: 'Payload value',
+    example: '0x456def...',
+  })
+  @IsString()
+  payload: string;
+}
 
 /**
  * DTO for TON proof from Telegram wallet
@@ -26,16 +80,8 @@ export class TonProofDto {
     },
   })
   @ValidateNested()
-  @Type(() => Object)
-  proof: {
-    timestamp: number;
-    domain: {
-      lengthBytes: number;
-      value: string;
-    };
-    signature: string;
-    payload: string;
-  };
+  @Type(() => TonProofDataDto)
+  proof: TonProofDataDto;
 
   @ApiProperty({
     description: 'TON wallet address',
@@ -69,17 +115,25 @@ export class ConnectWalletDto {
   @ApiProperty({
     description: 'Signature to verify wallet ownership',
     example: '0x123abc...',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
+  @ValidateIf((o) => !o.tonProof)
+  @IsNotEmpty({
+    message: 'Signature is required when tonProof is not provided',
+  })
   signature: string;
 
   @ApiProperty({
     description: 'Message that was signed',
     example: 'Hashland authentication request for address EQAbc123...',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
+  @ValidateIf((o) => !o.tonProof)
+  @IsNotEmpty({
+    message: 'Signature message is required when tonProof is not provided',
+  })
   signatureMessage: string;
 
   @ApiProperty({
