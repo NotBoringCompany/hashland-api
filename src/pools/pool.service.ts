@@ -213,13 +213,9 @@ export class PoolService {
   }
 
   /**
-   * Fetches one random public pool ID for new operators to join.
-   *
-   * @returns The ID of the pool to join
+   * Fetches all public pool IDs.
    */
-  fetchRandomPublicPoolId(): string {
-    // get the pool ID from the pool number.
-    // hardcoding this reduces query time compared to fetching from the database.
+  fetchPublicPoolIds(): Array<{ poolNumber: number; poolId: string }> {
     const poolIds: Array<{ poolNumber: number; poolId: string }> = [
       {
         poolNumber: 1,
@@ -235,8 +231,7 @@ export class PoolService {
       },
     ];
 
-    // randomize which pool to fetch
-    return poolIds[Math.floor(Math.random() * poolIds.length)].poolId;
+    return poolIds;
   }
 
   /**
@@ -244,7 +239,7 @@ export class PoolService {
    */
   async fetchAvailableRandomPublicPoolId(): Promise<string | null> {
     try {
-      const publicPoolIds = this.fetchRandomPublicPoolId();
+      const publicPoolIds = this.fetchPublicPoolIds();
 
       const pools = await this.poolModel
         .find(
