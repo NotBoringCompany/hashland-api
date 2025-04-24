@@ -52,6 +52,10 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
    * subscribe to changeStream for incremental updates
    */
   async onModuleInit() {
+    this.logger.debug(
+      '(onModuleInit DrillService) Initializing module: Loading active extractor drills',
+    );
+
     // 1) initial load (covered by compound index)
     const cursor = this.drillModel
       .find(
@@ -61,14 +65,23 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
       .lean()
       .cursor({ batchSize: 20_000 });
 
+    let count = 0;
     for await (const doc of cursor) {
       this.eligibleExtractorDrills.set(doc._id.toHexString(), {
         eff: doc.actualEff,
         operatorId: doc.operatorId,
       });
+      count++;
     }
 
+    this.logger.debug(
+      `(onModuleInit DrillService) Loaded ${count} eligible extractor drills into memory.`,
+    );
+
     // 2) subscribe to changes
+    this.logger.debug(
+      '(onModuleInit DrillService) Subscribing to drillModel change stream for updates',
+    );
     this.changeStream = this.drillModel.watch([
       {
         $match: {
@@ -78,6 +91,9 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
     ]);
 
     this.changeStream.on('change', (change) => {
+      this.logger.debug(
+        `(onModuleInit DrillService) Change detected: ${JSON.stringify(change)}`,
+      );
       this.handleDrillsChange(change as DrillChangeEvent);
     });
   }
@@ -87,9 +103,15 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
    */
   private async handleDrillsChange(change: DrillChangeEvent) {
     const id = change.documentKey._id.toString();
+    this.logger.debug(
+      `(onModuleInit DrillService) Handling drill change: ${change.operationType} for ID ${id}`,
+    );
 
     if (change.operationType === 'delete') {
       this.eligibleExtractorDrills.delete(id);
+      this.logger.debug(
+        `(onModuleInit DrillService) Drill deleted from cache: ${id}`,
+      );
       return;
     }
 
@@ -108,8 +130,14 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
         eff: doc.actualEff,
         operatorId: doc.operatorId,
       });
+      this.logger.debug(
+        `(onModuleInit DrillService) Drill added/updated in cache: ${id}`,
+      );
     } else {
       this.eligibleExtractorDrills.delete(id);
+      this.logger.debug(
+        `(onModuleInit DrillService) Drill no longer eligible and removed from cache: ${id}`,
+      );
     }
   }
 
