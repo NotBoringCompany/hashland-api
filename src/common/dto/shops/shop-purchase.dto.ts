@@ -132,7 +132,7 @@ export class CheckPurchaseAllowedDto {
     example: 'REPLENISH_FUEL',
     required: false,
   })
-  @IsString()
+  @IsOptional()
   shopItemName?: string;
 
   @ApiProperty({
