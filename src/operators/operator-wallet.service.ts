@@ -27,6 +27,7 @@ import { AlchemyService } from 'src/alchemy/alchemy.service';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
 import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class OperatorWalletService {
@@ -41,11 +42,13 @@ export class OperatorWalletService {
     private readonly redisService: RedisService,
     private readonly alchemyService: AlchemyService,
     private readonly mixpanelService: MixpanelService,
+    private readonly configService: ConfigService,
   ) {
     // Initialize TON client
     const endpoint =
-      process.env.TON_API_ENDPOINT || 'https://toncenter.com/api/v2/jsonRPC';
-    const apiKey = process.env.TON_API_KEY || '';
+      this.configService.get<string>('TON_API_ENDPOINT') ||
+      'https://toncenter.com/api/v2/jsonRPC';
+    const apiKey = this.configService.get<string>('TON_API_KEY') || '';
 
     this.tonClient = new TonClient({
       endpoint,
@@ -168,7 +171,7 @@ export class OperatorWalletService {
 
       // ✅ TON Chain Handling
       if (chainWalletsMap[AllowedChain.TON]?.length) {
-        const tonApiKey = process.env.TON_API_KEY || '';
+        const tonApiKey = this.configService.get<string>('TON_API_KEY') || '';
         const apiUrl =
           `https://toncenter.com/api/v3/accountStates?include_boc=false&api_key=${tonApiKey}&` +
           chainWalletsMap[AllowedChain.TON]!.map(
@@ -186,7 +189,8 @@ export class OperatorWalletService {
 
           totalUsdBalance += totalTonBalance * (rates.ton || 0);
 
-          const tonXApiKey = process.env.TON_X_API_KEY || '';
+          const tonXApiKey =
+            this.configService.get<string>('TON_X_API_KEY') || '';
           const tonXApiUrl = `https://mainnet-rpc.tonxapi.com/v2/json-rpc/${tonXApiKey}`;
 
           const requests = chainWalletsMap[AllowedChain.TON]!.map(
@@ -572,13 +576,13 @@ export class OperatorWalletService {
       }
 
       // Verify domain
-      // const appDomain = this.configService.get<string>(
-      //   'APP_DOMAIN',
-      //   'hashland.ton.app',
-      // );
-      // if (tonProof.proof.domain.value !== appDomain) {
-      //   return false;
-      // }
+      const appDomain = this.configService.get<string>(
+        'APP_DOMAIN',
+        'hashland.ton.app',
+      );
+      if (tonProof.proof.domain.value !== appDomain) {
+        return false;
+      }
 
       // Verify the signature
       const tonAddress = Address.parse(address);
@@ -822,7 +826,7 @@ export class OperatorWalletService {
    * @returns The challenge message
    */
   private generateChallengeMessage(address: string, nonce: string): string {
-    const appName = process.env.APP_NAME || 'Hashland';
+    const appName = this.configService.get<string>('APP_NAME', 'Hashland');
     const timestamp = Date.now();
 
     return `${appName} authentication request for address ${address}.\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
@@ -870,9 +874,10 @@ export class OperatorWalletService {
 
       return {
         status: 'connected',
-        endpoint:
-          process.env.TON_API_ENDPOINT ||
+        endpoint: this.configService.get<string>(
+          'TON_API_ENDPOINT',
           'https://toncenter.com/api/v2/jsonRPC',
+        ),
       };
     } catch (error) {
       this.logger.error(
