@@ -50,10 +50,45 @@ export class OperatorWalletService {
       'https://toncenter.com/api/v2/jsonRPC';
     const apiKey = this.configService.get<string>('TON_API_KEY') || '';
 
+    this.logger.log(
+      `[Constructor] Initializing TON client with endpoint: ${endpoint}`,
+    );
+    this.logger.debug(
+      `[Constructor] TON API Key: ${
+        apiKey
+          ? apiKey.substring(0, 4) +
+            '***' +
+            (apiKey.length > 8 ? apiKey.substring(apiKey.length - 4) : '')
+          : 'not set'
+      }`,
+    );
+
     this.tonClient = new TonClient({
       endpoint,
       apiKey,
     });
+
+    // Log full client configuration (excluding sensitive data)
+    this.logger.debug(
+      `[Constructor] TON client initialized with parameters: ${JSON.stringify({
+        endpoint: this.tonClient.parameters.endpoint,
+        apiKey: this.tonClient.parameters.apiKey ? 'set (masked)' : 'not set',
+        timeout: this.tonClient.parameters.timeout,
+      })}`,
+    );
+
+    // Try a simple API call to verify connectivity
+    this.checkTonApiConnection()
+      .then((status) => {
+        this.logger.log(
+          `[Constructor] TON API connection test: ${status.status}`,
+        );
+      })
+      .catch((error) => {
+        this.logger.error(
+          `[Constructor] TON API connection test failed: ${error.message}`,
+        );
+      });
   }
 
   /**
@@ -794,8 +829,49 @@ export class OperatorWalletService {
     address: Address,
   ): Promise<Buffer | null> {
     try {
+      this.logger.log(
+        `[extractPublicKeyFromContract] Attempting to extract public key for address: ${address.toString()}`,
+      );
+
+      // Log TON client configuration
+      const clientConfig = {
+        endpoint: this.tonClient.parameters.endpoint,
+        hasApiKey: Boolean(this.tonClient.parameters.apiKey),
+        apiKeyLength: this.tonClient.parameters.apiKey
+          ? this.tonClient.parameters.apiKey.length
+          : 0,
+      };
+
+      this.logger.debug(
+        `[extractPublicKeyFromContract] TON client config: ${JSON.stringify(clientConfig)}`,
+      );
+
       // For v3R1 and v3R2 wallets, you can use get methods to extract the public key
-      const result = await this.tonClient.runMethod(address, 'get_public_key');
+      this.logger.debug(
+        `[extractPublicKeyFromContract] Calling runMethod 'get_public_key' on address: ${address.toString()}`,
+      );
+
+      // Add a timeout for better error diagnostics
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error('API call timeout after 10s')),
+          10000,
+        );
+      });
+
+      const resultPromise = this.tonClient.runMethod(address, 'get_public_key');
+      const result = (await Promise.race([
+        resultPromise,
+        timeoutPromise,
+      ])) as any;
+
+      this.logger.debug(
+        `[extractPublicKeyFromContract] runMethod result: ${JSON.stringify(
+          result,
+          (key, value) =>
+            typeof value === 'bigint' ? value.toString() : value,
+        )}`,
+      );
 
       // Check if result exists and has a stack
       if (result && result.stack) {
@@ -803,15 +879,72 @@ export class OperatorWalletService {
         // Get the first item from the stack (the public key)
         const publicKeyBigInt = result.stack.readBigNumber();
         const publicKeyHex = publicKeyBigInt.toString(16).padStart(64, '0');
-        return Buffer.from(publicKeyHex, 'hex');
+        const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
+
+        this.logger.debug(
+          `[extractPublicKeyFromContract] Extracted public key: ${publicKeyHex}`,
+        );
+        return publicKeyBuffer;
+      } else {
+        this.logger.warn(
+          `[extractPublicKeyFromContract] No stack found in result for address: ${address.toString()}`,
+        );
       }
 
       return null;
     } catch (error) {
-      this.logger.error(
-        `Error extracting public key: ${error.message}`,
-        error.stack,
-      );
+      // Check if the error is a 403 error
+      if (error.message && error.message.includes('403')) {
+        this.logger.error(
+          `[extractPublicKeyFromContract] 403 Forbidden error. API key may be invalid or rate limited. Address: ${address.toString()}`,
+        );
+
+        // Add more detailed diagnostics for API configuration
+        const apiEndpoint = this.configService.get<string>(
+          'TON_API_ENDPOINT',
+          'default_endpoint',
+        );
+        const apiKey = this.configService.get<string>('TON_API_KEY', '');
+        const maskedKey = apiKey
+          ? apiKey.substring(0, 4) +
+            '***' +
+            (apiKey.length > 8 ? apiKey.substring(apiKey.length - 4) : '')
+          : 'not set';
+
+        this.logger.debug(
+          `[extractPublicKeyFromContract] TON API configuration: 
+          - Endpoint: ${apiEndpoint}
+          - API Key: ${maskedKey}
+          - API Key Length: ${apiKey ? apiKey.length : 0}`,
+        );
+
+        // Verify if API key is included in request headers
+        if (this.tonClient.parameters.apiKey) {
+          this.logger.debug(
+            `[extractPublicKeyFromContract] TON client has API key configured (length: ${this.tonClient.parameters.apiKey.length})`,
+          );
+        } else {
+          this.logger.warn(
+            `[extractPublicKeyFromContract] TON client does NOT have API key configured in its parameters`,
+          );
+        }
+      } else {
+        this.logger.error(
+          `[extractPublicKeyFromContract] Error extracting public key for ${address.toString()}: ${error.message}`,
+          error.stack,
+        );
+      }
+
+      if (error.response) {
+        this.logger.debug(
+          `[extractPublicKeyFromContract] Response error data: 
+          - Status: ${error.response.status}
+          - Status Text: ${error.response.statusText}
+          - Headers: ${JSON.stringify(error.response.headers)}
+          - Data: ${JSON.stringify(error.response.data)}`,
+        );
+      }
+
       return null;
     }
   }
