@@ -1515,4 +1515,3 @@ export class OperatorService {
     }
   }
 }
-
