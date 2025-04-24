@@ -12,9 +12,9 @@ jobs:
     environment: development
 
     steps:
-      - name: Stop and remove containers
+      - name: Stop and remove containers (preserve volumes)
         run: |
-          docker-compose down -v || true
+          docker-compose down || true
           docker rm -f hashland-api hashland-mongo hashland-redis || true
 
       - name: Remove perf.log for Winston (fix permission issue)
