@@ -669,10 +669,14 @@ export class ReferralService {
         );
       }
 
-      if (starterCode.isUsed) {
+      // Check if the starter code has reached maximum usage
+      if (
+        starterCode.maxUses > 0 &&
+        starterCode.usedBy?.length >= starterCode.maxUses
+      ) {
         return new ApiResponse(
           400,
-          'Starter code has already been used',
+          'Starter code has reached maximum usage limit',
           new StarterCodeResponseDto({
             code,
             isValid: false,
@@ -748,10 +752,6 @@ export class ReferralService {
         throw new NotFoundException('Starter code not found');
       }
 
-      if (starterCode.isUsed) {
-        throw new BadRequestException('Starter code has already been used');
-      }
-
       // Check if expired
       if (
         starterCode.expiresAt &&
@@ -760,19 +760,43 @@ export class ReferralService {
         throw new BadRequestException('Starter code has expired');
       }
 
-      // Use the starter code
-      await this.starterCodeModel.updateOne(
-        { _id: starterCode._id },
-        {
-          $set: {
-            isUsed: true,
-            usedBy: operatorObjectId,
-          },
-        },
+      // Check if this operator has already used this code
+      const hasUsed = starterCode.usedBy?.some(
+        (user) => user.operatorId.toString() === operatorObjectId.toString(),
       );
+
+      if (hasUsed) {
+        throw new BadRequestException(
+          'Operator has already used this starter code',
+        );
+      }
+
+      // Check if max uses limit has been reached (0 means unlimited)
+      if (
+        starterCode.maxUses > 0 &&
+        starterCode.usedBy?.length >= starterCode.maxUses
+      ) {
+        throw new BadRequestException(
+          'Starter code has reached maximum usage limit',
+        );
+      }
 
       // Get referrer ID if available, otherwise this is just a starter code with no referrer
       const referrerId = starterCode.createdBy;
+
+      // Add this operator to the list of users who have used this code
+      await this.starterCodeModel.updateOne(
+        { _id: starterCode._id },
+        {
+          $push: {
+            usedBy: {
+              operatorId: operatorObjectId,
+              usedAt: new Date(),
+              rewardsProcessed: false,
+            },
+          },
+        },
+      );
 
       // Update the new operator with the referral data
       await this.operatorModel.updateOne(
@@ -820,9 +844,35 @@ export class ReferralService {
               operatorObjectId,
               starterCode.rewards,
             );
+
+            // Mark rewards as processed for this user in the starter code
+            await this.starterCodeModel.updateOne(
+              {
+                _id: starterCode._id,
+                'usedBy.operatorId': operatorObjectId,
+              },
+              {
+                $set: {
+                  'usedBy.$.rewardsProcessed': true,
+                },
+              },
+            );
           } else {
             // Apply standard referral rewards
             await this.applyReferralRewards(referrerId, operatorObjectId);
+
+            // Mark rewards as processed for this user in the starter code
+            await this.starterCodeModel.updateOne(
+              {
+                _id: starterCode._id,
+                'usedBy.operatorId': operatorObjectId,
+              },
+              {
+                $set: {
+                  'usedBy.$.rewardsProcessed': true,
+                },
+              },
+            );
           }
         }
       }

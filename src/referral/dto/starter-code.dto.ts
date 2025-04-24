@@ -61,6 +61,17 @@ export class CreateStarterCodeDto {
   code?: string;
 
   @ApiProperty({
+    description:
+      'Maximum number of times this code can be used (0 for unlimited)',
+    example: 5,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  maxUses?: number;
+
+  @ApiProperty({
     description: 'Rewards configuration for this starter code',
     type: RewardsDto,
     required: false,

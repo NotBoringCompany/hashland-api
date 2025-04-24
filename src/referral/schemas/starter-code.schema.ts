@@ -3,6 +3,38 @@ import { Document, Types } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
+ * Schema for tracking a user who has used a starter code
+ */
+export class StarterCodeUser {
+  /**
+   * The operator ID who used this starter code
+   */
+  @ApiProperty({
+    description: 'The operator who used this starter code',
+    example: '507f1f77bcf86cd799439011',
+  })
+  operatorId: Types.ObjectId;
+
+  /**
+   * When the starter code was used by this operator
+   */
+  @ApiProperty({
+    description: 'When the starter code was used',
+    example: '2024-03-19T12:00:00.000Z',
+  })
+  usedAt: Date;
+
+  /**
+   * Whether rewards were processed for this usage
+   */
+  @ApiProperty({
+    description: 'Whether rewards were processed',
+    example: true,
+  })
+  rewardsProcessed: boolean;
+}
+
+/**
  * Schema for starter codes that can be used as referrals
  */
 @Schema({
@@ -46,24 +78,34 @@ export class StarterCode extends Document {
   createdBy: Types.ObjectId;
 
   /**
-   * Whether this starter code has been used
+   * Maximum number of times this code can be used (0 for unlimited)
    */
   @ApiProperty({
-    description: 'Whether this starter code has been used',
-    example: false,
+    description:
+      'Maximum number of times this code can be used (0 for unlimited)',
+    example: 5,
   })
-  @Prop({ type: Boolean, default: false })
-  isUsed: boolean;
+  @Prop({ type: Number, default: 1 })
+  maxUses: number;
 
   /**
-   * The operator ID who used this starter code (optional)
+   * Array of users who have used this starter code
    */
   @ApiProperty({
-    description: 'The operator who used this starter code',
-    example: '507f1f77bcf86cd799439011',
+    description: 'Users who have used this starter code',
+    type: [StarterCodeUser],
   })
-  @Prop({ type: Types.ObjectId, ref: 'Operators', index: true })
-  usedBy: Types.ObjectId;
+  @Prop({
+    type: [
+      {
+        operatorId: { type: Types.ObjectId, ref: 'Operators' },
+        usedAt: { type: Date, default: Date.now },
+        rewardsProcessed: { type: Boolean, default: false },
+      },
+    ],
+    default: [],
+  })
+  usedBy: StarterCodeUser[];
 
   /**
    * Rewards configuration for this starter code
