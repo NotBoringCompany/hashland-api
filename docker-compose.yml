@@ -15,7 +15,7 @@ services:
       chown 999:999 /data/keyfile/mongo-keyfile
       "
     volumes:
-      - mongo-keyfile:/data/keyfile
+      - hashland-mongo-keyfile:/data/keyfile
     restart: "no"
 
   app:
@@ -54,9 +54,9 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - mongo-data:/data/db
-      - mongo-config:/data/configdb
-      - mongo-keyfile:/data/keyfile
+      - hashland-mongo-data:/data/db
+      - hashland-mongo-config:/data/configdb
+      - hashland-mongo-keyfile:/data/keyfile
     environment:
       - MONGO_INITDB_DATABASE=main
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
@@ -82,11 +82,15 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
+      - hashland-redis-data:/data
     command: redis-server --appendonly yes --replica-read-only no
 
 volumes:
-  mongo-data:
-  mongo-config:
-  mongo-keyfile:
-  redis-data: 
+  hashland-mongo-data:
+    name: hashland-mongo-data
+  hashland-mongo-config:
+    name: hashland-mongo-config
+  hashland-mongo-keyfile:
+    name: hashland-mongo-keyfile
+  hashland-redis-data:
+    name: hashland-redis-data 
