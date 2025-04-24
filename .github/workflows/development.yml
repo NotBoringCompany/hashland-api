@@ -12,9 +12,10 @@ jobs:
     environment: development
 
     steps:
-      - name: Remove container
+      - name: Stop and remove containers
         run: |
-          docker rm -f hashland-api || true
+          docker-compose down -v || true
+          docker rm -f hashland-api hashland-mongo hashland-redis || true
 
       - name: Remove perf.log for Winston (fix permission issue)
         run: |
@@ -37,11 +38,12 @@ jobs:
           echo "DATABASE_NAME=main" >> .env
           echo "JWT_EXPIRATION=24h" >> .env
           echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
-          echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> .env
+          echo "MONGO_URI=mongodb://${{ secrets.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@mongo:27017/main?authSource=admin&replicaSet=rs0" >> .env
           echo "MONGO_USERNAME=${{ secrets.MONGO_USERNAME }}" >> .env
           echo "MONGO_PASSWORD=${{ secrets.MONGO_PASSWORD }}" >> .env
           echo "PORT=8080" >> .env
-          echo "REDIS_URI=${{ secrets.REDIS_URI }}" >> .env
+          echo "REDIS_URI=redis://redis:6379" >> .env
+          echo "REDIS_PRIMARY_ONLY=true" >> .env
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
           echo "TON_API_KEY=${{ secrets.TON_API_KEY }}" >> .env
           echo "TON_API_ENDPOINT=${{ secrets.TON_API_ENDPOINT }}" >> .env
@@ -55,14 +57,6 @@ jobs:
           echo "ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}" >> .env
           echo "HASHLAND_URL=${{ secrets.HASHLAND_URL }}" >> .env
   
-      # /logs folder is mounted in the container
-      - name: Build and deploy with Docker
+      - name: Deploy with Docker Compose
         run: |
-          docker build -t hashland-api:dev .
-          docker run -d \
-            --name hashland-api \
-            -p 8080:8080 \
-            --env-file .env \
-            -v ${{ github.workspace }}/logs:/app/logs \
-            --restart unless-stopped \
-            hashland-api:dev 
+          docker-compose up -d 
