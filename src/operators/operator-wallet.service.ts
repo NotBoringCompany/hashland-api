@@ -63,29 +63,16 @@ export class OperatorWalletService {
       }`,
     );
 
-    // Force the API key to be included
-    const tonClientConfig = {
+    this.tonClient = new TonClient({
       endpoint,
       apiKey,
-    };
-
-    // Make sure apiKey is not undefined or empty
-    if (!tonClientConfig.apiKey) {
-      this.logger.warn(
-        '[Constructor] No TON API key found in configuration. API requests may be rate limited.',
-      );
-    }
-
-    this.tonClient = new TonClient(tonClientConfig);
+    });
 
     // Log full client configuration (excluding sensitive data)
     this.logger.debug(
       `[Constructor] TON client initialized with parameters: ${JSON.stringify({
         endpoint: this.tonClient.parameters.endpoint,
         apiKey: this.tonClient.parameters.apiKey ? 'set (masked)' : 'not set',
-        apiKeyLength: this.tonClient.parameters.apiKey
-          ? this.tonClient.parameters.apiKey.length
-          : 0,
         timeout: this.tonClient.parameters.timeout,
       })}`,
     );
@@ -834,140 +821,132 @@ export class OperatorWalletService {
   }
 
   /**
-   * Extract public key from contract by calling various get methods
+   * Extract public key from contract by calling get_public_key method
    * @param address - The TON address
    * @returns The public key as a Buffer, or null if not found
    */
   private async extractPublicKeyFromContract(
     address: Address,
   ): Promise<Buffer | null> {
-    this.logger.log(
-      `[extractPublicKeyFromContract] Attempting to extract public key for address: ${address.toString()}`,
-    );
-
-    // Log TON client configuration
-    const clientConfig = {
-      endpoint: this.tonClient.parameters.endpoint,
-      hasApiKey: Boolean(this.tonClient.parameters.apiKey),
-      apiKeyLength: this.tonClient.parameters.apiKey
-        ? this.tonClient.parameters.apiKey.length
-        : 0,
-    };
-
-    this.logger.debug(
-      `[extractPublicKeyFromContract] TON client config: ${JSON.stringify(clientConfig)}`,
-    );
-
-    // Different wallet types use different get methods for public key
-    const possibleMethods = [
-      'get_public_key',
-      'get_wallet_public_key',
-      'public_key',
-      'publicKey',
-    ];
-
-    // Try each method in sequence
-    for (const method of possibleMethods) {
-      try {
-        this.logger.debug(
-          `[extractPublicKeyFromContract] Trying method '${method}' on address: ${address.toString()}`,
-        );
-
-        // Add a timeout for better error diagnostics
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(
-            () => reject(new Error('API call timeout after 10s')),
-            10000,
-          );
-        });
-
-        const resultPromise = this.tonClient.runMethod(address, method);
-        const result = (await Promise.race([
-          resultPromise,
-          timeoutPromise,
-        ])) as any;
-
-        this.logger.debug(
-          `[extractPublicKeyFromContract] '${method}' result: ${JSON.stringify(
-            result,
-            (key, value) =>
-              typeof value === 'bigint' ? value.toString() : value,
-          )}`,
-        );
-
-        // Check if result exists and has a stack
-        if (result && result.stack) {
-          try {
-            // The stack is a TupleReader, not an array, so we need to read from it
-            // Get the first item from the stack (the public key)
-            const publicKeyBigInt = result.stack.readBigNumber();
-            const publicKeyHex = publicKeyBigInt.toString(16).padStart(64, '0');
-            const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
-
-            this.logger.debug(
-              `[extractPublicKeyFromContract] Extracted public key from method '${method}': ${publicKeyHex}`,
-            );
-            return publicKeyBuffer;
-          } catch (stackError) {
-            this.logger.debug(
-              `[extractPublicKeyFromContract] Error reading stack from '${method}': ${stackError.message}`,
-            );
-            // Continue to next method if stack reading fails
-          }
-        } else {
-          this.logger.debug(
-            `[extractPublicKeyFromContract] No usable stack found in '${method}' result`,
-          );
-        }
-      } catch (methodError) {
-        // Only log as debug since we're trying multiple methods
-        this.logger.debug(
-          `[extractPublicKeyFromContract] Method '${method}' failed: ${methodError.message}`,
-        );
-
-        // If it's a method not found error (exit code -13), this is expected
-        if (
-          methodError.message &&
-          methodError.message.includes('exit_code: -13')
-        ) {
-          this.logger.debug(
-            `[extractPublicKeyFromContract] Method '${method}' not found in contract, trying next method...`,
-          );
-        }
-        // Continue to next method
-      }
-    }
-
-    // If we've tried all methods and none worked, log an error
-    this.logger.error(
-      `[extractPublicKeyFromContract] Failed to extract public key using any method for address: ${address.toString()}`,
-    );
-
-    // Try alternative approach: get raw contract data
     try {
-      this.logger.debug(
-        `[extractPublicKeyFromContract] Attempting to get contract state for address: ${address.toString()}`,
-      );
-      const contract = await this.tonClient.getContractState(address);
-      this.logger.debug(
-        `[extractPublicKeyFromContract] Contract type: ${contract.state}`,
+      this.logger.log(
+        `[extractPublicKeyFromContract] Attempting to extract public key for address: ${address.toString()}`,
       );
 
-      if (contract.data) {
+      // Log TON client configuration
+      const clientConfig = {
+        endpoint: this.tonClient.parameters.endpoint,
+        hasApiKey: Boolean(this.tonClient.parameters.apiKey),
+        apiKeyLength: this.tonClient.parameters.apiKey
+          ? this.tonClient.parameters.apiKey.length
+          : 0,
+      };
+
+      this.logger.debug(
+        `[extractPublicKeyFromContract] TON client config: ${JSON.stringify(clientConfig)}`,
+      );
+
+      // For v3R1 and v3R2 wallets, you can use get methods to extract the public key
+      this.logger.debug(
+        `[extractPublicKeyFromContract] Calling runMethod 'get_public_key' on address: ${address.toString()}`,
+      );
+
+      // Add a timeout for better error diagnostics
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error('API call timeout after 10s')),
+          10000,
+        );
+      });
+
+      const resultPromise = this.tonClient.runMethod(address, 'get_public_key');
+      const result = (await Promise.race([
+        resultPromise,
+        timeoutPromise,
+      ])) as any;
+
+      this.logger.debug(
+        `[extractPublicKeyFromContract] runMethod result: ${JSON.stringify(
+          result,
+          (key, value) =>
+            typeof value === 'bigint' ? value.toString() : value,
+        )}`,
+      );
+
+      // Check if result exists and has a stack
+      if (result && result.stack) {
+        // The stack is a TupleReader, not an array, so we need to read from it
+        // Get the first item from the stack (the public key)
+        const publicKeyBigInt = result.stack.readBigNumber();
+        const publicKeyHex = publicKeyBigInt.toString(16).padStart(64, '0');
+        const publicKeyBuffer = Buffer.from(publicKeyHex, 'hex');
+
         this.logger.debug(
-          `[extractPublicKeyFromContract] Contract has data of length: ${contract.data.length} bytes`,
+          `[extractPublicKeyFromContract] Extracted public key: ${publicKeyHex}`,
+        );
+        return publicKeyBuffer;
+      } else {
+        this.logger.warn(
+          `[extractPublicKeyFromContract] No stack found in result for address: ${address.toString()}`,
         );
       }
 
-      // For now, we can't extract the public key from raw data,
-      // but this information might help with debugging
+      return null;
     } catch (error) {
-      this.logger.error(
-        `[extractPublicKeyFromContract] Failed to get contract state: ${error.message}`,
-      );
-    }
+      // Check if the error is a 403 error
+      if (error.message && error.message.includes('403')) {
+        this.logger.error(
+          `[extractPublicKeyFromContract] 403 Forbidden error. API key may be invalid or rate limited. Address: ${address.toString()}`,
+        );
 
-    return null;
+        // Add more detailed diagnostics for API configuration
+        const apiEndpoint = this.configService.get<string>(
+          'TON_API_ENDPOINT',
+          'default_endpoint',
+        );
+        const apiKey = this.configService.get<string>('TON_API_KEY', '');
+        const maskedKey = apiKey
+          ? apiKey.substring(0, 4) +
+            '***' +
+            (apiKey.length > 8 ? apiKey.substring(apiKey.length - 4) : '')
+          : 'not set';
+
+        this.logger.debug(
+          `[extractPublicKeyFromContract] TON API configuration: 
+          - Endpoint: ${apiEndpoint}
+          - API Key: ${maskedKey}
+          - API Key Length: ${apiKey ? apiKey.length : 0}`,
+        );
+
+        // Verify if API key is included in request headers
+        if (this.tonClient.parameters.apiKey) {
+          this.logger.debug(
+            `[extractPublicKeyFromContract] TON client has API key configured (length: ${this.tonClient.parameters.apiKey.length})`,
+          );
+        } else {
+          this.logger.warn(
+            `[extractPublicKeyFromContract] TON client does NOT have API key configured in its parameters`,
+          );
+        }
+      } else {
+        this.logger.error(
+          `[extractPublicKeyFromContract] Error extracting public key for ${address.toString()}: ${error.message}`,
+          error.stack,
+        );
+      }
+
+      if (error.response) {
+        this.logger.debug(
+          `[extractPublicKeyFromContract] Response error data: 
+          - Status: ${error.response.status}
+          - Status Text: ${error.response.statusText}
+          - Headers: ${JSON.stringify(error.response.headers)}
+          - Data: ${JSON.stringify(error.response.data)}`,
+        );
+      }
+
+      return null;
+    }
   }
 
   /**
