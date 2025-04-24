@@ -3,6 +3,14 @@ import { Document, Types } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
+ * Enum defining the types of referrals
+ */
+export enum ReferralType {
+  OPERATOR = 'operator',
+  STARTER_CODE = 'starter_code',
+}
+
+/**
  * Schema for tracking user referrals
  */
 @Schema({
@@ -24,6 +32,22 @@ export class Referral extends Document {
     primaryKey: true,
   })
   _id: Types.ObjectId;
+
+  /**
+   * The type of referral
+   */
+  @ApiProperty({
+    description: 'The type of referral',
+    example: 'operator',
+    enum: ReferralType,
+  })
+  @Prop({
+    type: String,
+    enum: ReferralType,
+    default: ReferralType.OPERATOR,
+    required: true,
+  })
+  referralType: ReferralType;
 
   /**
    * The referring operator's ID (who shared the referral link)

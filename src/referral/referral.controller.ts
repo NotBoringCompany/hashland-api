@@ -5,6 +5,8 @@ import {
   UseGuards,
   Request,
   Query,
+  Post,
+  Body,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -13,6 +15,7 @@ import {
   ApiParam,
   ApiBearerAuth,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
 import { ReferralService } from './referral.service';
@@ -22,6 +25,12 @@ import { ReferralStatsResponseDto } from './dto/referral.dto';
 import { ReferredUserDto } from './dto/referred-users.dto';
 import { PaginationQueryDto } from './dto/pagination.dto';
 import { PaginatedResponse } from 'src/common/dto/paginated-response.dto';
+import {
+  CreateStarterCodeDto,
+  StarterCodeResponseDto,
+  UseStarterCodeDto,
+} from './dto/starter-code.dto';
+import { StarterCode } from './schemas/starter-code.schema';
 
 /**
  * Controller for handling referral-related HTTP requests
@@ -130,5 +139,122 @@ export class ReferralController {
       query.limit,
       query.projection,
     );
+  }
+
+  /**
+   * Create a new starter code
+   */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('starter-code')
+  @ApiOperation({
+    summary: 'Create a new starter code',
+    description: 'Creates a new starter code that can be used for referrals',
+  })
+  @ApiBody({
+    type: CreateStarterCodeDto,
+  })
+  @SwaggerResponse({
+    status: 200,
+    description: 'Successfully created starter code',
+    type: StarterCodeResponseDto,
+  })
+  @SwaggerResponse({
+    status: 400,
+    description: 'Bad request',
+  })
+  async createStarterCode(
+    @Body() createStarterCodeDto: CreateStarterCodeDto,
+    @Request() req,
+  ): Promise<ApiResponse<StarterCodeResponseDto>> {
+    // If createdBy is not provided, use the authenticated user
+    if (!createStarterCodeDto.createdBy) {
+      createStarterCodeDto.createdBy = req.user.userId;
+    }
+    return this.referralService.createStarterCode(createStarterCodeDto);
+  }
+
+  /**
+   * Validate a starter code without using it
+   */
+  @Get('starter-code/validate/:code')
+  @ApiOperation({
+    summary: 'Validate a starter code',
+    description: 'Validates a starter code without using it',
+  })
+  @ApiParam({
+    name: 'code',
+    description: 'Starter code to validate',
+    example: 'STARTABC123',
+  })
+  @SwaggerResponse({
+    status: 200,
+    description: 'Validation result',
+    type: StarterCodeResponseDto,
+  })
+  async validateStarterCode(
+    @Param('code') code: string,
+  ): Promise<ApiResponse<StarterCodeResponseDto>> {
+    return this.referralService.validateStarterCode(code);
+  }
+
+  /**
+   * Use a starter code
+   */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('starter-code/use')
+  @ApiOperation({
+    summary: 'Use a starter code',
+    description: 'Process the use of a starter code by an operator',
+  })
+  @ApiBody({
+    type: UseStarterCodeDto,
+  })
+  @SwaggerResponse({
+    status: 200,
+    description: 'Successfully used starter code',
+  })
+  @SwaggerResponse({
+    status: 400,
+    description: 'Bad request',
+  })
+  @SwaggerResponse({
+    status: 404,
+    description: 'Starter code or operator not found',
+  })
+  async useStarterCode(
+    @Body() useStarterCodeDto: UseStarterCodeDto,
+    @Request() req,
+  ): Promise<ApiResponse<{ success: boolean }>> {
+    // If operatorId is not provided, use the authenticated user
+    if (!useStarterCodeDto.operatorId) {
+      useStarterCodeDto.operatorId = req.user.userId;
+    }
+    return this.referralService.useStarterCode(useStarterCodeDto);
+  }
+
+  /**
+   * Get all starter codes with pagination
+   */
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Get('starter-codes')
+  @ApiOperation({
+    summary: 'Get all starter codes',
+    description: 'Retrieves a paginated list of all starter codes',
+  })
+  @ApiQuery({
+    type: PaginationQueryDto,
+  })
+  @SwaggerResponse({
+    status: 200,
+    description: 'Successfully retrieved starter codes',
+    type: () => PaginatedResponse.withType(StarterCode),
+  })
+  async getAllStarterCodes(
+    @Query() query: PaginationQueryDto,
+  ): Promise<PaginatedResponse<StarterCode>> {
+    return this.referralService.getStarterCodes(query.page, query.limit);
   }
 }

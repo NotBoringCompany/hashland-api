@@ -565,33 +565,118 @@ export class OperatorWalletService {
     try {
       // Verify the address matches
       if (tonProof.tonAddress.toLowerCase() !== address.toLowerCase()) {
+        this.logger.error(
+          `Address mismatch: ${tonProof.tonAddress} != ${address}`,
+        );
         return false;
       }
 
-      // Check if proof is expired (24 hours)
-      const proofTimestamp = tonProof.proof.timestamp;
-      const currentTimestamp = Math.floor(Date.now() / 1000);
-      if (currentTimestamp - proofTimestamp > 86400) {
+      const now = Math.floor(Date.now() / 1000);
+
+      // Check ton proof expiration (24 hours default)
+      if (now > tonProof.proof.timestamp + 86400) {
+        this.logger.error('Ton proof has been expired');
         return false;
       }
 
-      // Convert signature from hex to buffer
-      const signatureBuffer = Buffer.from(tonProof.proof.signature, 'hex');
+      // Parse the TON address
+      const parsedAddress = Address.parse(address);
 
-      // Create payload hash
+      // Simple payload handling - use as-is from the proof
       const payloadBuffer = Buffer.from(tonProof.proof.payload);
 
-      // Convert public key from hex to buffer
-      const publicKeyBuffer = Buffer.from(tonProof.publicKey, 'hex');
+      // Create the message hash according to TON Connect protocol
+      // workChain 32 bit signed int
+      const wc = Buffer.alloc(4);
+      wc.writeInt32BE(parsedAddress.workChain);
+
+      // timestamp 64 bit unsigned little-endian
+      const ts = Buffer.alloc(8);
+      ts.writeBigUint64LE(BigInt(tonProof.proof.timestamp));
+
+      // domain length 32 bit unsigned little-endian
+      const dl = Buffer.alloc(4);
+      dl.writeUint32LE(tonProof.proof.domain.value.length);
+
+      // Build the complete message according to ton-proof-item-v2 format
+      const tonProofPrefix = 'ton-proof-item-v2/';
+      const msg = Buffer.concat([
+        Buffer.from(tonProofPrefix),
+        wc,
+        parsedAddress.hash, // 32 bytes address hash
+        dl,
+        Buffer.from(tonProof.proof.domain.value),
+        ts,
+        payloadBuffer,
+      ]);
+
+      // Hash the message with SHA-256
+      const msgHash = crypto.createHash('sha256').update(msg).digest();
+
+      // Add the ton-connect prefix and hash again
+      const tonConnectPrefix = 'ton-connect';
+      const fullMsg = Buffer.concat([
+        Buffer.from([0xff, 0xff]), // Prefix with 0xffff
+        Buffer.from(tonConnectPrefix),
+        msgHash,
+      ]);
+
+      // Final hash that needs to be verified with the signature
+      const fullMsgHash = crypto.createHash('sha256').update(fullMsg).digest();
+
+      // Get the public key either from the proof or try to extract it
+      let publicKey: Buffer;
+
+      if (tonProof.publicKey) {
+        // Use the provided public key
+        publicKey = Buffer.from(tonProof.publicKey, 'hex');
+      } else {
+        // Extract public key from the wallet contract
+        publicKey = await this.extractPublicKeyFromContract(parsedAddress);
+        if (!publicKey) {
+          this.logger.error(
+            `Could not extract public key for address: ${address}`,
+          );
+          return false;
+        }
+      }
+
+      // Convert signature from base64 to buffer (TON Connect uses base64)
+      let signatureBuffer: Buffer;
+      try {
+        signatureBuffer = Buffer.from(tonProof.proof.signature, 'base64');
+
+        // Ensure signature has correct length for Ed25519 (64 bytes)
+        if (signatureBuffer.length !== 64) {
+          this.logger.error(
+            `Invalid signature size: ${signatureBuffer.length} bytes, expected 64 bytes`,
+          );
+          return false;
+        }
+      } catch (error) {
+        this.logger.error(`Error decoding signature: ${error.message}`);
+        return false;
+      }
 
       // Verify the signature
-      const isValid = this.verifySignature(
-        publicKeyBuffer,
-        payloadBuffer,
-        signatureBuffer,
-      );
+      try {
+        const isValid = nacl.sign.detached.verify(
+          fullMsgHash,
+          signatureBuffer,
+          publicKey,
+        );
 
-      return isValid;
+        if (!isValid) {
+          this.logger.error(
+            `Signature verification failed for address: ${address}`,
+          );
+        }
+
+        return isValid;
+      } catch (error) {
+        this.logger.error(`Error in signature verification: ${error.message}`);
+        return false;
+      }
     } catch (error) {
       this.logger.error(
         `Error validating TON proof: ${error.message}`,
@@ -869,5 +954,16 @@ export class OperatorWalletService {
       );
       throw new Error(`Failed to connect to TON API: ${error.message}`);
     }
+  }
+
+  /**
+   * Get the configured TON Connect domain from config or use default
+   * @returns The configured domain string
+   */
+  getConfiguredDomain(): string {
+    return this.configService.get<string>(
+      'TON_CONNECT_DOMAIN',
+      'hashland.ton.app',
+    );
   }
 }
