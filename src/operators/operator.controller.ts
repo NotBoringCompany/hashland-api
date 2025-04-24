@@ -1,4 +1,12 @@
-import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -16,9 +24,36 @@ import { Drill } from 'src/drills/schemas/drill.schema';
 import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
 
 @ApiTags('Operators')
-@Controller('operator')
+@Controller('operators')
 export class OperatorController {
   constructor(private readonly operatorService: OperatorService) {}
+
+  @ApiOperation({
+    summary: 'Rename operator',
+    description: 'Renames the operator with a new username',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully renamed operator',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid operator ID or username',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Operator not found',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('rename')
+  async renameOperator(
+    @Request() req,
+    @Body('newUsername') newUsername: string,
+  ) {
+    const operatorId = new Types.ObjectId(req.user.operatorId);
+    await this.operatorService.renameUsername(operatorId, newUsername);
+  }
 
   @ApiOperation({
     summary: 'Get operator data',
@@ -38,7 +73,7 @@ export class OperatorController {
       'Comma-separated list of fields to include in the response for the operator data',
     required: false,
     type: String,
-    example: 'username,assetEquity,cumulativeEff',
+    example: 'usernameData.username,assetEquity,cumulativeEff',
   })
   @ApiResponse({
     status: 200,

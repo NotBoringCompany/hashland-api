@@ -15,6 +15,8 @@ import { AuthenticatedResponse } from '../common/dto/auth.dto';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { ApiResponse } from '../common/dto/response.dto';
 import { WalletLoginDto } from '../common/dto/wallet-auth.dto';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 /**
  * Service handling wallet-based authentication
@@ -30,6 +32,7 @@ export class WalletAuthService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel(OperatorWallet.name)
     private operatorWalletModel: Model<OperatorWallet>,
+    private mixpanelService: MixpanelService,
   ) {}
 
   /**
@@ -54,7 +57,7 @@ export class WalletAuthService {
   ): Promise<AuthenticatedResponse> {
     try {
       this.logger.log(
-        `Wallet login attempt for address: ${walletLoginData.address}`,
+        `Wallet login attempt for address: ${walletLoginData.address.toLowerCase()}`,
       );
 
       // Validate the wallet signature
@@ -67,64 +70,96 @@ export class WalletAuthService {
 
       if (!isValid) {
         this.logger.warn(
-          `Invalid signature for address: ${walletLoginData.address}`,
+          `Invalid signature for address: ${walletLoginData.address.toLowerCase()}`,
         );
         throw new UnauthorizedException('Invalid wallet signature');
       }
 
       // Find existing operator wallet
       let wallet = await this.operatorWalletModel.findOne({
-        address: walletLoginData.address,
+        address: walletLoginData.address.toLowerCase(),
         chain: walletLoginData.chain,
       });
 
-      let operator: Operator | null;
+      let operatorAuth: {
+        operator: Operator;
+        type: 'login' | 'register';
+      } | null;
 
       if (!wallet) {
         this.logger.log(
-          `Wallet not found, creating new operator for: ${walletLoginData.address}`,
+          `Wallet not found, creating new operator for: ${walletLoginData.address.toLowerCase()}`,
         );
 
         // Generate a username based on the wallet address
-        const username = `user_${walletLoginData.address.substring(0, 8).toLowerCase()}`;
+        const username = `user_${walletLoginData.address.toLowerCase().substring(0, 8).toLowerCase()}`;
 
         // Create a new operator
-        operator = await this.operatorService.findOrCreateOperator({
-          id: walletLoginData.address.substring(0, 8),
-          username,
-          walletAddress: walletLoginData.address,
-          walletChain: walletLoginData.chain,
-        });
+        operatorAuth = await this.operatorService.findOrCreateOperator(
+          {
+            id: walletLoginData.address.toLowerCase().substring(0, 8),
+            username,
+            walletAddress: walletLoginData.address.toLowerCase(),
+            walletChain: walletLoginData.chain,
+          },
+          {},
+          walletLoginData.referralCode,
+        );
 
         // Create wallet record
         wallet = await this.operatorWalletModel.create({
-          operatorId: operator._id,
-          address: walletLoginData.address,
+          operatorId: operatorAuth.operator._id,
+          address: walletLoginData.address.toLowerCase(),
           chain: walletLoginData.chain,
           signature: walletLoginData.signature,
           signatureMessage: walletLoginData.message,
         });
       } else {
-        // Find the operator
-        operator = await this.operatorModel.findById(wallet.operatorId);
+        // Find the operator using the wallet's operatorId
+        const operator = await this.operatorModel.findById(wallet.operatorId);
+
         if (!operator) {
           this.logger.warn(
-            `Operator not found for wallet: ${walletLoginData.address}`,
+            `Operator not found for wallet: ${walletLoginData.address.toLowerCase()}`,
           );
           throw new UnauthorizedException('Operator not found');
         }
+
+        // Update operaturAuth data
+        operatorAuth = {
+          operator,
+          type: 'login',
+        };
       }
 
-      // Update asset equity
+      // ✅ Update asset equity when the operator logs in
       await this.operatorWalletService.updateAssetEquityForOperator(
-        operator._id,
+        operatorAuth.operator._id,
+      );
+
+      // ✅ Update cumulativeEff for the operator
+      await this.operatorService.updateCumulativeEffForSingleOperator(
+        operatorAuth.operator._id,
       );
 
       // Generate access token
-      const accessToken = this.generateToken({ _id: operator._id });
+      const accessToken = this.generateToken({
+        _id: operatorAuth.operator._id,
+      });
+
+      this.mixpanelService.track(
+        operatorAuth.type === 'login'
+          ? EVENT_CONSTANTS.AUTH_LOGIN
+          : EVENT_CONSTANTS.AUTH_REGISTER,
+        {
+          distinct_id: operatorAuth.operator._id,
+          operator: operatorAuth.operator,
+          service: 'Wallet',
+        },
+      );
 
       return new AuthenticatedResponse({
-        operator,
+        operator: operatorAuth.operator,
         accessToken,
       });
     } catch (error) {

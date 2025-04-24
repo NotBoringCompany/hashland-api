@@ -8,12 +8,12 @@ export async function runShopItems() {
   const shopItemService = app.get(ShopItemService); // Get service instance
 
   const result = await shopItemService.addShopItem(
-    ShopItemType.REPLENISH_FUEL,
+    ShopItemType.UPGRADE_MAX_ACTIVE_DRILLS_10,
     {
-      replenishFuelRatio: 1,
+      upgradedMaxActiveDrillLimit: 10,
     },
-    'Replenishes fuel back to max capacity.',
-    { ton: 0, bera: 0.95 },
+    'Upgrades the maximum number of active drills to 10.',
+    { ton: 195, bera: 150.6 },
   );
   console.log('✅ addShopItem result:', result);
 

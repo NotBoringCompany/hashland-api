@@ -18,6 +18,7 @@ import {
   HASHReserve,
   HashReserveSchema,
 } from 'src/hash-reserve/schemas/hash-reserve.schema';
+import { ReferralModule } from 'src/referral/referral.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import {
     PoolModule,
     PoolOperatorModule,
     DrillModule,
+    ReferralModule,
   ],
   controllers: [OperatorController], // Expose API endpoints
   providers: [OperatorService, OperatorQueue], // Business logic for Operators

@@ -60,7 +60,7 @@ export class LeaderboardService {
       // Map the leaderboard to include the rank
       const rankedLeaderboard = leaderboard.map((operator, index) => ({
         rank: index + 1 + skip,
-        username: operator.username,
+        username: operator.usernameData.username,
         earnedHASH: operator.totalEarnedHASH,
       }));
 
@@ -131,7 +131,7 @@ export class LeaderboardService {
       // Map the leaderboard to include the rank
       const rankedLeaderboard = leaderboard.map((operator, index) => ({
         rank: index + 1 + skip,
-        username: operator.username,
+        username: operator.usernameData.username,
         earnedHASH: operator.totalEarnedHASH,
       }));
 

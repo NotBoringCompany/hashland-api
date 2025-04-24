@@ -3,45 +3,24 @@ import {
   InternalServerErrorException,
   NotFoundException,
   Logger,
-  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Pool } from './schemas/pool.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolOperator } from './schemas/pool-operator.schema';
-import { RedisService } from 'src/common/redis.service';
+import { performance } from 'perf_hooks';
 
 @Injectable()
-export class PoolService implements OnModuleInit {
+export class PoolService {
   private readonly logger = new Logger(PoolService.name);
-  private readonly redisCachePrefix = 'pool:estimatedEff:';
-  private readonly effCacheDuration = 6 * 60 * 60; // 6 hours in seconds
 
   constructor(
-    @InjectModel(Pool.name) private poolModel: Model<Pool>,
+    @InjectModel(Pool.name)
+    private poolModel: Model<Pool>,
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
-    private readonly redisService: RedisService,
   ) {}
-
-  /**
-   * Initialize pools' estimated efficiency on module initialization
-   */
-  async onModuleInit() {
-    try {
-      this.logger.log('Initializing pool estimated efficiency values...');
-      await this.updateAllPoolsEstimatedEff();
-      this.logger.log(
-        'Pool estimated efficiency values initialized successfully',
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to initialize pool estimated efficiency: ${error.message}`,
-        error.stack,
-      );
-    }
-  }
 
   /**
    * Join a pool. Ensures:
@@ -158,11 +137,13 @@ export class PoolService implements OnModuleInit {
 
   /**
    * Fetch all pools. Optional projection to filter out fields.
+   * Ensures efficiency values are up-to-date.
    */
   async getAllPools(
     projection?: string | Record<string, 1 | 0>,
   ): Promise<ApiResponse<{ pools: Partial<Pool[]> }>> {
     try {
+      // Now fetch the pools with the updated data and requested projection
       const pools = await this.poolModel.find().select(projection).lean();
 
       return new ApiResponse<{ pools: Partial<Pool[]> }>(
@@ -182,18 +163,19 @@ export class PoolService implements OnModuleInit {
 
   /**
    * Get a pool by its ID.
+   * Ensures the pool's efficiency value is up-to-date.
    */
   async getPoolById(
     poolId: string,
     projection?: string | Record<string, 1 | 0>,
   ): Promise<ApiResponse<{ pool: Pool | null }>> {
     try {
-      const pool = await this.poolModel
-        .findById(poolId)
-        .select(projection)
+      // First check if the pool exists and get its last update time
+      const poolWithTimestamp = await this.poolModel
+        .findById(poolId, { lastEffUpdate: 1 })
         .lean();
 
-      if (!pool) {
+      if (!poolWithTimestamp) {
         throw new NotFoundException(
           new ApiResponse<null>(
             404,
@@ -201,6 +183,12 @@ export class PoolService implements OnModuleInit {
           ),
         );
       }
+
+      // Now fetch the pool with the updated efficiency and requested projection
+      const pool = await this.poolModel
+        .findById(poolId)
+        .select(projection)
+        .lean();
 
       return new ApiResponse<{ pool: Pool | null }>(
         200,
@@ -262,14 +250,15 @@ export class PoolService implements OnModuleInit {
    */
   async updatePoolEstimatedEff(
     poolId: string | Types.ObjectId,
-    forceUpdate: boolean = false,
   ): Promise<number> {
     try {
-      const poolIdObj =
-        typeof poolId === 'string' ? new Types.ObjectId(poolId) : poolId;
-      // Try to get from cache first
-      const cacheKey = `${this.redisCachePrefix}${poolId}`;
-      const cachedEff = await this.redisService.get(cacheKey);
+      // Early return if poolId is null
+      if (!poolId) {
+        this.logger.warn(
+          `Skipping pool efficiency update - poolId is null or undefined`,
+        );
+        return 0;
+      }
 
       // Check if pool exists
       const pool = await this.poolModel.findById(poolId, { lastEffUpdate: 1 });
@@ -279,27 +268,16 @@ export class PoolService implements OnModuleInit {
         );
       }
 
-      // If cache is valid and not forcing update, return cached value
-      if (cachedEff && !forceUpdate && pool.lastEffUpdate) {
-        const lastUpdate = pool.lastEffUpdate.getTime();
-        const now = Date.now();
-        const hoursSinceLastUpdate = (now - lastUpdate) / (1000 * 60 * 60);
-
-        if (hoursSinceLastUpdate < 6) {
-          return parseFloat(cachedEff);
-        }
-      }
-
       // Use aggregation to efficiently calculate the weighted efficiency in a single query
       const aggregationResult = await this.poolOperatorModel.aggregate([
         // Step 1: Match operators in this pool
-        { $match: { poolId: poolIdObj } },
+        { $match: { pool: poolId } },
 
         // Step 2: Lookup operator details
         {
           $lookup: {
             from: 'Operators',
-            localField: 'operatorId',
+            localField: 'operator',
             foreignField: '_id',
             as: 'operator',
           },
@@ -342,13 +320,6 @@ export class PoolService implements OnModuleInit {
         lastEffUpdate: new Date(),
       });
 
-      // Store in Redis cache
-      await this.redisService.set(
-        cacheKey,
-        totalWeightedEff.toString(),
-        this.effCacheDuration,
-      );
-
       this.logger.log(
         `Updated estimatedEff for pool ${poolId}: ${totalWeightedEff} from ${operatorCount} operators`,
       );
@@ -389,7 +360,7 @@ export class PoolService implements OnModuleInit {
       for (let i = 0; i < pools.length; i += batchSize) {
         const batch = pools.slice(i, i + batchSize);
         await Promise.all(
-          batch.map((pool) => this.updatePoolEstimatedEff(pool._id, true)),
+          batch.map((pool) => this.updatePoolEstimatedEff(pool._id)),
         );
         this.logger.log(
           `Processed batch ${Math.ceil((i + 1) / batchSize)}/${Math.ceil(pools.length / batchSize)}`,
@@ -462,15 +433,15 @@ export class PoolService implements OnModuleInit {
       // Start building the query
       let operatorsQuery = this.poolOperatorModel
         .find({ pool: new Types.ObjectId(poolId) })
-        .select(projection)
-        .populate('operator', 'username cumulativeEff effMultiplier');
+        .select(projection);
 
       // Populate operator details if requested
       if (populate) {
         operatorsQuery = operatorsQuery.populate({
-          path: 'operatorId',
-          select: 'username cumulativeEff effMultiplier',
-          model: 'Operators',
+          path: 'operator',
+          select:
+            'usernameData.username cumulativeEff effMultiplier totalEarnedHASH assetEquity',
+          model: 'Operator',
           options: { lean: true },
         });
       }
@@ -508,6 +479,75 @@ export class PoolService implements OnModuleInit {
         new ApiResponse(
           500,
           `(getPoolOperators) Error fetching pool operators: ${err.message}`,
+        ),
+      );
+    }
+  }
+
+  /**
+   * Get a specific operator in a pool by operator ID.
+   * Used for retrieving the authenticated user's pool operator details.
+   */
+  async getPoolOperatorByOperatorId(
+    poolId: string,
+    operatorId: Types.ObjectId,
+    projection?: Record<string, 1 | 0>,
+  ): Promise<ApiResponse<{ operator: Partial<PoolOperator> | null }>> {
+    try {
+      // Check if pool exists
+      const poolExists = await this.poolModel.exists({
+        _id: new Types.ObjectId(poolId),
+      });
+
+      if (!poolExists) {
+        return new ApiResponse(
+          404,
+          `(getPoolOperatorByOperatorId) Pool with ID ${poolId} not found`,
+          { operator: null },
+        );
+      }
+
+      // Find the pool operator
+      let query = this.poolOperatorModel.findOne({
+        pool: new Types.ObjectId(poolId),
+        operator: operatorId,
+      });
+
+      // Apply projection if provided
+      if (projection) {
+        query = query.select(projection);
+      }
+
+      // Populate operator details
+      query = query.populate({
+        path: 'operator',
+        select:
+          'usernameData.username cumulativeEff effMultiplier totalEarnedHASH assetEquity',
+        model: 'Operator',
+        options: { lean: true },
+      });
+
+      const poolOperator = await query.lean();
+
+      if (!poolOperator) {
+        return new ApiResponse(
+          404,
+          `(getPoolOperatorByOperatorId) Operator is not a member of this pool`,
+          { operator: null },
+        );
+      }
+
+      return new ApiResponse(
+        200,
+        `(getPoolOperatorByOperatorId) Successfully fetched operator details for pool ${poolId}`,
+        { operator: poolOperator },
+      );
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse(
+          500,
+          `(getPoolOperatorByOperatorId) Error fetching pool operator: ${err.message}`,
+          { operator: null },
         ),
       );
     }

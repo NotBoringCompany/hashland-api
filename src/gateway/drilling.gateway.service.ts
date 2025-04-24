@@ -5,6 +5,7 @@ import { DrillService } from 'src/drills/drill.service';
 import { DrillingSessionStatus } from 'src/drills/drilling-session.service';
 import { Types } from 'mongoose';
 import { DrillingCycle } from 'src/drills/schemas/drilling-cycle.schema';
+import { OperatorService } from 'src/operators/operator.service';
 
 /**
  * Service for handling WebSocket interactions with the drilling gateway.
@@ -17,6 +18,7 @@ export class DrillingGatewayService {
     private readonly drillingGateway: DrillingGateway,
     private readonly redisService: RedisService,
     private readonly drillService: DrillService,
+    private readonly operatorService: OperatorService,
   ) {}
 
   /**
@@ -147,10 +149,31 @@ export class DrillingGatewayService {
       const socketIds =
         this.drillingGateway.getAllSocketsForOperator(operatorIdStr);
 
-      const message =
-        changeType === 'depleted'
-          ? `Your fuel has been depleted by ${changeAmount} units.`
-          : `Your fuel has been replenished by ${changeAmount} units.`;
+      // Skip if no connected sockets for this operator
+      if (socketIds.length === 0) {
+        this.logger.debug(
+          `⏭️ No connected sockets for operator ${operatorIdStr} to notify about fuel ${changeType}`,
+        );
+        continue;
+      }
+
+      // Create appropriate message based on change type
+      let message = '';
+      let eventTitle = '';
+
+      if (changeType === 'depleted') {
+        message = `Your fuel has been depleted by ${changeAmount} units.`;
+        eventTitle = 'Fuel Depleted';
+      } else {
+        // Handle both replenishment and max fuel increase
+        if (changeAmount > update.maxFuel * 0.5) {
+          message = `Your fuel capacity has been increased by ${changeAmount} units.`;
+          eventTitle = 'Fuel Capacity Increased';
+        } else {
+          message = `Your fuel has been replenished by ${changeAmount} units.`;
+          eventTitle = 'Fuel Replenished';
+        }
+      }
 
       const fuelUpdateMessage = {
         currentFuel: update.currentFuel,
@@ -158,8 +181,10 @@ export class DrillingGatewayService {
         changeAmount,
         changeType,
         message,
+        eventTitle,
       };
 
+      // Send notification to all connected sockets for this operator
       for (const socketId of socketIds) {
         if (this.drillingGateway.server.sockets.sockets.has(socketId)) {
           this.drillingGateway.server
@@ -175,9 +200,15 @@ export class DrillingGatewayService {
   }
 
   /**
-   * Notifies all active operators about the latest driling cycle.
+   * Notifies all active operators about the latest drilling cycle.
+   *
+   * @param drillingCycle The latest drilling cycle data
+   * @param rewardShares Optional array of reward shares for each operator
    */
-  async notifyNewCycle(drillingCycle: DrillingCycle | null) {
+  async notifyNewCycle(
+    drillingCycle: DrillingCycle | null,
+    rewardShares?: Array<{ operatorId: Types.ObjectId; amount: number }>,
+  ) {
     // Ensure we have a valid cycle before broadcasting
     if (!drillingCycle || !drillingCycle.cycleNumber) {
       this.logger.warn(
@@ -186,11 +217,87 @@ export class DrillingGatewayService {
       return;
     }
 
-    // Broadcast to all connected clients
-    this.drillingGateway.server.emit('new-cycle', drillingCycle);
+    // Get the extractor operator username if available
+    // Convert to a plain JavaScript object to add custom properties
+    const cycleData = JSON.parse(JSON.stringify(drillingCycle));
+
+    if (drillingCycle.extractorOperatorId) {
+      try {
+        // Fetch the operator's username
+        const operator = await this.operatorService.findById(
+          drillingCycle.extractorOperatorId,
+          { 'usernameData.username': 1 },
+        );
+
+        if (operator && operator.usernameData.username) {
+          cycleData.extractorOperatorUsername = operator.usernameData.username;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to fetch extractor operator username: ${error.message}`,
+        );
+        // Continue with the broadcast even if username lookup fails
+      }
+    }
+
+    // First, broadcast the base cycle data to everyone
+    this.drillingGateway.server.emit('new-cycle', cycleData);
+
+    this.logger.debug('(notifyNewCycle) rewardShares', rewardShares);
+
+    // Process reward shares if available
+    if (rewardShares && rewardShares.length > 0) {
+      const operatorRewards = new Map<string, number>();
+
+      // Create a map of operator IDs to reward amounts
+      for (const share of rewardShares) {
+        if (share.operatorId) {
+          operatorRewards.set(share.operatorId.toString(), share.amount);
+        }
+      }
+
+      this.logger.debug('(notifyNewCycle) operatorRewards', operatorRewards);
+
+      // Get connected operator IDs
+      const socketOperators = this.drillingGateway.getConnectedOperatorIds();
+      let processedCount = 0;
+
+      // Send reward info to each operator
+      for (const operatorId of socketOperators) {
+        const operatorReward = operatorRewards.get(operatorId) || 0;
+
+        // Only send if operator actually has a reward
+        if (operatorReward > 0) {
+          const socketIds =
+            this.drillingGateway.getAllSocketsForOperator(operatorId);
+
+          // Create a minimal payload with just the reward info
+          const rewardData = {
+            cycleNumber: drillingCycle.cycleNumber,
+            operatorReward,
+          };
+
+          // Send to all operator's devices
+          for (const socketId of socketIds) {
+            if (this.drillingGateway.server.sockets.sockets.has(socketId)) {
+              this.drillingGateway.server
+                .to(socketId)
+                .emit('cycle-reward', rewardData);
+            }
+          }
+          processedCount++;
+        }
+      }
+
+      if (processedCount > 0) {
+        this.logger.log(
+          `💸 Sent personalized rewards to ${processedCount} operators for cycle #${drillingCycle.cycleNumber}`,
+        );
+      }
+    }
 
     this.logger.log(
-      `💰 Broadcasted new cycle #${drillingCycle.cycleNumber} with ${drillingCycle.rewardShares?.length || 0} operators and total weighted efficiency of ${drillingCycle.totalWeightedEff || 0}`,
+      `💰 Broadcasted new cycle #${drillingCycle.cycleNumber} with ${drillingCycle.activeOperators} active operators and total weighted efficiency of ${drillingCycle.totalWeightedEff || 0}`,
     );
   }
 }

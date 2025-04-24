@@ -38,6 +38,27 @@ export class DrillingCycleQueue implements OnModuleInit {
         return;
       }
 
+      // Get the latest cycle number
+      const latestCycleNumber =
+        (await this.redisService.get('drilling-cycle:current')) ?? '0';
+
+      this.logger.debug(`
+        (DrillingCycleQueue) Latest cycle number: ${latestCycleNumber}.
+        `);
+
+      // If the total number of cycles has been reached, disable the cycle
+      if (
+        parseInt(latestCycleNumber, 10) >= GAME_CONSTANTS.CYCLES.TOTAL_CYCLES
+      ) {
+        this.logger.warn(
+          '🚨 (DrillingCycleQueue) Total number of cycles has been reached. Disabling cycles.',
+        );
+        GAME_CONSTANTS.CYCLES.ENABLED = false;
+
+        // Return to prevent any further processing
+        return;
+      }
+
       // Clean up any existing recurring jobs first
       const existingJobs = await this.drillingCycleQueue.getRepeatableJobs();
 
@@ -86,7 +107,7 @@ export class DrillingCycleQueue implements OnModuleInit {
    */
   @Process({
     name: 'new-drilling-cycle',
-    concurrency: 1, // Ensure only one cycle processing job at a time
+    concurrency: 1, // Ensures only one cycle processing job at a time
   })
   async handleNewDrillingCycle() {
     if (!GAME_CONSTANTS.CYCLES.ENABLED) {
@@ -98,26 +119,31 @@ export class DrillingCycleQueue implements OnModuleInit {
 
     try {
       // ✅ Step 1: Get current cycle number **before creating a new one**
-      const latestCycleNumber = await this.redisService.get(
+      const latestCycleNumberStr = await this.redisService.get(
         'drilling-cycle:current',
       );
+      const latestCycleNumber = latestCycleNumberStr
+        ? parseInt(latestCycleNumberStr, 10)
+        : 0;
 
-      if (!latestCycleNumber) {
-        this.logger.warn(
-          '⚠️ No previous cycle found in Redis. Skipping endCurrentCycle.',
-        );
-      } else {
-        // Properly await the endCurrentCycle operation
+      // Always call endCurrentCycle unless it's cycle 0 (before the first ever cycle)
+      if (latestCycleNumber > 0) {
         try {
-          await this.drillingCycleService.endCurrentCycle(
-            parseInt(latestCycleNumber, 10),
-          );
+          await this.drillingCycleService.endCurrentCycle(latestCycleNumber);
           this.logger.log(`✅ Successfully ended cycle #${latestCycleNumber}`);
         } catch (err) {
           this.logger.error(`❌ Error while ending cycle: ${err.message}`);
-          // Don't proceed if we can't end the current cycle properly
           throw new Error(`Failed to end current cycle: ${err.message}`);
         }
+      }
+
+      if (latestCycleNumber >= GAME_CONSTANTS.CYCLES.TOTAL_CYCLES) {
+        this.logger.warn(
+          '🚨 (handleNewDrillingCycle) Total number of cycles has been reached. Disabling cycles.',
+        );
+        GAME_CONSTANTS.CYCLES.ENABLED = false;
+
+        return;
       }
 
       // ✅ Step 2: Start a new drilling cycle

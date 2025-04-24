@@ -33,7 +33,7 @@ export class ShopPurchase extends Document {
     description: 'The database ID of the operator who made the purchase',
     example: '507f1f77bcf86cd799439012',
   })
-  @Prop({ type: Types.ObjectId, ref: 'Operator', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'Operators', required: true })
   operatorId: Types.ObjectId;
 
   /**

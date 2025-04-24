@@ -28,13 +28,6 @@ export class ShopItemEffectDrillData {
   })
   @Prop({ required: true, default: 0 })
   baseEff: number;
-
-  @ApiProperty({
-    description: 'The maximum level that the drill can reach',
-    example: 5,
-  })
-  @Prop({ required: true, default: 0 })
-  maxLevel: number;
 }
 
 /**
@@ -79,4 +72,18 @@ export class ShopItemEffects {
   })
   @Prop({ required: false, default: 0 })
   replenishFuelRatio?: number;
+
+  /**
+   * If the shop item upgrades the operator's `maxActiveDrillLimit`, then this field will show the new value for `maxActiveDrillLimit`.
+   */
+  @ApiProperty({
+    description: 'New value for max active drill limit',
+    example: 10,
+    required: false,
+  })
+  @Prop({
+    required: false,
+    default: 0,
+  })
+  upgradedMaxActiveDrillLimit?: number;
 }

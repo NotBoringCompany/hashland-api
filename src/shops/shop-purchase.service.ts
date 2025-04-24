@@ -1,4 +1,7 @@
 import {
+  BadRequestException,
+  ForbiddenException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -13,10 +16,13 @@ import { Drill } from 'src/drills/schemas/drill.schema';
 import { ShopItemEffects } from 'src/common/schemas/shop-item-effect.schema';
 import { Operator } from 'src/operators/schemas/operator.schema';
 import { TonService } from 'src/ton/ton.service';
-import { DrillConfig } from 'src/common/enums/drill.enum';
 import { AllowedChain } from 'src/common/enums/chain.enum';
 import { BlockchainData } from 'src/common/schemas/blockchain-payment.schema';
 import { AlchemyService } from 'src/alchemy/alchemy.service';
+import { RedisService } from 'src/common/redis.service';
+import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 
 @Injectable()
 export class ShopPurchaseService {
@@ -33,6 +39,9 @@ export class ShopPurchaseService {
     private readonly operatorModel: Model<Operator>,
     private readonly tonService: TonService,
     private readonly alchemyService: AlchemyService,
+    private readonly redisService: RedisService,
+    private readonly drillingGatewayService: DrillingGatewayService,
+    private readonly mixpanelService: MixpanelService,
   ) {}
 
   /**
@@ -69,9 +78,8 @@ export class ShopPurchaseService {
       );
 
       if (purchaseAllowedResponse.status !== 200) {
-        return new ApiResponse<null>(
-          purchaseAllowedResponse.status,
-          purchaseAllowedResponse.message,
+        throw new ForbiddenException(
+          `(purchaseItem) Purchase not allowed: ${purchaseAllowedResponse.message}`,
         );
       }
 
@@ -81,8 +89,7 @@ export class ShopPurchaseService {
       });
 
       if (existingPurchase) {
-        return new ApiResponse<null>(
-          403,
+        throw new ForbiddenException(
           `(purchaseItem) Transaction hash already used for a purchase.`,
         );
       }
@@ -108,11 +115,14 @@ export class ShopPurchaseService {
       }
 
       if (!blockchainData) {
-        return new ApiResponse<null>(
-          403,
+        throw new BadRequestException(
           `(purchaseItem) Invalid blockchain transaction.`,
         );
       }
+
+      this.logger.debug(
+        `(purchaseItem) Blockchain data verified: ${JSON.stringify(blockchainData, null, 2)}`,
+      );
 
       // Create a new shop purchase
       const shopPurchase = await this.shopPurchaseModel.create({
@@ -124,11 +134,40 @@ export class ShopPurchaseService {
         blockchainData,
       });
 
+      this.logger.debug(
+        `(purchaseItem) Shop purchase created: ${JSON.stringify(
+          shopPurchase,
+          null,
+          2,
+        )}`,
+      );
+
       // Grant the effects of the shop item to the operator
-      this.grantShopItemEffect(
+      await this.grantShopItemEffects(
         operatorId,
         purchaseAllowedResponse.data.shopItemEffects,
+      ).catch((err: any) => {
+        this.logger.error(
+          `(purchaseItem) Error granting shop item effect: ${err.message}`,
+        );
+
+        throw new InternalServerErrorException(
+          `(purchaseItem) Error granting shop item effect: ${err.message}`,
+        );
+      });
+
+      this.logger.debug(
+        `(purchaseItem) Shop item effects granted to operator ${operatorId}.`,
       );
+
+      this.mixpanelService.track(EVENT_CONSTANTS.SHOP_PURCHASE, {
+        distinct_id: operatorId,
+        shopPurchaseId: String(shopPurchase._id),
+        itemPurchased: shopPurchase.itemPurchased,
+        totalCost: shopPurchase.totalCost,
+        currency: shopPurchase.currency,
+        createdAt: shopPurchase.createdAt,
+      });
 
       return new ApiResponse(
         200,
@@ -143,32 +182,55 @@ export class ShopPurchaseService {
         },
       );
     } catch (err: any) {
-      return new ApiResponse<null>(
-        500,
+      throw new HttpException(
         `(purchaseItem) Error purchasing item: ${err.message}`,
+        err.status || 500,
       );
     }
   }
 
   /**
-   * Grants the operator the effect of a shop item. For example,
+   * Grants the operator the effects of a shop item. For example,
    * if the shop item is a drill, we would create a new drill for the operator and update the cumulative EFF of the operator.
    */
-  async grantShopItemEffect(
+  async grantShopItemEffects(
     operatorId: Types.ObjectId,
     shopItemEffects: ShopItemEffects,
   ): Promise<void> {
     try {
       const bulkOperations: any[] = [];
 
-      // ✅ Step 1: Grant a new drill if applicable
+      // Grant a new drill if applicable
       if (shopItemEffects.drillData) {
+        let active: boolean = false;
+
+        // If the operator's active drill count is less than their max limit, we
+        // can set the new drill as active.
+        const operator = await this.operatorModel
+          .findOne({ _id: operatorId }, { maxActiveDrillsAllowed: 1 })
+          .lean();
+        if (!operator) {
+          throw new Error(
+            `(grantShopItemEffects) Operator with ID ${operatorId} not found`,
+          );
+        }
+
+        const activeDrillCount = await this.drillModel.countDocuments({
+          operatorId,
+          active: true,
+        });
+
+        if (activeDrillCount < operator.maxActiveDrillsAllowed) {
+          active = true;
+        }
+
         const newDrill = new this.drillModel({
           operatorId,
           version: shopItemEffects.drillData.version,
           config: shopItemEffects.drillData.config,
           extractorAllowed: true,
-          level: 1,
+          active,
+          lastActiveStateToggle: null,
           actualEff: shopItemEffects.drillData.baseEff,
         });
 
@@ -185,56 +247,131 @@ export class ShopPurchaseService {
         });
       }
 
-      // ✅ Step 2: Increase maxFuel if applicable
+      // First get current operator info to calculate new fuel values
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { currentFuel: 1, maxFuel: 1 })
+        .lean();
+
+      if (!operator) {
+        throw new Error(`Operator with ID ${operatorId} not found`);
+      }
+
+      let newMaxFuel = operator.maxFuel;
+      let newCurrentFuel = operator.currentFuel;
+      let maxFuelIncreased = false;
+      let fuelReplenished = false;
+      let maxFuelIncreaseAmount = 0;
+      let fuelReplenishedAmount = 0;
+
+      // Increase maxFuel if applicable
       if (
         shopItemEffects.maxFuelIncrease &&
         shopItemEffects.maxFuelIncrease > 0
       ) {
+        maxFuelIncreaseAmount = shopItemEffects.maxFuelIncrease;
+        newMaxFuel += maxFuelIncreaseAmount;
+        maxFuelIncreased = true;
+
         bulkOperations.push({
           updateOne: {
             filter: { _id: operatorId },
-            update: { $inc: { maxFuel: shopItemEffects.maxFuelIncrease } },
+            update: { $inc: { maxFuel: maxFuelIncreaseAmount } },
           },
         });
       }
 
-      // ✅ Step 3: Replenish fuel (without exceeding maxFuel)
+      // Replenish fuel (without exceeding maxFuel) if applicable
       if (
         shopItemEffects.replenishFuelRatio &&
         shopItemEffects.replenishFuelRatio > 0
       ) {
+        const fuelToAdd = newMaxFuel * shopItemEffects.replenishFuelRatio;
+        const oldFuel = newCurrentFuel;
+        newCurrentFuel = Math.min(newCurrentFuel + fuelToAdd, newMaxFuel);
+        fuelReplenishedAmount = newCurrentFuel - oldFuel;
+        fuelReplenished = fuelReplenishedAmount > 0;
+
+        if (fuelReplenished) {
+          bulkOperations.push({
+            updateOne: {
+              filter: { _id: operatorId },
+              update: { $set: { currentFuel: newCurrentFuel } },
+            },
+          });
+        }
+      }
+
+      // Upgrade the operator's max active drill limit if applicable
+      if (
+        shopItemEffects.upgradedMaxActiveDrillLimit &&
+        shopItemEffects.upgradedMaxActiveDrillLimit > 0
+      ) {
         bulkOperations.push({
           updateOne: {
             filter: { _id: operatorId },
-            update: [
-              {
-                $set: {
-                  currentFuel: {
-                    $min: [
-                      {
-                        $add: [
-                          '$currentFuel',
-                          {
-                            $multiply: [
-                              '$maxFuel',
-                              shopItemEffects.replenishFuelRatio,
-                            ],
-                          },
-                        ],
-                      },
-                      '$maxFuel',
-                    ],
-                  },
-                },
+            update: {
+              $set: {
+                maxActiveDrillsAllowed:
+                  shopItemEffects.upgradedMaxActiveDrillLimit,
               },
-            ],
+            },
           },
         });
       }
 
-      // ✅ Step 4: Execute bulk updates if there are operations to perform
+      // Execute bulk updates if there are operations to perform
       if (bulkOperations.length > 0) {
         await this.operatorModel.bulkWrite(bulkOperations);
+      }
+
+      // Update Redis cache for fuel values if they changed
+      if (maxFuelIncreased || fuelReplenished) {
+        const operatorFuelCacheKey = `operator:${operatorId.toString()}:fuel`;
+        await this.redisService.set(
+          operatorFuelCacheKey,
+          JSON.stringify({ currentFuel: newCurrentFuel, maxFuel: newMaxFuel }),
+          3600, // 1 hour expiry
+        );
+
+        // Create notification data
+        const operatorUpdate = {
+          operatorId,
+          currentFuel: newCurrentFuel,
+          maxFuel: newMaxFuel,
+        };
+
+        // Notify for fuel replenishment if applicable
+        if (fuelReplenished) {
+          this.logger.log(
+            `✅ (grantShopItemEffect) Fuel replenished for operator ${operatorId}: +${fuelReplenishedAmount} units (${newCurrentFuel}/${newMaxFuel})`,
+          );
+
+          // Send websocket notification for fuel replenishment
+          await this.drillingGatewayService.notifyFuelUpdates(
+            [operatorUpdate],
+            fuelReplenishedAmount,
+            'replenished',
+          );
+        }
+
+        // Notify for max fuel increase if applicable
+        if (
+          maxFuelIncreased &&
+          (!fuelReplenished || maxFuelIncreaseAmount > fuelReplenishedAmount)
+        ) {
+          this.logger.log(
+            `✅ (grantShopItemEffect) Max fuel increased for operator ${operatorId}: +${maxFuelIncreaseAmount} units (${newCurrentFuel}/${newMaxFuel})`,
+          );
+
+          // Send websocket notification for max fuel increase
+          // Only notify about max fuel increase if we haven't already notified for replenishment
+          // or if the max fuel increase is more significant than the replenishment
+          await this.drillingGatewayService.notifyFuelUpdates(
+            [operatorUpdate],
+            maxFuelIncreaseAmount,
+            'replenished',
+          );
+        }
       }
 
       this.logger.log(
@@ -303,105 +440,149 @@ export class ShopPurchaseService {
         );
       }
 
-      const itemName = shopItem.item.toLowerCase();
+      const lowercaseItemName = shopItem.item.toLowerCase();
 
-      // ✅ Drill purchase limit and other prerequisites check
-      if (itemName.includes('drill')) {
-        const maxDrillsAllowed =
-          GAME_CONSTANTS.DRILLS.BASE_PREMIUM_DRILLS_ALLOWED +
-          GAME_CONSTANTS.DRILLS.BASE_BASIC_DRILLS_ALLOWED;
+      ////////////////// NOTE: TEMPORARILY DISABLED DRILL PURCHASE PREREQUISITES CHECK!!!!! ///////////////////
+      // // ✅ Drill purchase prerequisites check
+      // if (
+      //   lowercaseItemName.includes('drill') &&
+      //   !lowercaseItemName.includes('upgrade')
+      // ) {
+      //   this.logger.debug(
+      //     `(checkPurchaseAllowed) Checking prerequisites for drill purchase... `,
+      //   );
+      //   // Fetch all drills and operator data in parallel
+      //   const [operatorDrills, operator] = await Promise.all([
+      //     this.drillModel.find({ operatorId }, { config: 1 }),
+      //     this.operatorModel.findById(operatorId, { maxFuel: 1 }),
+      //   ]);
 
-        // Fetch all drills and operator data in parallel
-        const [operatorDrills, operator] = await Promise.all([
-          this.drillModel.find({ operatorId }, { config: 1 }),
-          this.operatorModel.findById(operatorId, { maxFuel: 1 }),
-        ]);
+      //   // ✅ Count drill types in one iteration
+      //   const drillCounts = operatorDrills.reduce(
+      //     (counts, drill) => {
+      //       counts[drill.config] = (counts[drill.config] || 0) + 1;
+      //       return counts;
+      //     },
+      //     {} as Record<DrillConfig, number>,
+      //   );
 
-        if (operatorDrills.length >= maxDrillsAllowed) {
-          return new ApiResponse<{ purchaseAllowed: boolean; reason: string }>(
-            403,
-            `(checkPurchaseAllowed) Operator has reached the maximum number of drills allowed.`,
-            {
-              purchaseAllowed: false,
-              reason: `Max drills reached (${maxDrillsAllowed}).`,
-            },
-          );
-        }
+      //   // ✅ Define prerequisite checks dynamically
+      //   const prerequisites = {
+      //     bulwark: {
+      //       requiredType: DrillConfig.IRONBORE,
+      //       requiredCount:
+      //         GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
+      //           .ironboreDrillsRequired,
+      //       maxFuel:
+      //         GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
+      //           .maxFuelRequired,
+      //     },
+      //     titan: {
+      //       requiredType: DrillConfig.BULWARK,
+      //       requiredCount:
+      //         GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
+      //           .bulwarkDrillsRequired,
+      //       maxFuel:
+      //         GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
+      //           .maxFuelRequired,
+      //     },
+      //     dreadnought: {
+      //       requiredType: DrillConfig.TITAN,
+      //       requiredCount:
+      //         GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
+      //           .titanDrillsRequired,
+      //       maxFuel:
+      //         GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
+      //           .maxFuelRequired,
+      //     },
+      //   } as const;
 
-        // ✅ Count drill types in one iteration
-        const drillCounts = operatorDrills.reduce(
-          (counts, drill) => {
-            counts[drill.config] = (counts[drill.config] || 0) + 1;
-            return counts;
-          },
-          {} as Record<DrillConfig, number>,
+      //   for (const [
+      //     key,
+      //     { requiredType, requiredCount, maxFuel },
+      //   ] of Object.entries(prerequisites)) {
+      //     if (lowercaseItemName.includes(key)) {
+      //       const ownedCount = drillCounts[requiredType] ?? 0;
+
+      //       if (ownedCount < requiredCount) {
+      //         return new ApiResponse<{
+      //           purchaseAllowed: boolean;
+      //           reason: string;
+      //         }>(
+      //           403,
+      //           `(checkPurchaseAllowed) Operator does not meet drill prerequisites.`,
+      //           {
+      //             purchaseAllowed: false,
+      //             reason: `Requires at least ${requiredCount} ${requiredType} drills, but only ${ownedCount} found.`,
+      //           },
+      //         );
+      //       }
+      //       if (operator.maxFuel < maxFuel) {
+      //         return new ApiResponse<{
+      //           purchaseAllowed: boolean;
+      //           reason: string;
+      //         }>(
+      //           403,
+      //           `(checkPurchaseAllowed) Operator does not have enough maxFuel.`,
+      //           {
+      //             purchaseAllowed: false,
+      //             reason: `Requires ${maxFuel} max fuel, but only ${operator.maxFuel} available.`,
+      //           },
+      //         );
+      //       }
+      //     }
+      //   }
+      // }
+
+      // If the item is to upgrade max active drill limit
+      if (lowercaseItemName.includes('upgrade_max_active_drills')) {
+        this.logger.error(
+          `(checkPurchaseAllowed) Checking prerequisites for max active drill limit upgrade... `,
         );
 
-        // ✅ Define prerequisite checks dynamically
-        const prerequisites = {
-          bulwark: {
-            requiredType: DrillConfig.IRONBORE,
-            requiredCount:
-              GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
-                .ironboreDrillsRequired,
-            maxFuel:
-              GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
-                .maxFuelRequired,
-          },
-          titan: {
-            requiredType: DrillConfig.BULWARK,
-            requiredCount:
-              GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
-                .bulwarkDrillsRequired,
-            maxFuel:
-              GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
-                .maxFuelRequired,
-          },
-          dreadnought: {
-            requiredType: DrillConfig.TITAN,
-            requiredCount:
-              GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
-                .titanDrillsRequired,
-            maxFuel:
-              GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
-                .maxFuelRequired,
-          },
-        } as const;
+        // Check the operator's current max active drill limit
+        // They can only purchase the value after the current one AND once they have 10 they cannot purchase any at all
+        const operator = await this.operatorModel
+          .findById(operatorId, { maxActiveDrillsAllowed: 1 })
+          .lean();
 
-        for (const [
-          key,
-          { requiredType, requiredCount, maxFuel },
-        ] of Object.entries(prerequisites)) {
-          if (itemName.includes(key)) {
-            const ownedCount = drillCounts[requiredType] ?? 0;
+        if (!operator) {
+          return new ApiResponse<{
+            purchaseAllowed: boolean;
+            reason: string;
+          }>(404, `(checkPurchaseAllowed) Operator not found.`, {
+            purchaseAllowed: false,
+            reason: 'Operator not found.',
+          });
+        }
 
-            if (ownedCount < requiredCount) {
-              return new ApiResponse<{
-                purchaseAllowed: boolean;
-                reason: string;
-              }>(
-                403,
-                `(checkPurchaseAllowed) Operator does not meet drill prerequisites.`,
-                {
-                  purchaseAllowed: false,
-                  reason: `Requires at least ${requiredCount} ${requiredType} drills, but only ${ownedCount} found.`,
-                },
-              );
-            }
-            if (operator.maxFuel < maxFuel) {
-              return new ApiResponse<{
-                purchaseAllowed: boolean;
-                reason: string;
-              }>(
-                403,
-                `(checkPurchaseAllowed) Operator does not have enough maxFuel.`,
-                {
-                  purchaseAllowed: false,
-                  reason: `Requires ${maxFuel} max fuel, but only ${operator.maxFuel} available.`,
-                },
-              );
-            }
-          }
+        const currentLimit = operator.maxActiveDrillsAllowed;
+        const nextLimit = currentLimit + 1;
+
+        // Check if the item name is `UPGRADE_MAX_ACTIVE_DRILLS_(nextLimit)`
+        // If not, return an error
+        if (lowercaseItemName !== `upgrade_max_active_drills_${nextLimit}`) {
+          this.logger.error(`
+            (checkPurchaseAllowed) Invalid item name for max active drill limit upgrade. 
+            Allowed: upgrade_max_active_drills_${nextLimit}, current item: ${lowercaseItemName}  
+          `);
+
+          const message =
+            currentLimit >= GAME_CONSTANTS.DRILLS.MAX_ACTIVE_DRILLS_ALLOWED
+              ? `Already at maximum active drill limit of ${GAME_CONSTANTS.DRILLS.MAX_ACTIVE_DRILLS_ALLOWED}.`
+              : `You can only upgrade to the next limit: ${nextLimit}.`;
+
+          return new ApiResponse<{
+            purchaseAllowed: boolean;
+            reason: string;
+          }>(
+            403,
+            `(checkPurchaseAllowed) Cannot purchase max active drill limit upgrade that's not the correct limit.`,
+            {
+              purchaseAllowed: false,
+              reason: message,
+            },
+          );
         }
       }
 

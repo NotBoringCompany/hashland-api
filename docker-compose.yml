@@ -1,6 +1,23 @@
 version: '3.8'
 
 services:
+  # MongoDB keyfile generator service
+  mongo-init:
+    image: mongo:latest
+    container_name: mongo-keyfile-init
+    command: >
+      bash -c "
+      openssl rand -base64 756 > /tmp/mongo-keyfile &&
+      chmod 400 /tmp/mongo-keyfile &&
+      mkdir -p /data/keyfile &&
+      cp /tmp/mongo-keyfile /data/keyfile/ &&
+      chmod 400 /data/keyfile/mongo-keyfile &&
+      chown 999:999 /data/keyfile/mongo-keyfile
+      "
+    volumes:
+      - hashland-mongo-keyfile:/data/keyfile
+    restart: "no"
+
   app:
     build:
       context: .
@@ -11,19 +28,22 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - ./logs:/app/logs # For storing Winston logs
     environment:
       - NODE_ENV=development
       - PORT=8080
-      - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongo:27017/main?authSource=admin
-      - REDIS_URI=redis://redis:6379
+      - MONGO_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongo:27017/main?authSource=admin&replicaSet=rs0
+      - REDIS_URI=redis://:${REDIS_PASSWORD}@redis:6379
       - REDIS_PRIMARY_ONLY=true
       - DATABASE_NAME=main
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION=24h
       - TON_API_ENDPOINT=https://toncenter.com/api/v2/jsonRPC
     depends_on:
-      - mongo
-      - redis
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
     command: npm run start:dev
     env_file:
       - .env
@@ -34,14 +54,27 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - mongo-data:/data/db
+      - hashland-mongo-data:/data/db
+      - hashland-mongo-config:/data/configdb
+      - hashland-mongo-keyfile:/data/keyfile
     environment:
       - MONGO_INITDB_DATABASE=main
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
-    command: mongod --bind_ip_all --auth
+    command: ["mongod", "--bind_ip_all", "--auth", "--replSet", "rs0", "--port", "27017", "--keyFile", "/data/keyfile/mongo-keyfile"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}) }" | mongosh --host mongo:27017 -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin --quiet
+      interval: 5s
+      timeout: 30s
+      start_period: 10s
+      retries: 30
     env_file:
       - .env
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
 
   redis:
     image: redis:alpine
@@ -49,9 +82,20 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes --replica-read-only no
+      - hashland-redis-data:/data
+    command: >
+      sh -c "redis-server --appendonly yes --replica-read-only no --requirepass \"$$REDIS_PASSWORD\""
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    env_file:
+      - .env
 
 volumes:
-  mongo-data:
-  redis-data: 
+  hashland-mongo-data:
+    name: hashland-mongo-data
+  hashland-mongo-config:
+    name: hashland-mongo-config
+  hashland-mongo-keyfile:
+    name: hashland-mongo-keyfile
+  hashland-redis-data:
+    name: hashland-redis-data 

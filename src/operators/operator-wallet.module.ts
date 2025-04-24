@@ -11,6 +11,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Operator, OperatorSchema } from './schemas/operator.schema';
 import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
 import { AlchemyModule } from 'src/alchemy/alchemy.module';
+import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AlchemyModule } from 'src/alchemy/alchemy.module';
     ]),
     RedisModule,
     AlchemyModule,
+    MixpanelModule,
   ],
   controllers: [OperatorWalletController], // Expose API endpoints
   providers: [OperatorWalletService], // Business logic for Operators

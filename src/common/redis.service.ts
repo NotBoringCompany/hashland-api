@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import Redis from 'ioredis';
+import Redis, { ChainableCommander } from 'ioredis';
 
 @Injectable()
 export class RedisService {
@@ -31,6 +31,20 @@ export class RedisService {
     this.redis.on('ready', () => {
       this.logger.log('✅ Redis connection ready');
     });
+  }
+
+  /**
+   * Execute multiple Redis commands in a single pipeline.
+   */
+  async pipeline(
+    fn: (pipeline: ChainableCommander) => void,
+  ): Promise<[Error | null, any][]> {
+    return this.retryOperation(async () => {
+      const p = this.redis.pipeline();
+      fn(p);
+      // p.exec() returns Promise<[Error|null, unknown][]>
+      return p.exec();
+    }, 'pipeline');
   }
 
   /**
@@ -100,6 +114,13 @@ export class RedisService {
   async resetCycleNumber(newCycleNumber: number) {
     await this.set('drilling-cycle:current', newCycleNumber.toString());
     this.logger.warn(`🔄 Drilling Cycle Number Reset to: ${newCycleNumber}`);
+  }
+
+  /**
+   * Flush all keys in Redis (use with caution).
+   */
+  async flushAll() {
+    return this.redis.flushall();
   }
 
   /**

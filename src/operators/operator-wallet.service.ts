@@ -1,8 +1,8 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -24,6 +24,10 @@ import {
 } from 'src/common/utils/equity';
 import { ByteArray, keccak256, recoverAddress, Signature, toBytes } from 'viem';
 import { AlchemyService } from 'src/alchemy/alchemy.service';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { MixpanelService } from 'src/mixpanel/mixpanel.service';
+import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class OperatorWalletService {
@@ -37,11 +41,14 @@ export class OperatorWalletService {
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     private readonly redisService: RedisService,
     private readonly alchemyService: AlchemyService,
+    private readonly mixpanelService: MixpanelService,
+    private readonly configService: ConfigService,
   ) {
     // Initialize TON client
     const endpoint =
-      process.env.TON_API_ENDPOINT || 'https://toncenter.com/api/v2/jsonRPC';
-    const apiKey = process.env.TON_API_KEY || '';
+      this.configService.get<string>('TON_API_ENDPOINT') ||
+      'https://toncenter.com/api/v2/jsonRPC';
+    const apiKey = this.configService.get<string>('TON_API_KEY') || '';
 
     this.tonClient = new TonClient({
       endpoint,
@@ -50,8 +57,9 @@ export class OperatorWalletService {
   }
 
   /**
-   * Updates asset equity, effMultiplier (in Operator), actualEff for basic drills,
-   * and adjusts cumulativeEff in the Operator schema.
+   * Updates asset equity, effMultiplier (in Operator) and actualEff for basic drills in the Operator schema.
+   *
+   * Does NOT update `cumulativeEff`. This needs to be done separately.
    */
   async updateAssetEquityForOperator(
     operatorId: Types.ObjectId,
@@ -81,42 +89,54 @@ export class OperatorWalletService {
         })),
       );
 
+      this.logger.debug(
+        `(updateAssetEquityForOperator) New equity: ${newEquity}`,
+      );
+
       // ✅ Step 3: Fetch operator document
       const operator = await this.operatorModel
-        .findById(operatorId, { assetEquity: 1, cumulativeEff: 1 })
+        .findById(operatorId, { assetEquity: 1 })
         .lean();
       if (!operator) return;
 
       // ✅ Step 4: Compute `effMultiplier`
       const newEffMultiplier = equityToEffMultiplier(newEquity);
 
-      // ✅ Step 5: Update `actualEff` of **Basic Drill** & Compute `cumulativeEff`
-      const newActualEff = equityToActualEff(newEquity);
-
-      const updatedDrill = await this.drillModel.findOneAndUpdate(
-        { operatorId, version: DrillVersion.BASIC },
-        { $set: { actualEff: newActualEff } },
-        { new: true, projection: { actualEff: 1 } }, // Return the updated `actualEff`
+      this.logger.debug(
+        `(updateAssetEquityForOperator) New effMultiplier: ${newEffMultiplier}`,
       );
 
-      // ✅ Step 6: Compute `cumulativeEff`
-      const oldActualEff = updatedDrill ? updatedDrill.actualEff : 0;
-      const effDifference = newActualEff - oldActualEff;
-      const newCumulativeEff = (operator.cumulativeEff || 0) + effDifference;
+      // ✅ Step 5: Update `actualEff` of **Basic Drill**
+      const newActualEff = equityToActualEff(newEquity);
 
-      // ✅ Step 7: Update `assetEquity`, `effMultiplier` & `cumulativeEff` in Operator document
+      this.logger.debug(
+        `(updateAssetEquityForOperator) New actualEff: ${newActualEff}`,
+      );
+
+      await this.drillModel.findOneAndUpdate(
+        { operatorId, version: DrillVersion.BASIC },
+        { $set: { actualEff: newActualEff } },
+        { new: false, projection: { actualEff: 1 } }, // Return the old `actualEff` (with `new: false`)
+      );
+
+      // ✅ Step 6: Update `assetEquity` and `effMultiplier` in Operator document
       await this.operatorModel.updateOne(
         { _id: operatorId },
         {
           $set: {
             assetEquity: newEquity,
             effMultiplier: newEffMultiplier,
-            cumulativeEff: newCumulativeEff,
           },
         },
       );
 
-      this.logger.log(
+      this.mixpanelService.track(EVENT_CONSTANTS.WALLET_UPDATE_ASSET_EQUITY, {
+        distinct_id: operatorId,
+        wallets: walletDocuments,
+        assetEquity: newEquity,
+      });
+
+      this.logger.debug(
         `✅ (updateAssetEquityForOperator) Updated asset equity & effMultiplier for operator ${operatorId}.`,
       );
     } catch (error) {
@@ -151,7 +171,7 @@ export class OperatorWalletService {
 
       // ✅ TON Chain Handling
       if (chainWalletsMap[AllowedChain.TON]?.length) {
-        const tonApiKey = process.env.TON_API_KEY || '';
+        const tonApiKey = this.configService.get<string>('TON_API_KEY') || '';
         const apiUrl =
           `https://toncenter.com/api/v3/accountStates?include_boc=false&api_key=${tonApiKey}&` +
           chainWalletsMap[AllowedChain.TON]!.map(
@@ -169,7 +189,8 @@ export class OperatorWalletService {
 
           totalUsdBalance += totalTonBalance * (rates.ton || 0);
 
-          const tonXApiKey = process.env.TON_X_API_KEY || '';
+          const tonXApiKey =
+            this.configService.get<string>('TON_X_API_KEY') || '';
           const tonXApiUrl = `https://mainnet-rpc.tonxapi.com/v2/json-rpc/${tonXApiKey}`;
 
           const requests = chainWalletsMap[AllowedChain.TON]!.map(
@@ -228,6 +249,13 @@ export class OperatorWalletService {
             }
           }
         }
+      }
+
+      // If totalUsdBalance is < MINIMUM_USD_BALANCE_THRESHOLD, set it to 0
+      if (
+        totalUsdBalance < GAME_CONSTANTS.ECONOMY.MINIMUM_USD_BALANCE_THRESHOLD
+      ) {
+        totalUsdBalance = 0;
       }
 
       return totalUsdBalance;
@@ -338,8 +366,9 @@ export class OperatorWalletService {
       });
 
       if (existingWalletsInChain.length >= 2) {
-        throw new UnauthorizedException(
+        throw new HttpException(
           '(connectWallet) Operator already has maximum connected wallets in this chain',
+          400,
         );
       }
 
@@ -356,15 +385,16 @@ export class OperatorWalletService {
         ]);
 
         if (secondWalletUSDBalance < minAssetEquity) {
-          throw new UnauthorizedException(
+          throw new HttpException(
             `(connectWallet) Operator must have at least $${minAssetEquity} in their second wallet to connect it.`,
+            400,
           );
         }
       }
 
       // Check if wallet is already connected to this operator for this chain
       const existingWallet = await this.operatorWalletModel.findOne({
-        address: walletData.address,
+        address: walletData.address.toLowerCase(),
         chain: walletData.chain,
       });
 
@@ -372,8 +402,9 @@ export class OperatorWalletService {
         existingWallet &&
         existingWallet.operatorId.toString() !== operatorId.toString()
       ) {
-        throw new UnauthorizedException(
+        throw new HttpException(
           '(connectWallet) Wallet already connected to another operator',
+          400,
         );
       }
 
@@ -402,8 +433,9 @@ export class OperatorWalletService {
       }
 
       if (!isValid) {
-        throw new UnauthorizedException(
+        throw new HttpException(
           '(connectWallet) Invalid wallet signature or proof.',
+          400,
         );
       }
 
@@ -412,13 +444,18 @@ export class OperatorWalletService {
         existingWallet.signature = walletData.signature;
         existingWallet.signatureMessage = walletData.signatureMessage;
         await existingWallet.save();
+
+        this.mixpanelService.track(EVENT_CONSTANTS.WALLET_CONNECT, {
+          distinct_id: operatorId,
+          wallet: existingWallet,
+        });
         return existingWallet._id;
       }
 
       // Create new wallet after validation
       const newWallet = new this.operatorWalletModel({
         operatorId,
-        address: walletData.address,
+        address: walletData.address.toLowerCase(),
         chain: walletData.chain,
         signature: walletData.signature,
         signatureMessage: walletData.signatureMessage,
@@ -431,6 +468,11 @@ export class OperatorWalletService {
         this.logger.error(
           `(connectWallet) Error updating asset equity for operator: ${err.message}`,
         );
+      });
+
+      this.mixpanelService.track(EVENT_CONSTANTS.WALLET_CONNECT, {
+        distinct_id: operatorId,
+        wallet: newWallet,
       });
 
       return newWallet._id;
@@ -533,35 +575,18 @@ export class OperatorWalletService {
         return false;
       }
 
-      // Verify domain
-      // const appDomain = this.configService.get<string>(
-      //   'APP_DOMAIN',
-      //   'hashland.ton.app',
-      // );
-      // if (tonProof.proof.domain.value !== appDomain) {
-      //   return false;
-      // }
-
-      // Verify the signature
-      const tonAddress = Address.parse(address);
-      const publicKey = await this.extractPublicKeyFromContract(tonAddress);
-
-      if (!publicKey) {
-        this.logger.error(
-          `Could not extract public key for address: ${address}`,
-        );
-        return false;
-      }
-
       // Convert signature from hex to buffer
       const signatureBuffer = Buffer.from(tonProof.proof.signature, 'hex');
 
       // Create payload hash
       const payloadBuffer = Buffer.from(tonProof.proof.payload);
 
+      // Convert public key from hex to buffer
+      const publicKeyBuffer = Buffer.from(tonProof.publicKey, 'hex');
+
       // Verify the signature
       const isValid = this.verifySignature(
-        publicKey,
+        publicKeyBuffer,
         payloadBuffer,
         signatureBuffer,
       );
@@ -784,7 +809,7 @@ export class OperatorWalletService {
    * @returns The challenge message
    */
   private generateChallengeMessage(address: string, nonce: string): string {
-    const appName = process.env.APP_NAME || 'Hashland';
+    const appName = this.configService.get<string>('APP_NAME', 'Hashland');
     const timestamp = Date.now();
 
     return `${appName} authentication request for address ${address}.\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
@@ -832,9 +857,10 @@ export class OperatorWalletService {
 
       return {
         status: 'connected',
-        endpoint:
-          process.env.TON_API_ENDPOINT ||
+        endpoint: this.configService.get<string>(
+          'TON_API_ENDPOINT',
           'https://toncenter.com/api/v2/jsonRPC',
+        ),
       };
     } catch (error) {
       this.logger.error(
