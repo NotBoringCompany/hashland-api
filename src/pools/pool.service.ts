@@ -240,6 +240,58 @@ export class PoolService {
   }
 
   /**
+   * Fetches a random public pool ID that still has available slots.
+   */
+  async fetchAvailableRandomPublicPoolId(): Promise<string | null> {
+    try {
+      const publicPoolIds = this.fetchRandomPublicPoolId();
+
+      const pools = await this.poolModel
+        .find(
+          {
+            _id: { $in: publicPoolIds },
+          },
+          {
+            _id: 1,
+            maxOperators: 1,
+          },
+        )
+        .lean();
+
+      const poolMemberCounts = await this.poolOperatorModel.countDocuments({
+        pool: { $in: publicPoolIds },
+      });
+
+      this.logger.debug(
+        `(fetchAvailableRandomPublicPoolId) Pool member counts: ${JSON.stringify(
+          poolMemberCounts,
+          null,
+          2,
+        )}`,
+      );
+
+      const availablePools = pools.filter(
+        (pool) => pool.maxOperators > poolMemberCounts[pool._id.toString()],
+      );
+
+      if (availablePools.length > 0) {
+        return availablePools[
+          Math.floor(Math.random() * availablePools.length)
+        ]._id.toString();
+      }
+
+      return null;
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(fetchAvailableRandomPublicPoolId) Error fetching available pool: ${err.message}`,
+        ),
+      );
+    }
+  }
+
+  /**
    * Updates the estimated efficiency (estimatedEff) for a specific pool.
    * Calculates the sum of weightedEff (cumulativeEff * effMultiplier) for all operators in the pool.
    * Uses a more efficient aggregation pipeline for performance.
