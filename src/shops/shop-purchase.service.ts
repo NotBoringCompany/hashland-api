@@ -23,7 +23,6 @@ import { RedisService } from 'src/common/redis.service';
 import { DrillingGatewayService } from 'src/gateway/drilling.gateway.service';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
 import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
-import { DrillConfig } from 'src/common/enums/drill.enum';
 
 @Injectable()
 export class ShopPurchaseService {
@@ -444,96 +443,96 @@ export class ShopPurchaseService {
       const lowercaseItemName = shopItem.item.toLowerCase();
 
       ////////////////// NOTE: TEMPORARILY DISABLED DRILL PURCHASE PREREQUISITES CHECK!!!!! ///////////////////
-      // ✅ Drill purchase prerequisites check
-      if (
-        lowercaseItemName.includes('drill') &&
-        !lowercaseItemName.includes('upgrade')
-      ) {
-        this.logger.debug(
-          `(checkPurchaseAllowed) Checking prerequisites for drill purchase... `,
-        );
-        // Fetch all drills and operator data in parallel
-        const [operatorDrills, operator] = await Promise.all([
-          this.drillModel.find({ operatorId }, { config: 1 }),
-          this.operatorModel.findById(operatorId, { maxFuel: 1 }),
-        ]);
+      // // ✅ Drill purchase prerequisites check
+      // if (
+      //   lowercaseItemName.includes('drill') &&
+      //   !lowercaseItemName.includes('upgrade')
+      // ) {
+      //   this.logger.debug(
+      //     `(checkPurchaseAllowed) Checking prerequisites for drill purchase... `,
+      //   );
+      //   // Fetch all drills and operator data in parallel
+      //   const [operatorDrills, operator] = await Promise.all([
+      //     this.drillModel.find({ operatorId }, { config: 1 }),
+      //     this.operatorModel.findById(operatorId, { maxFuel: 1 }),
+      //   ]);
 
-        // ✅ Count drill types in one iteration
-        const drillCounts = operatorDrills.reduce(
-          (counts, drill) => {
-            counts[drill.config] = (counts[drill.config] || 0) + 1;
-            return counts;
-          },
-          {} as Record<DrillConfig, number>,
-        );
+      //   // ✅ Count drill types in one iteration
+      //   const drillCounts = operatorDrills.reduce(
+      //     (counts, drill) => {
+      //       counts[drill.config] = (counts[drill.config] || 0) + 1;
+      //       return counts;
+      //     },
+      //     {} as Record<DrillConfig, number>,
+      //   );
 
-        // ✅ Define prerequisite checks dynamically
-        const prerequisites = {
-          bulwark: {
-            requiredType: DrillConfig.IRONBORE,
-            requiredCount:
-              GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
-                .ironboreDrillsRequired,
-            maxFuel:
-              GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
-                .maxFuelRequired,
-          },
-          titan: {
-            requiredType: DrillConfig.BULWARK,
-            requiredCount:
-              GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
-                .bulwarkDrillsRequired,
-            maxFuel:
-              GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
-                .maxFuelRequired,
-          },
-          dreadnought: {
-            requiredType: DrillConfig.TITAN,
-            requiredCount:
-              GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
-                .titanDrillsRequired,
-            maxFuel:
-              GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
-                .maxFuelRequired,
-          },
-        } as const;
+      //   // ✅ Define prerequisite checks dynamically
+      //   const prerequisites = {
+      //     bulwark: {
+      //       requiredType: DrillConfig.IRONBORE,
+      //       requiredCount:
+      //         GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
+      //           .ironboreDrillsRequired,
+      //       maxFuel:
+      //         GAME_CONSTANTS.DRILLS.BULWARK_DRILL_PURCHASE_PREREQUISITES
+      //           .maxFuelRequired,
+      //     },
+      //     titan: {
+      //       requiredType: DrillConfig.BULWARK,
+      //       requiredCount:
+      //         GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
+      //           .bulwarkDrillsRequired,
+      //       maxFuel:
+      //         GAME_CONSTANTS.DRILLS.TITAN_DRILL_PURCHASE_PREREQUISITES
+      //           .maxFuelRequired,
+      //     },
+      //     dreadnought: {
+      //       requiredType: DrillConfig.TITAN,
+      //       requiredCount:
+      //         GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
+      //           .titanDrillsRequired,
+      //       maxFuel:
+      //         GAME_CONSTANTS.DRILLS.DREADNOUGHT_DRILL_PURCHASE_PREREQUISITES
+      //           .maxFuelRequired,
+      //     },
+      //   } as const;
 
-        for (const [
-          key,
-          { requiredType, requiredCount, maxFuel },
-        ] of Object.entries(prerequisites)) {
-          if (lowercaseItemName.includes(key)) {
-            const ownedCount = drillCounts[requiredType] ?? 0;
+      //   for (const [
+      //     key,
+      //     { requiredType, requiredCount, maxFuel },
+      //   ] of Object.entries(prerequisites)) {
+      //     if (lowercaseItemName.includes(key)) {
+      //       const ownedCount = drillCounts[requiredType] ?? 0;
 
-            if (ownedCount < requiredCount) {
-              return new ApiResponse<{
-                purchaseAllowed: boolean;
-                reason: string;
-              }>(
-                403,
-                `(checkPurchaseAllowed) Operator does not meet drill prerequisites.`,
-                {
-                  purchaseAllowed: false,
-                  reason: `Requires at least ${requiredCount} ${requiredType} drills, but only ${ownedCount} found.`,
-                },
-              );
-            }
-            if (operator.maxFuel < maxFuel) {
-              return new ApiResponse<{
-                purchaseAllowed: boolean;
-                reason: string;
-              }>(
-                403,
-                `(checkPurchaseAllowed) Operator does not have enough maxFuel.`,
-                {
-                  purchaseAllowed: false,
-                  reason: `Requires ${maxFuel} max fuel, but only ${operator.maxFuel} available.`,
-                },
-              );
-            }
-          }
-        }
-      }
+      //       if (ownedCount < requiredCount) {
+      //         return new ApiResponse<{
+      //           purchaseAllowed: boolean;
+      //           reason: string;
+      //         }>(
+      //           403,
+      //           `(checkPurchaseAllowed) Operator does not meet drill prerequisites.`,
+      //           {
+      //             purchaseAllowed: false,
+      //             reason: `Requires at least ${requiredCount} ${requiredType} drills, but only ${ownedCount} found.`,
+      //           },
+      //         );
+      //       }
+      //       if (operator.maxFuel < maxFuel) {
+      //         return new ApiResponse<{
+      //           purchaseAllowed: boolean;
+      //           reason: string;
+      //         }>(
+      //           403,
+      //           `(checkPurchaseAllowed) Operator does not have enough maxFuel.`,
+      //           {
+      //             purchaseAllowed: false,
+      //             reason: `Requires ${maxFuel} max fuel, but only ${operator.maxFuel} available.`,
+      //           },
+      //         );
+      //       }
+      //     }
+      //   }
+      // }
 
       // If the item is to upgrade max active drill limit
       if (lowercaseItemName.includes('upgrade_max_active_drills')) {
@@ -562,10 +561,10 @@ export class ShopPurchaseService {
 
         // Check if the item name is `UPGRADE_MAX_ACTIVE_DRILLS_(nextLimit)`
         // If not, return an error
-        if (lowercaseItemName !== `UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}`) {
+        if (lowercaseItemName !== `upgrade_max_active_drills_${nextLimit}`) {
           this.logger.error(`
             (checkPurchaseAllowed) Invalid item name for max active drill limit upgrade. 
-            Allowed: UPGRADE_MAX_ACTIVE_DRILLS_${nextLimit}, current item: ${lowercaseItemName}  
+            Allowed: upgrade_max_active_drills_${nextLimit}, current item: ${lowercaseItemName}  
           `);
 
           const message =
