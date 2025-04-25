@@ -55,9 +55,7 @@ export class PoolController {
     type: GetAllPoolsResponseDto,
   })
   @Get()
-  async getAllPools(
-    @Query('projection') projection?: string,
-  ): Promise<AppApiResponse<{ pools: Partial<Pool[]> }>> {
+  async getAllPools(@Query('projection') projection?: string) {
     // Convert query string to Mongoose projection object
     const projectionObj = projection
       ? projection

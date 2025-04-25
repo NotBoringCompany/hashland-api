@@ -7,7 +7,7 @@ export class GetAllPoolsResponseDto {
     description: 'Array of pools',
     type: [Pool],
   })
-  pools: Partial<Pool>[];
+  pools: Partial<Pool & { currentOperatorCount: number }>[];
 }
 
 export class CreatePoolAdminDto {

@@ -136,21 +136,39 @@ export class PoolService {
   }
 
   /**
-   * Fetch all pools. Optional projection to filter out fields.
-   * Ensures efficiency values are up-to-date.
+   * Fetch all pools with up-to-date operator counts.
    */
   async getAllPools(
     projection?: string | Record<string, 1 | 0>,
-  ): Promise<ApiResponse<{ pools: Partial<Pool[]> }>> {
+  ): Promise<ApiResponse<{ pools: any[] }>> {
     try {
-      // Now fetch the pools with the updated data and requested projection
+      // 1) Aggregate operator counts by pool in one go
+      const counts = await this.poolOperatorModel.aggregate<{
+        _id: any;
+        count: number;
+      }>([{ $group: { _id: '$pool', count: { $sum: 1 } } }]);
+
+      // 2) Build a lookup map: poolId → operator count
+      const countMap = counts.reduce<Record<string, number>>(
+        (map, { _id, count }) => {
+          map[_id.toString()] = count;
+          return map;
+        },
+        {},
+      );
+
+      // 3) Fetch all pools with optional projection
       const pools = await this.poolModel.find().select(projection).lean();
 
-      return new ApiResponse<{ pools: Partial<Pool[]> }>(
-        200,
-        `(getAllPools) Fetched all pools.`,
-        { pools },
-      );
+      // 4) Merge in the counts (defaulting to 0 if no operators)
+      const poolsWithCounts = pools.map((pool) => ({
+        ...pool,
+        currentOperatorCount: countMap[pool._id.toString()] || 0,
+      }));
+
+      return new ApiResponse(200, '(getAllPools) Fetched all pools.', {
+        pools: poolsWithCounts,
+      });
     } catch (err: any) {
       throw new InternalServerErrorException(
         new ApiResponse<null>(
