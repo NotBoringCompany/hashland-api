@@ -556,7 +556,10 @@ export class DrillingCycleService {
       const weightedRewards = activeOperators.map((operator) => ({
         operatorId: operator._id,
         amount:
-          (operator.cumulativeEff / totalCumulativeEff) * activeOperatorsReward,
+          totalCumulativeEff === 0
+            ? 0
+            : (operator.cumulativeEff / totalCumulativeEff) *
+              activeOperatorsReward,
       }));
 
       rewardData.push(...weightedRewards);
@@ -587,8 +590,10 @@ export class DrillingCycleService {
         const weightedRewards = activeOperators.map((operator) => ({
           operatorId: operator._id,
           amount:
-            (operator.cumulativeEff / totalCumulativeEff) *
-            activeOperatorsReward,
+            totalCumulativeEff === 0
+              ? 0
+              : (operator.cumulativeEff / totalCumulativeEff) *
+                activeOperatorsReward,
         }));
 
         rewardData.push(
@@ -684,8 +689,11 @@ export class DrillingCycleService {
 
         // ✅ Compute Weighted Pool Rewards
         const weightedPoolRewards = weightedPoolOperators.map((operator) => {
+          // If totalPoolEff is zero, avoid division by zero which causes NaN
           const opReward =
-            (operator.cumulativeEff / totalPoolEff) * activePoolReward;
+            totalPoolEff === 0
+              ? 0
+              : (operator.cumulativeEff / totalPoolEff) * activePoolReward;
 
           // Track individual pool operator rewards
           const poolOpKey = `${operator._id.toString()}_${poolOperator.pool.toString()}`;

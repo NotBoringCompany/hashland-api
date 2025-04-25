@@ -101,7 +101,7 @@ export class AlchemyService {
           this.logger.error(
             `❌ (verifyEVMTransaction) Transaction receiver does not match address.
             
-            Expected: ${this.evmReceiverAddress}, received: ${tx.to}`,
+            Expected: ${this.evmReceiverAddress.toLowerCase()}, received: ${tx.to?.toLowerCase()}`,
           );
 
           return null;

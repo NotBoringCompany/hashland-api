@@ -808,7 +808,7 @@ export class OperatorService {
     }
 
     // Pick a random pool to join
-    const poolId = this.poolService.fetchRandomPublicPoolId();
+    const poolId = await this.poolService.fetchAvailableRandomPublicPoolId();
 
     if (poolId) {
       try {
@@ -823,6 +823,11 @@ export class OperatorService {
           `(findOrCreateOperator) Error joining pool: ${err.message}`,
         );
       }
+    } else {
+      // No available public pool found for new operator. They are solo.
+      this.logger.warn(
+        `(findOrCreateOperator) No available public pool found for new operator ${operator._id}.`,
+      );
     }
 
     // Grant a basic drill to the operator

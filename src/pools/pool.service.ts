@@ -213,30 +213,66 @@ export class PoolService {
   }
 
   /**
-   * Fetches one random public pool ID for new operators to join.
-   *
-   * @returns The ID of the pool to join
+   * Fetches a random public pool ID that still has available slots.
    */
-  fetchRandomPublicPoolId(): string {
-    // get the pool ID from the pool number.
-    // hardcoding this reduces query time compared to fetching from the database.
-    const poolIds: Array<{ poolNumber: number; poolId: string }> = [
-      {
-        poolNumber: 1,
-        poolId: '67c59119e13cd025d70558f8',
-      },
-      {
-        poolNumber: 2,
-        poolId: '67c5913d38219727f71abcc9',
-      },
-      {
-        poolNumber: 3,
-        poolId: '67c59160bcc83377ab6e9201',
-      },
-    ];
+  async fetchAvailableRandomPublicPoolId(): Promise<string | null> {
+    try {
+      const publicPoolIds = [
+        new Types.ObjectId('67c59119e13cd025d70558f8'),
+        new Types.ObjectId('67c5913d38219727f71abcc9'),
+        new Types.ObjectId('67c59160bcc83377ab6e9201'),
+      ];
 
-    // randomize which pool to fetch
-    return poolIds[Math.floor(Math.random() * poolIds.length)].poolId;
+      const pools = await this.poolModel
+        .find({ _id: { $in: publicPoolIds } }, { _id: 1, maxOperators: 1 })
+        .lean();
+
+      const poolMemberCountMap = new Map<string, number>();
+
+      await Promise.all(
+        publicPoolIds.map(async (poolId) => {
+          const count = await this.poolOperatorModel.countDocuments({
+            pool: poolId,
+          });
+          poolMemberCountMap.set(poolId.toString(), count);
+        }),
+      );
+
+      this.logger.debug(
+        `(fetchAvailableRandomPublicPoolId) Pool member counts: ${JSON.stringify(
+          Array.from(poolMemberCountMap.entries()),
+          null,
+          2,
+        )}`,
+      );
+
+      const availablePools = pools.filter((pool) => {
+        const count = poolMemberCountMap.get(pool._id.toString()) ?? 0;
+        return pool.maxOperators > count;
+      });
+
+      this.logger.debug(
+        `(fetchAvailableRandomPublicPoolId) Available pools: ${JSON.stringify(
+          availablePools,
+          null,
+          2,
+        )}`,
+      );
+
+      if (availablePools.length > 0) {
+        const randomIndex = Math.floor(Math.random() * availablePools.length);
+        return availablePools[randomIndex]._id.toString();
+      }
+
+      return null;
+    } catch (err: any) {
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(
+          500,
+          `(fetchAvailableRandomPublicPoolId) Error fetching available pool: ${err.message}`,
+        ),
+      );
+    }
   }
 
   /**
