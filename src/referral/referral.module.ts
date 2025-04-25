@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import { ReferralService } from './referral.service';
 import { Referral, ReferralSchema } from './schemas/referral.schema';
+import { StarterCode, StarterCodeSchema } from './schemas/starter-code.schema';
 import {
   Operator,
   OperatorSchema,
@@ -16,6 +17,7 @@ import { ReferralController } from './referral.controller';
     RedisModule,
     MongooseModule.forFeature([
       { name: Referral.name, schema: ReferralSchema },
+      { name: StarterCode.name, schema: StarterCodeSchema },
       { name: Operator.name, schema: OperatorSchema },
     ]),
   ],
