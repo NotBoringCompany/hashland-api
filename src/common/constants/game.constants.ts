@@ -46,7 +46,7 @@ export const GAME_CONSTANTS = {
     /**
      * Length of the generated referral code.
      */
-    CODE_LENGTH: 8,
+    CODE_LENGTH: 12,
   },
 
   /**

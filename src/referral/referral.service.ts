@@ -65,8 +65,31 @@ export class ReferralService {
         });
       }
 
-      // Generate a new referral code
-      const referralCode = this.generateReferralCode(operatorId.toString());
+      // Generate a new referral code and make sure it's unique
+      let referralCode = this.generateReferralCode(operatorId.toString());
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      // Check if code already exists and retry if necessary
+      while (
+        (await this.checkReferralCodeExists(referralCode)) &&
+        attempts < maxAttempts
+      ) {
+        this.logger.warn(
+          `Generated duplicate referral code ${referralCode}, retrying...`,
+        );
+        referralCode = this.generateReferralCode(operatorId.toString());
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        this.logger.error(
+          'Failed to generate a unique referral code after multiple attempts',
+        );
+        throw new InternalServerErrorException(
+          'Failed to generate a unique referral code',
+        );
+      }
 
       // Save the referral code to the operator
       await this.operatorModel.updateOne(
@@ -108,11 +131,38 @@ export class ReferralService {
     // Simple encoding to generate a unique code based on user ID and timestamp
     const timestamp = Date.now().toString().slice(-6);
     const buffer = Buffer.from(userId + timestamp);
-    return buffer
+    const code = buffer
       .toString('base64')
       .replace(/[/+=]/g, '')
       .substring(0, GAME_CONSTANTS.REFERRAL.CODE_LENGTH)
       .toUpperCase();
+
+    // Check if the code already exists before returning
+    return code;
+  }
+
+  /**
+   * Check if a referral code exists in the database
+   * @param referralCode The code to check
+   * @returns true if the code exists, false otherwise
+   */
+  private async checkReferralCodeExists(
+    referralCode: string,
+  ): Promise<boolean> {
+    // Allow for both old (8 char) and new (12 char) code formats
+    // For compatibility, if the input code length is greater than 8,
+    // we'll also check if the first 8 characters match an existing code
+
+    const shortCode = referralCode.substring(0, 8);
+
+    const operator = await this.operatorModel.findOne({
+      $or: [
+        { 'referralData.referralCode': referralCode },
+        { 'referralData.referralCode': shortCode },
+      ],
+    });
+
+    return operator !== null;
   }
 
   /**
@@ -150,8 +200,15 @@ export class ReferralService {
       }
 
       // Find the referring operator (regular referral code)
+      // Support both 8-character and 12-character codes for backwards compatibility
+      const shortCode = referralCode.substring(0, 8);
       const referrer = await this.operatorModel.findOne(
-        { 'referralData.referralCode': referralCode },
+        {
+          $or: [
+            { 'referralData.referralCode': referralCode },
+            { 'referralData.referralCode': shortCode },
+          ],
+        },
         { _id: 1 },
       );
 
@@ -330,8 +387,15 @@ export class ReferralService {
     referralCode: string,
   ): Promise<Types.ObjectId | null> {
     try {
+      // Support both 8-character and 12-character codes for backwards compatibility
+      const shortCode = referralCode.substring(0, 8);
       const operator = await this.operatorModel.findOne(
-        { 'referralData.referralCode': referralCode },
+        {
+          $or: [
+            { 'referralData.referralCode': referralCode },
+            { 'referralData.referralCode': shortCode },
+          ],
+        },
         { _id: 1 },
       );
 

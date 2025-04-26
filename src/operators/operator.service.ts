@@ -1286,6 +1286,30 @@ export class OperatorService {
   }
 
   /**
+   * Check if a referral code exists in the database
+   * @param referralCode The code to check
+   * @returns true if the code exists, false otherwise
+   */
+  private async checkReferralCodeExists(
+    referralCode: string,
+  ): Promise<boolean> {
+    // Allow for both old (8 char) and new (12 char) code formats
+    // For compatibility, if the input code length is greater than 8,
+    // we'll also check if the first 8 characters match an existing code
+
+    const shortCode = referralCode.substring(0, 8);
+
+    const operator = await this.operatorModel.findOne({
+      $or: [
+        { 'referralData.referralCode': referralCode },
+        { 'referralData.referralCode': shortCode },
+      ],
+    });
+
+    return operator !== null;
+  }
+
+  /**
    * Generates or retrieves a unique referral code for an operator
    * @param operatorId The operator's ID
    * @returns The referral code
@@ -1313,8 +1337,31 @@ export class OperatorService {
         };
       }
 
-      // Generate a new referral code
-      const referralCode = this.generateReferralCode(operatorId.toString());
+      // Generate a new referral code and make sure it's unique
+      let referralCode = this.generateReferralCode(operatorId.toString());
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      // Check if code already exists and retry if necessary
+      while (
+        (await this.checkReferralCodeExists(referralCode)) &&
+        attempts < maxAttempts
+      ) {
+        this.logger.warn(
+          `Generated duplicate referral code ${referralCode}, retrying...`,
+        );
+        referralCode = this.generateReferralCode(operatorId.toString());
+        attempts++;
+      }
+
+      if (attempts >= maxAttempts) {
+        this.logger.error(
+          'Failed to generate a unique referral code after multiple attempts',
+        );
+        throw new InternalServerErrorException(
+          'Failed to generate a unique referral code',
+        );
+      }
 
       // Save the referral code to the operator
       await this.operatorModel.updateOne(
@@ -1348,7 +1395,7 @@ export class OperatorService {
     return buffer
       .toString('base64')
       .replace(/[/+=]/g, '')
-      .substring(0, 8)
+      .substring(0, GAME_CONSTANTS.REFERRAL.CODE_LENGTH)
       .toUpperCase();
   }
 
@@ -1367,9 +1414,15 @@ export class OperatorService {
     referrerId?: Types.ObjectId;
   }> {
     try {
-      // Find the referring operator
+      // Support both 8-character and 12-character codes for backwards compatibility
+      const shortCode = referralCode.substring(0, 8);
       const referrer = await this.operatorModel.findOne(
-        { 'referralData.referralCode': referralCode },
+        {
+          $or: [
+            { 'referralData.referralCode': referralCode },
+            { 'referralData.referralCode': shortCode },
+          ],
+        },
         { _id: 1 },
       );
 
@@ -1505,8 +1558,15 @@ export class OperatorService {
     referralCode: string,
   ): Promise<Types.ObjectId | null> {
     try {
+      // Support both 8-character and 12-character codes for backwards compatibility
+      const shortCode = referralCode.substring(0, 8);
       const operator = await this.operatorModel.findOne(
-        { 'referralData.referralCode': referralCode },
+        {
+          $or: [
+            { 'referralData.referralCode': referralCode },
+            { 'referralData.referralCode': shortCode },
+          ],
+        },
         { _id: 1 },
       );
 
