@@ -847,6 +847,10 @@ export class DrillingCycleService {
       );
 
       await this.hashReserveService.addToHASHReserve(toSendToHashReserve);
+    } else {
+      this.logger.error(
+        `(distributeCycleRewards) WARNING!!! Amount to send to HASH Reserve is negative or 0: ${toSendToHashReserve}.`,
+      );
     }
 
     const endTime = performance.now();
