@@ -8,7 +8,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as crypto from 'crypto';
 import { Address, beginCell } from '@ton/core';
-import { TonClient } from '@ton/ton';
+import { TonClient4 } from '@ton/ton';
 import * as nacl from 'tweetnacl';
 import { Operator } from './schemas/operator.schema';
 import { OperatorWallet } from './schemas/operator-wallet.schema';
@@ -28,11 +28,19 @@ import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
 import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
 import { ConfigService } from '@nestjs/config';
+import { JwtTonProofService } from 'src/common/services/jwt-ton-proof.service';
+import { Cell, contractAddress, loadStateInit } from '@ton/core';
+import { sha256 } from '@ton/crypto';
+import { tryParsePublicKey } from 'src/common/utils/wallets-data';
 
 @Injectable()
 export class OperatorWalletService {
   private readonly logger = new Logger(OperatorWalletService.name);
-  private tonClient: TonClient;
+  private tonClient: TonClient4;
+  private readonly allowedDomains: string[];
+  private readonly validProofTimeSeconds: number;
+  private readonly tonProofPrefix = 'ton-proof-item-v2/';
+  private readonly tonConnectPrefix = 'ton-connect';
 
   constructor(
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
@@ -43,17 +51,36 @@ export class OperatorWalletService {
     private readonly alchemyService: AlchemyService,
     private readonly mixpanelService: MixpanelService,
     private readonly configService: ConfigService,
+    private readonly jwtTonProofService?: JwtTonProofService,
   ) {
-    // Initialize TON client
-    const endpoint =
-      this.configService.get<string>('TON_API_ENDPOINT') ||
-      'https://toncenter.com/api/v2/jsonRPC';
-    const apiKey = this.configService.get<string>('TON_API_KEY') || '';
+    // Initialize TON client with TON4 endpoint
+    const isMainnet =
+      this.configService.get<string>('TON_NETWORK', 'mainnet') === 'mainnet';
+    const endpoint = isMainnet
+      ? this.configService.get<string>(
+          'TON_API_ENDPOINT',
+          'https://mainnet-v4.tonhubapi.com',
+        )
+      : this.configService.get<string>(
+          'TON_API_ENDPOINT',
+          'https://testnet-v4.tonhubapi.com',
+        );
 
-    this.tonClient = new TonClient({
+    this.tonClient = new TonClient4({
       endpoint,
-      apiKey,
     });
+
+    // Configure allowed domains for TON proof
+    this.allowedDomains = this.configService
+      .get<string>('TON_PROOF_ALLOWED_DOMAINS', this.getConfiguredDomain())
+      .split(',')
+      .map((domain) => domain.trim());
+
+    // Valid proof time in seconds (default: 15 minutes)
+    this.validProofTimeSeconds = parseInt(
+      this.configService.get<string>('TON_PROOF_VALID_TIME_SECONDS', '900'),
+      10,
+    );
   }
 
   /**
@@ -549,132 +576,168 @@ export class OperatorWalletService {
   }
 
   /**
-   * Validate a TON proof from Telegram wallet
-   * @param tonProof - The TON proof data
+   * Generate a TON proof payload token for wallet verification
+   * @param context Optional context to include in the token
+   * @returns Payload token string
+   */
+  generateTonProofPayload(context?: Record<string, any>): string {
+    if (!this.jwtTonProofService) {
+      throw new Error('JwtTonProofService is not available');
+    }
+
+    const payload = this.jwtTonProofService.generatePayload();
+    return this.jwtTonProofService.createPayloadToken(payload, context);
+  }
+
+  /**
+   * Validate a TON proof from wallet
+   * @param tonProofDto - The TON proof data
    * @param address - The wallet address
    * @returns Whether the proof is valid
    */
   async validateTonProof(
-    tonProof: TonProofDto,
+    tonProofDto: TonProofDto,
     address: string,
   ): Promise<boolean> {
-    if (!tonProof) {
+    if (!tonProofDto) {
       return false;
     }
 
     try {
       // Verify the address matches
-      if (tonProof.tonAddress.toLowerCase() !== address.toLowerCase()) {
+      if (tonProofDto.tonAddress.toLowerCase() !== address.toLowerCase()) {
         this.logger.error(
-          `Address mismatch: ${tonProof.tonAddress} != ${address}`,
+          `Address mismatch: ${tonProofDto.tonAddress} != ${address}`,
         );
         return false;
       }
 
-      const now = Math.floor(Date.now() / 1000);
+      // Verify that the domain is allowed
+      if (!this.allowedDomains.includes(tonProofDto.proof.domain.value)) {
+        this.logger.error(
+          `Domain not allowed: ${tonProofDto.proof.domain.value}`,
+        );
+        return false;
+      }
 
-      // Check ton proof expiration (24 hours default)
-      if (now > tonProof.proof.timestamp + 86400) {
-        this.logger.error('Ton proof has been expired');
+      // Check proof timestamp is not expired (within valid time range)
+      const now = Math.floor(Date.now() / 1000);
+      if (now - this.validProofTimeSeconds > tonProofDto.proof.timestamp) {
+        this.logger.error('TON proof has expired');
         return false;
       }
 
       // Parse the TON address
       const parsedAddress = Address.parse(address);
 
-      // Simple payload handling - use as-is from the proof
-      const payloadBuffer = Buffer.from(tonProof.proof.payload);
+      // Verify the payload token if JWT service is available
+      if (this.jwtTonProofService) {
+        const payloadVerified = this.jwtTonProofService.verifyPayloadToken(
+          tonProofDto.proof.payload,
+        );
+        if (!payloadVerified) {
+          this.logger.error('Invalid payload token');
+          return false;
+        }
+      }
 
-      // Create the message hash according to TON Connect protocol
-      // workChain 32 bit signed int
-      const wc = Buffer.alloc(4);
-      wc.writeInt32BE(parsedAddress.workChain);
+      try {
+        // Load the state init cell from base64
+        const stateInit = loadStateInit(
+          Cell.fromBase64(tonProofDto.proof.state_init).beginParse(),
+        );
 
-      // timestamp 64 bit unsigned little-endian
-      const ts = Buffer.alloc(8);
-      ts.writeBigUint64LE(BigInt(tonProof.proof.timestamp));
+        // Try to get public key from different sources
+        let publicKey: Buffer | null = null;
 
-      // domain length 32 bit unsigned little-endian
-      const dl = Buffer.alloc(4);
-      dl.writeUint32LE(tonProof.proof.domain.value.length);
+        // First, try parsing from state init using our utility
+        publicKey = tryParsePublicKey(stateInit);
 
-      // Build the complete message according to ton-proof-item-v2 format
-      const tonProofPrefix = 'ton-proof-item-v2/';
-      const msg = Buffer.concat([
-        Buffer.from(tonProofPrefix),
-        wc,
-        parsedAddress.hash, // 32 bytes address hash
-        dl,
-        Buffer.from(tonProof.proof.domain.value),
-        ts,
-        payloadBuffer,
-      ]);
-
-      // Hash the message with SHA-256
-      const msgHash = crypto.createHash('sha256').update(msg).digest();
-
-      // Add the ton-connect prefix and hash again
-      const tonConnectPrefix = 'ton-connect';
-      const fullMsg = Buffer.concat([
-        Buffer.from([0xff, 0xff]), // Prefix with 0xffff
-        Buffer.from(tonConnectPrefix),
-        msgHash,
-      ]);
-
-      // Final hash that needs to be verified with the signature
-      const fullMsgHash = crypto.createHash('sha256').update(fullMsg).digest();
-
-      // Get the public key either from the proof or try to extract it
-      let publicKey: Buffer;
-
-      if (tonProof.publicKey) {
-        // Use the provided public key
-        publicKey = Buffer.from(tonProof.publicKey, 'hex');
-      } else {
-        // Extract public key from the wallet contract
-        publicKey = await this.extractPublicKeyFromContract(parsedAddress);
+        // If not found, try getting from contract
         if (!publicKey) {
-          this.logger.error(
-            `Could not extract public key for address: ${address}`,
-          );
+          publicKey = await this.extractPublicKeyFromContract(parsedAddress);
+        }
+
+        // If still not found, use the provided public key
+        if (!publicKey && tonProofDto.public_key) {
+          publicKey = Buffer.from(tonProofDto.public_key, 'hex');
+        }
+
+        if (!publicKey) {
+          this.logger.error('Could not obtain public key');
           return false;
         }
-      }
 
-      // Convert signature from base64 to buffer (TON Connect uses base64)
-      let signatureBuffer: Buffer;
-      try {
-        signatureBuffer = Buffer.from(tonProof.proof.signature, 'base64');
+        // Verify the provided public key matches the extracted one (if both available)
+        if (tonProofDto.public_key) {
+          const providedPublicKey = Buffer.from(tonProofDto.public_key, 'hex');
+          if (publicKey && !publicKey.equals(providedPublicKey)) {
+            this.logger.error('Public key mismatch');
+            return false;
+          }
+        }
 
-        // Ensure signature has correct length for Ed25519 (64 bytes)
-        if (signatureBuffer.length !== 64) {
-          this.logger.error(
-            `Invalid signature size: ${signatureBuffer.length} bytes, expected 64 bytes`,
-          );
+        // Verify the address from state init
+        const computedAddress = contractAddress(
+          parsedAddress.workChain,
+          stateInit,
+        );
+        if (!computedAddress.equals(parsedAddress)) {
+          this.logger.error('Address derived from state init does not match');
           return false;
         }
-      } catch (error) {
-        this.logger.error(`Error decoding signature: ${error.message}`);
-        return false;
-      }
 
-      // Verify the signature
-      try {
+        // Build the message according to TON proof format
+        const wc = Buffer.alloc(4);
+        wc.writeUInt32BE(parsedAddress.workChain, 0);
+
+        const ts = Buffer.alloc(8);
+        ts.writeBigUInt64LE(BigInt(tonProofDto.proof.timestamp), 0);
+
+        const dl = Buffer.alloc(4);
+        dl.writeUInt32LE(tonProofDto.proof.domain.lengthBytes, 0);
+
+        // Assemble the message
+        const msg = Buffer.concat([
+          Buffer.from(this.tonProofPrefix),
+          wc,
+          parsedAddress.hash,
+          dl,
+          Buffer.from(tonProofDto.proof.domain.value),
+          ts,
+          Buffer.from(tonProofDto.proof.payload),
+        ]);
+
+        // Hash the message with SHA-256
+        const msgHash = Buffer.from(await sha256(msg));
+
+        // Add the ton-connect prefix and hash again
+        const fullMsg = Buffer.concat([
+          Buffer.from([0xff, 0xff]),
+          Buffer.from(this.tonConnectPrefix),
+          msgHash,
+        ]);
+
+        // Final hash that needs to be verified
+        const finalHash = Buffer.from(await sha256(fullMsg));
+
+        // Verify the signature
+        const signatureBuffer = Buffer.from(
+          tonProofDto.proof.signature,
+          'base64',
+        );
         const isValid = nacl.sign.detached.verify(
-          fullMsgHash,
+          finalHash,
           signatureBuffer,
           publicKey,
         );
 
-        if (!isValid) {
-          this.logger.error(
-            `Signature verification failed for address: ${address}`,
-          );
-        }
-
         return isValid;
       } catch (error) {
-        this.logger.error(`Error in signature verification: ${error.message}`);
+        this.logger.error(
+          `Error in TON proof verification: ${error.message}`,
+          error.stack,
+        );
         return false;
       }
     } catch (error) {
@@ -833,19 +896,7 @@ export class OperatorWalletService {
     address: Address,
   ): Promise<Buffer | null> {
     try {
-      // For v3R1 and v3R2 wallets, you can use get methods to extract the public key
-      const result = await this.tonClient.runMethod(address, 'get_public_key');
-
-      // Check if result exists and has a stack
-      if (result && result.stack) {
-        // The stack is a TupleReader, not an array, so we need to read from it
-        // Get the first item from the stack (the public key)
-        const publicKeyBigInt = result.stack.readBigNumber();
-        const publicKeyHex = publicKeyBigInt.toString(16).padStart(64, '0');
-        return Buffer.from(publicKeyHex, 'hex');
-      }
-
-      return null;
+      return await this.getWalletPublicKey(address.toString());
     } catch (error) {
       this.logger.error(
         `Error extracting public key: ${error.message}`,
@@ -938,14 +989,17 @@ export class OperatorWalletService {
   async checkTonApiConnection(): Promise<{ status: string; endpoint: string }> {
     try {
       // Try to get masterchain info as a simple test
-      await this.tonClient.getMasterchainInfo();
+      await this.tonClient.getLastBlock();
+
+      const isMainnet =
+        this.configService.get<string>('TON_NETWORK', 'mainnet') === 'mainnet';
+      const endpoint = isMainnet
+        ? 'https://mainnet-v4.tonhubapi.com'
+        : 'https://testnet-v4.tonhubapi.com';
 
       return {
         status: 'connected',
-        endpoint: this.configService.get<string>(
-          'TON_API_ENDPOINT',
-          'https://toncenter.com/api/v2/jsonRPC',
-        ),
+        endpoint,
       };
     } catch (error) {
       this.logger.error(
@@ -965,5 +1019,56 @@ export class OperatorWalletService {
       'TON_CONNECT_DOMAIN',
       'hashland.ton.app',
     );
+  }
+
+  /**
+   * Get wallet public key by address using TonClient4
+   * @param address TON wallet address
+   * @returns The public key as a Buffer or null if not found
+   */
+  async getWalletPublicKey(address: string): Promise<Buffer | null> {
+    try {
+      const masterAt = await this.tonClient.getLastBlock();
+      const result = await this.tonClient.runMethod(
+        masterAt.last.seqno,
+        Address.parse(address),
+        'get_public_key',
+        [],
+      );
+
+      // Convert the big number result to a buffer
+      const publicKeyHex = result.reader
+        .readBigNumber()
+        .toString(16)
+        .padStart(64, '0');
+      return Buffer.from(publicKeyHex, 'hex');
+    } catch (error) {
+      this.logger.error(
+        `Error getting wallet public key: ${error.message}`,
+        error.stack,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get account info by address using TonClient4
+   * @param address TON wallet address
+   * @returns Account info or null if not found
+   */
+  async getAccountInfo(address: string): Promise<any | null> {
+    try {
+      const masterAt = await this.tonClient.getLastBlock();
+      return await this.tonClient.getAccount(
+        masterAt.last.seqno,
+        Address.parse(address),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error getting account info: ${error.message}`,
+        error.stack,
+      );
+      return null;
+    }
   }
 }

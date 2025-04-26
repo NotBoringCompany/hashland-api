@@ -6,6 +6,7 @@ import {
   ValidateNested,
   ValidateIf,
   IsNumber,
+  IsHexadecimal,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiResponse } from 'src/common/dto/response.dto';
@@ -49,18 +50,25 @@ class TonProofDataDto {
   domain: TonProofDomainDto;
 
   @ApiProperty({
-    description: 'Signature value',
-    example: '0x123abc...',
+    description: 'Signature value (base64 encoded)',
+    example: 'base64-encoded-signature',
   })
   @IsString()
   signature: string;
 
   @ApiProperty({
     description: 'Payload value',
-    example: '0x456def...',
+    example: 'payload-token-value',
   })
   @IsString()
   payload: string;
+
+  @ApiProperty({
+    description: 'State init (base64)',
+    example: 'base64-encoded-state-init',
+  })
+  @IsString()
+  state_init: string;
 }
 
 /**
@@ -75,8 +83,9 @@ export class TonProofDto {
         lengthBytes: 17,
         value: 'hashland.ton.app',
       },
-      signature: '0x123abc...',
-      payload: '0x456def...',
+      signature: 'base64-encoded-signature',
+      payload: 'payload-token-value',
+      state_init: 'base64-encoded-state-init',
     },
   })
   @ValidateNested()
@@ -92,12 +101,75 @@ export class TonProofDto {
   tonAddress: string;
 
   @ApiProperty({
-    description: 'Public key associated with the TON wallet',
-    example: '0x789ghi...',
+    description: 'Public key associated with the TON wallet (hex)',
+    example: '39d0939e8fa4c61854263d8cc71de4d6c90af169958d30f11fafefec1f428ce0',
   })
   @IsString()
   @IsNotEmpty()
-  publicKey: string;
+  @IsHexadecimal()
+  public_key: string;
+}
+
+/**
+ * DTO for generating a TON proof payload
+ */
+export class GenerateTonProofPayloadDto {
+  @ApiProperty({
+    description: 'Optional context information for the payload',
+    example: { user_id: '123456' },
+    required: false,
+  })
+  @IsOptional()
+  context?: Record<string, any>;
+}
+
+/**
+ * Response data for TON proof payload
+ */
+export class TonProofPayloadResponseData {
+  @ApiProperty({
+    description: 'Generated payload token for TON proof',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  payload: string;
+}
+
+/**
+ * Response for TON proof payload generation
+ */
+export class TonProofPayloadResponse extends ApiResponse<TonProofPayloadResponseData> {
+  constructor(data: TonProofPayloadResponseData) {
+    super(200, 'TON proof payload generated', data);
+  }
+}
+
+/**
+ * DTO for verifying TON proof
+ */
+export class VerifyTonProofDto {
+  @ApiProperty({
+    description: 'TON wallet address',
+    example: 'EQAbc123...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  address: string;
+
+  @ApiProperty({
+    description: 'Public key associated with the TON wallet (hex)',
+    example: '39d0939e8fa4c61854263d8cc71de4d6c90af169958d30f11fafefec1f428ce0',
+  })
+  @IsString()
+  @IsHexadecimal()
+  @IsNotEmpty()
+  public_key: string;
+
+  @ApiProperty({
+    description: 'TON proof data',
+  })
+  @ValidateNested()
+  @Type(() => TonProofDataDto)
+  proof: TonProofDataDto;
 }
 
 /**

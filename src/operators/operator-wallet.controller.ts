@@ -24,10 +24,13 @@ import {
   ConnectedWalletResponse,
   ConnectedWalletResponseData,
   GenerateProofChallengeDto,
+  GenerateTonProofPayloadDto,
   ProofChallengeResponse,
   ProofChallengeResponseData,
   TonApiStatusResponse,
+  TonProofPayloadResponse,
   ValidateSignatureDto,
+  VerifyTonProofDto,
   WalletValidationResponse,
   WalletValidationResponseData,
 } from '../common/dto/wallet.dto';
@@ -54,6 +57,77 @@ export class OperatorWalletController {
   @Get('request-evm-signature-message')
   requestEVMSignatureMessage(@Query('address') address: string): string {
     return this.operatorWalletService.requestEVMSignatureMessage(address);
+  }
+
+  @ApiOperation({
+    summary: 'Generate TON proof payload',
+    description: 'Generates a payload token for TON wallet verification',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'TON proof payload generated',
+    type: TonProofPayloadResponse,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request - Missing or invalid parameters',
+  })
+  @Post('generate-ton-proof-payload')
+  @HttpCode(200)
+  async generateTonProofPayload(
+    @Body() generateTonProofPayloadDto: GenerateTonProofPayloadDto,
+  ): Promise<TonProofPayloadResponse> {
+    const payload = this.operatorWalletService.generateTonProofPayload(
+      generateTonProofPayloadDto.context,
+    );
+
+    return new TonProofPayloadResponse({ payload });
+  }
+
+  @ApiOperation({
+    summary: 'Connect a TON wallet using TON proof',
+    description:
+      'Connects a TON wallet to the authenticated operator using TON proof verification',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'TON wallet connected successfully',
+    type: ConnectedWalletResponse,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid token or TON proof',
+  })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('connect-ton')
+  @HttpCode(200)
+  async connectTonWallet(
+    @Request() req,
+    @Body() verifyTonProofDto: VerifyTonProofDto,
+  ): Promise<ConnectedWalletResponse> {
+    const operatorId = new Types.ObjectId(req.user.operatorId);
+
+    // Create a ConnectWalletDto with TON proof data
+    const connectWalletDto = new ConnectWalletDto();
+    connectWalletDto.address = verifyTonProofDto.address;
+    connectWalletDto.chain = 'TON';
+    connectWalletDto.tonProof = {
+      tonAddress: verifyTonProofDto.address,
+      public_key: verifyTonProofDto.public_key,
+      proof: verifyTonProofDto.proof,
+    };
+
+    const wallet = await this.operatorWalletService.connectWallet(
+      operatorId,
+      connectWalletDto,
+    );
+
+    const responseData: ConnectedWalletResponseData = {
+      _id: wallet._id,
+    };
+
+    return new ConnectedWalletResponse(responseData);
   }
 
   @ApiOperation({
