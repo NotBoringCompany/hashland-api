@@ -5,7 +5,10 @@ import {
   BlockchainData,
   TxParsedMessage,
 } from 'src/common/schemas/blockchain-payment.schema';
-import TonWeb, { AddressType } from 'tonweb';
+import TonWeb from 'tonweb';
+
+// Type for address that was previously imported
+type AddressType = any;
 
 @Injectable()
 export class TonService {
@@ -14,7 +17,11 @@ export class TonService {
   /**
    * Injects ConfigService for configuration management.
    */
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) {
+    // Verify TonWeb is correctly imported at construction time
+    console.log('TonWeb loaded:', !!TonWeb);
+    console.log('TonWeb properties:', Object.keys(TonWeb));
+  }
 
   /**
    * Returns the TonWeb instance. Initializes if not already initialized.
@@ -29,11 +36,24 @@ export class TonService {
         );
       }
 
-      // Create an HttpProvider instance and pass it to TonWeb constructor
-      const httpProvider = new TonWeb.HttpProvider(endpoint, {
-        apiKey,
-      });
-      this.tonWeb = new TonWeb(httpProvider);
+      try {
+        console.log('Initializing TonWeb with endpoint:', endpoint);
+
+        // Check if TonWeb is properly imported
+        if (!TonWeb) {
+          throw new Error('TonWeb is not defined');
+        }
+
+        // Create a new HttpProvider directly according to the documentation pattern
+        // TonWeb.HttpProvider is a constructor in the TonWeb package
+        const provider = new TonWeb.HttpProvider(endpoint, { apiKey });
+        this.tonWeb = new TonWeb(provider);
+
+        console.log('TonWeb instance initialized successfully');
+      } catch (err: any) {
+        console.error('Error initializing TonWeb:', err);
+        throw new Error(`Failed to initialize TonWeb: ${err.message}`);
+      }
     }
     return this.tonWeb;
   }
