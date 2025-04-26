@@ -15,10 +15,6 @@ export class TonService {
     const apiEndpoint = this.configService.get<string>('TON_API_ENDPOINT');
     const apiKey = this.configService.get<string>('TON_API_KEY');
 
-    console.log(`🔍 (TonService) apiEndpoint: ${apiEndpoint}`);
-    console.log(`🔍 (TonService) apiKey: ${apiKey}`);
-    console.log(`🔍 (TonService) tonWeb: ${TonWeb?.HttpProvider}`);
-
     if (!apiEndpoint || !apiKey) {
       throw new Error(
         'TON_API_ENDPOINT or TON_API_KEY is not set in the environment variables.',
