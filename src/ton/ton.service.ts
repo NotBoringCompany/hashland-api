@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import {
   BlockchainData,
@@ -10,24 +11,25 @@ import TonWeb, { AddressType } from 'tonweb';
 export class TonService {
   private tonWeb: TonWeb | null = null; // ✅ Lazy Initialization
 
-  /**
-   * Returns the TonWeb instance. Initializes if not already initialized.
-   */
-  private getTonWebInstance(): TonWeb {
-    if (!this.tonWeb) {
-      if (!process.env.TON_API_ENDPOINT || !process.env.TON_API_KEY) {
-        throw new Error(
-          `(TonService) TON_API_ENDPOINT or TON_API_KEY is not set in the environment variables.`,
-        );
-      }
+  constructor(private configService: ConfigService) {
+    const apiEndpoint = this.configService.get<string>('TON_API_ENDPOINT');
+    const apiKey = this.configService.get<string>('TON_API_KEY');
 
-      this.tonWeb = new TonWeb(
-        new TonWeb.HttpProvider(process.env.TON_API_ENDPOINT, {
-          apiKey: process.env.TON_API_KEY,
-        }),
+    console.log(`🔍 (TonService) apiEndpoint: ${apiEndpoint}`);
+    console.log(`🔍 (TonService) apiKey: ${apiKey}`);
+    console.log(`🔍 (TonService) tonWeb: ${TonWeb?.HttpProvider}`);
+
+    if (!apiEndpoint || !apiKey) {
+      throw new Error(
+        'TON_API_ENDPOINT or TON_API_KEY is not set in the environment variables.',
       );
     }
-    return this.tonWeb;
+
+    this.tonWeb = new TonWeb(
+      new TonWeb.HttpProvider(apiEndpoint, {
+        apiKey,
+      }),
+    );
   }
 
   /**
@@ -179,16 +181,15 @@ export class TonService {
    * Converts a BOC (bag of cells) for TON-related transactions into its corresponding transaction hash in hex format.
    */
   async bocToTxHash(boc: string): Promise<string | null> {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
     try {
       // convert base64-encoded boc string into byte array
-      const bocBytes = tonWeb.utils.base64ToBytes(boc);
+      const bocBytes = this.tonWeb.utils.base64ToBytes(boc);
       // decode boc into a single TON cell (`boc` should only contain one cell)
-      const cell = tonWeb.boc.Cell.oneFromBoc(bocBytes);
+      const cell = this.tonWeb.boc.Cell.oneFromBoc(bocBytes);
       // calculate hash of cell to get the tx hash
       const rawHash = await cell.hash();
       // `rawHash` is still a bytes array; convert to hex
-      const hash = tonWeb.utils.bytesToHex(rawHash);
+      const hash = this.tonWeb.utils.bytesToHex(rawHash);
 
       return hash;
     } catch (err: any) {
@@ -200,8 +201,7 @@ export class TonService {
    * Gets one or more transactions for the given address in the TON blockchain.
    */
   async getTransactions(address: string, limit: number = 1, txHash: string) {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
-    return await tonWeb.getTransactions(address, limit, null, txHash);
+    return await this.tonWeb.getTransactions(address, limit, null, txHash);
   }
 
   /**
@@ -210,9 +210,7 @@ export class TonService {
    * Non-bounceable addresses are used for EOAs (where funds will not be sent back if sent to a non-existent address).
    */
   getNonBounceableAddress(address: AddressType): string {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
-
-    return new tonWeb.utils.Address(address)?.toString(
+    return new this.tonWeb.utils.Address(address)?.toString(
       true,
       true,
       false,
