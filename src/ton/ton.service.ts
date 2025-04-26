@@ -28,11 +28,12 @@ export class TonService {
           `(TonService) TON_API_ENDPOINT or TON_API_KEY is not set in the configuration.`,
         );
       }
-      this.tonWeb = new TonWeb(
-        new TonWeb.HttpProvider(endpoint, {
-          apiKey,
-        }),
-      );
+
+      // Create an HttpProvider instance and pass it to TonWeb constructor
+      const httpProvider = new TonWeb.HttpProvider(endpoint, {
+        apiKey,
+      });
+      this.tonWeb = new TonWeb(httpProvider);
     }
     return this.tonWeb;
   }
