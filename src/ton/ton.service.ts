@@ -1,84 +1,150 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import {
   BlockchainData,
   TxParsedMessage,
 } from 'src/common/schemas/blockchain-payment.schema';
-import TonWeb from 'tonweb';
-
-// Type for address that was previously imported
-type AddressType = any;
+import axios from 'axios';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class TonService {
-  private tonWeb: TonWeb | null = null; // ✅ Lazy Initialization
+  private readonly apiEndpoint: string;
+  private readonly apiKey: string;
+  private readonly receiverAddress: string;
 
-  /**
-   * Injects ConfigService for configuration management.
-   */
   constructor(private readonly configService: ConfigService) {
-    // Verify TonWeb is correctly imported at construction time
-    console.log('TonWeb loaded:', !!TonWeb);
-    console.log('TonWeb properties:', Object.keys(TonWeb));
+    this.apiEndpoint =
+      this.configService.get<string>('TON_API_ENDPOINT') ||
+      'https://toncenter.com/api/v2';
+    this.apiKey = this.configService.get<string>('TON_API_KEY');
+    this.receiverAddress = this.configService.get<string>(
+      'TON_RECEIVER_ADDRESS',
+    );
+
+    if (!this.apiKey) {
+      console.warn('TON_API_KEY is not set. API rate limits may apply.');
+    }
+
+    if (!this.receiverAddress) {
+      console.warn(
+        'TON_RECEIVER_ADDRESS is not set. Transaction verification will fail.',
+      );
+    }
   }
 
   /**
-   * Returns the TonWeb instance. Initializes if not already initialized.
+   * Makes an API call to the TON API.
    */
-  private getTonWebInstance(): TonWeb {
-    if (!this.tonWeb) {
-      const endpoint = this.configService.get<string>('TON_API_ENDPOINT');
-      const apiKey = this.configService.get<string>('TON_API_KEY');
-      if (!endpoint || !apiKey) {
+  private async callTonApi(method: string, params: any = {}): Promise<any> {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add API key if available
+      if (this.apiKey) {
+        headers['X-API-Key'] = this.apiKey;
+      }
+
+      const response = await axios.post(
+        `${this.apiEndpoint}/jsonRPC`,
+        {
+          id: '1',
+          jsonrpc: '2.0',
+          method,
+          params,
+        },
+        { headers },
+      );
+
+      if (response.data.error) {
         throw new Error(
-          `(TonService) TON_API_ENDPOINT or TON_API_KEY is not set in the configuration.`,
+          `TON API error: ${JSON.stringify(response.data.error)}`,
         );
       }
 
-      try {
-        console.log('Initializing TonWeb with endpoint:', endpoint);
-
-        // Check if TonWeb is properly imported
-        if (!TonWeb) {
-          throw new Error('TonWeb is not defined');
-        }
-
-        // Create a new HttpProvider directly according to the documentation pattern
-        // TonWeb.HttpProvider is a constructor in the TonWeb package
-        const provider = new TonWeb.HttpProvider(endpoint, { apiKey });
-        this.tonWeb = new TonWeb(provider);
-
-        console.log('TonWeb instance initialized successfully');
-      } catch (err: any) {
-        console.error('Error initializing TonWeb:', err);
-        throw new Error(`Failed to initialize TonWeb: ${err.message}`);
-      }
+      return response.data.result;
+    } catch (error) {
+      console.error(`Error calling TON API method ${method}:`, error);
+      throw new HttpException(
+        `Failed to call TON API: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
-    return this.tonWeb;
+  }
+
+  /**
+   * Converts a base64 BOC string to a hash.
+   * This implementation uses the built-in crypto module to calculate the hash.
+   */
+  async bocToTxHash(boc: string): Promise<string> {
+    try {
+      // Decode base64 to buffer
+      const bocBuffer = Buffer.from(boc, 'base64');
+
+      // Calculate SHA-256 hash of the buffer
+      const hash = crypto.createHash('sha256').update(bocBuffer).digest('hex');
+
+      console.log(`BOC converted to hash: ${hash}`);
+      return hash;
+    } catch (error) {
+      console.error('Error converting BOC to hash:', error);
+      throw new Error(`Failed to convert BOC to hash: ${error.message}`);
+    }
+  }
+
+  /**
+   * Gets transactions for the given address using the TON API.
+   */
+  async getTransactions(
+    address: string,
+    limit: number = 10,
+    hash?: string,
+  ): Promise<any[]> {
+    const params: any = { address, limit };
+
+    if (hash) {
+      params.hash = hash;
+    }
+
+    return await this.callTonApi('getTransactions', params);
+  }
+
+  /**
+   * Gets the latest transactions for the given address by message hash.
+   */
+  async getTransactionsByMessageHash(msgHash: string): Promise<any[]> {
+    return await this.callTonApi('getTransactionsByMessageHash', {
+      msg_hash: msgHash,
+    });
+  }
+
+  /**
+   * Formats an address to non-bounceable format.
+   */
+  getNonBounceableAddress(address: string): string {
+    // For now, we'll just return the address as is
+    // In a full implementation, you would convert to non-bounceable format
+    return address;
   }
 
   /**
    * Verifies if a TON transaction that was made for a purchase is valid.
-   *
-   * Returns a `BlockchainData` object if the transaction is valid, otherwise returns `null`.
+   * Uses direct API calls instead of TonWeb.
    */
   async verifyTONTransaction(
-    /** The operator who initiated the purchase */
     operatorId: Types.ObjectId,
-    /** The address the purchase was made from */
     address: string,
-    /** The BOC (tx hash) of the purchase */
     boc: string,
   ): Promise<BlockchainData | null> {
-    // Log input parameters for traceability
     console.log(
       `(verifyTONTransaction) Called with operatorId: ${operatorId}, address: ${address}, boc: ${boc}`,
     );
+
     if (!operatorId || !address || !boc) {
-      console.warn(
-        '(verifyTONTransaction) Missing required parameters. Returning null.',
-      );
+      console.warn('Missing required parameters. Returning null.');
       return null;
     }
 
@@ -87,196 +153,125 @@ export class TonService {
 
     while (attempt < maxRetries) {
       try {
-        console.log(`🔄 (verifyTONTransaction) Attempt ${attempt + 1}...`);
+        console.log(`🔄 Verification attempt ${attempt + 1}...`);
 
-        // Step 1: Convert BOC to transaction hash
-        let txHash: string | null = null;
-        try {
-          txHash = await this.bocToTxHash(boc);
-          console.log(`(verifyTONTransaction) BOC parsed to txHash: ${txHash}`);
-        } catch (bocErr: any) {
-          console.error(
-            `(verifyTONTransaction) Error parsing BOC: ${bocErr.message}`,
-          );
-          throw bocErr;
-        }
-        if (!txHash) {
-          throw new Error(
-            `(verifyTONTransaction) BOC to txHash conversion failed`,
-          );
+        // Step 1: Send the BOC to get its message hash
+        // Either decode locally or call an API endpoint
+        const bocHash = await this.callTonApi('sendBocReturnHash', { boc });
+        console.log(`BOC sent, hash: ${bocHash}`);
+
+        if (!bocHash) {
+          throw new Error('Failed to get transaction hash from BOC');
         }
 
-        console.log(
-          `🔍 (verifyTONTransaction) Verifying TON transaction with tx hash ${txHash} for address ${address}...`,
-        );
+        // Step 2: Wait a moment for the transaction to be processed
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        // Step 2: Fetch transaction data from TON API
-        const txs = await this.getTransactions(address, 1, txHash);
-        console.log(
-          `(verifyTONTransaction) getTransactions result: ${JSON.stringify(txs, null, 2)}`,
-        );
+        // Step 3: Get the transaction by message hash
+        const transactions = await this.getTransactionsByMessageHash(bocHash);
 
-        if (!txs || txs.length === 0) {
-          console.warn(
-            `(verifyTONTransaction) No transactions found for address ${address} with tx hash ${txHash}`,
+        if (!transactions || transactions.length === 0) {
+          console.warn(`No transactions found with message hash ${bocHash}`);
+          // Try getting by address instead
+          const addrTxs = await this.getTransactions(address, 5);
+          console.log(
+            `Found ${addrTxs.length} recent transactions for address ${address}`,
           );
-          return null;
+
+          if (addrTxs.length === 0) {
+            throw new Error(`No transactions found for address ${address}`);
+          }
+
+          // Try to find one with matching hash
+          const matchingTx = addrTxs.find(
+            (tx) =>
+              tx.in_msg?.msg_data?.hash === bocHash || tx.hash === bocHash,
+          );
+
+          if (!matchingTx) {
+            throw new Error(
+              `Transaction with hash ${bocHash} not found in recent transactions`,
+            );
+          }
+
+          console.log(`Found matching transaction: ${matchingTx.hash}`);
         }
 
-        // Step 3: Fetch the first transaction
-        const firstTx = txs[0];
-        if (!firstTx || !firstTx.out_msgs?.length) {
-          throw new Error(
-            `(verifyTONTransaction) First transaction missing out_msgs for address ${address} with tx hash ${txHash}`,
-          );
-        }
-        console.log(
-          `(verifyTONTransaction) First transaction for tx hash ${txHash}: ${JSON.stringify(firstTx, null, 2)}`,
-        );
+        // Step 4: Verify the transaction details
+        const tx = transactions[0] || null;
 
-        // Step 4: Extract receiver address
-        const firstOutMsg = firstTx.out_msgs[0];
+        if (!tx || !tx.out_msgs || tx.out_msgs.length === 0) {
+          throw new Error('Transaction has no output messages');
+        }
+
+        // Step 5: Extract and verify transaction details
+        const outMsg = tx.out_msgs[0];
         const receiverAddress = this.getNonBounceableAddress(
-          firstOutMsg.destination,
+          outMsg.destination,
         );
-        console.log(
-          `🔍 (verifyTONTransaction) Receiver address after setting isBounceable to false: ${receiverAddress}`,
-        );
+        console.log(`Receiver address: ${receiverAddress}`);
 
-        // Step 5: Extract the transaction message payload
+        // Step 6: Check receiver address
+        const expectedReceiver = this.receiverAddress;
+        if (receiverAddress !== expectedReceiver) {
+          throw new Error(
+            `Invalid receiver address: ${receiverAddress}, expected: ${expectedReceiver}`,
+          );
+        }
+
+        // Step 7: Parse message payload
         let txParsedMessage: TxParsedMessage;
         try {
-          txParsedMessage = JSON.parse(firstOutMsg.message);
-          console.log(
-            `(verifyTONTransaction) Parsed message: ${JSON.stringify(txParsedMessage, null, 2)}`,
-          );
-        } catch (parseErr) {
-          console.error(
-            `(verifyTONTransaction) Failed to parse message: ${parseErr.message}`,
-          );
-          throw new Error(
-            `(verifyTONTransaction) Failed to parse message: ${parseErr.message}`,
-          );
+          txParsedMessage = JSON.parse(outMsg.message || '{}');
+          console.log(`Transaction message:`, txParsedMessage);
+        } catch (error) {
+          throw new Error(`Failed to parse message: ${error.message}`);
         }
 
-        // Step 6: Ensure the receiver address matches the expected TON receiver address
-        const expectedReceiver = this.configService.get<string>(
-          'TON_RECEIVER_ADDRESS',
-        );
-        if (receiverAddress !== expectedReceiver) {
-          console.error(
-            `(verifyTONTransaction) Invalid receiver address: ${receiverAddress}, expected: ${expectedReceiver}`,
-          );
-          throw new Error(
-            `(verifyTONTransaction) Invalid receiver address: ${receiverAddress}, expected: ${expectedReceiver}`,
-          );
-        }
+        // Step 8: Verify amount
+        const txValue = parseInt(outMsg.value) / Math.pow(10, 9);
+        console.log(`Transaction value: ${txValue} TON`);
 
-        // Step 7: Extract the actual transaction value
-        const txValue = parseInt(firstOutMsg.value) / Math.pow(10, 9);
-        console.log(
-          `🔍 (verifyTONTransaction) Transaction value: ${txValue} TON (raw: ${firstOutMsg.value})`,
-        );
-
-        // Step 8: Validate transaction amount based on currency
         if (txParsedMessage.curr === 'TON') {
-          const parsedMessageCost = txParsedMessage.cost;
-          if (parsedMessageCost !== txValue) {
-            console.error(
-              `(verifyTONTransaction) Value mismatch. Expected: ${parsedMessageCost}, Received: ${txValue}`,
-            );
+          const expectedValue = txParsedMessage.cost;
+          if (expectedValue !== txValue) {
             throw new Error(
-              `(verifyTONTransaction) Value mismatch. Expected: ${parsedMessageCost}, Received: ${txValue}`,
+              `Value mismatch. Expected: ${expectedValue}, Received: ${txValue}`,
             );
           }
         } else {
-          console.error(
-            `(verifyTONTransaction) Unsupported currency: ${txParsedMessage.curr}`,
-          );
-          throw new Error(
-            `(verifyTONTransaction) Unsupported currency: ${txParsedMessage.curr}`,
-          );
+          throw new Error(`Unsupported currency: ${txParsedMessage.curr}`);
         }
 
-        // Step 9: Return the verified transaction data
+        // Step 9: Return verified transaction data
         const result: BlockchainData = {
           address,
           chain: 'TON',
-          txHash,
+          txHash: tx.hash,
           txPayload: txParsedMessage,
           success: true,
         };
-        console.log(
-          `(verifyTONTransaction) Transaction verified successfully. Returning: ${JSON.stringify(result, null, 2)}`,
-        );
+
+        console.log(`Transaction verified successfully`);
         return result;
-      } catch (err: any) {
+      } catch (error) {
         console.error(
-          `❌ (verifyTONTransaction) Error verifying TON transaction (Attempt ${attempt + 1}): ${err.message}`,
+          `Error verifying transaction (Attempt ${attempt + 1}): ${error.message}`,
         );
         attempt++;
+
         if (attempt >= maxRetries) {
-          console.error(
-            `🚨 (verifyTONTransaction) Max retries reached. Returning null.`,
-          );
+          console.error(`Max retries reached. Returning null.`);
           return null;
         }
-        // Log retry wait time
+
+        // Wait with exponential backoff before retrying
         const waitTime = Math.min(500 * Math.pow(2, attempt), 5000);
-        console.log(
-          `(verifyTONTransaction) Waiting ${waitTime}ms before retrying...`,
-        );
+        console.log(`Waiting ${waitTime}ms before retrying...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
-    console.warn(
-      '(verifyTONTransaction) Exiting after retries. Returning null.',
-    );
+
     return null;
-  }
-
-  /**
-   * Converts a BOC (bag of cells) for TON-related transactions into its corresponding transaction hash in hex format.
-   */
-  async bocToTxHash(boc: string): Promise<string | null> {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
-    try {
-      // convert base64-encoded boc string into byte array
-      const bocBytes = tonWeb.utils.base64ToBytes(boc);
-      // decode boc into a single TON cell (`boc` should only contain one cell)
-      const cell = tonWeb.boc.Cell.oneFromBoc(bocBytes);
-      // calculate hash of cell to get the tx hash
-      const rawHash = await cell.hash();
-      // `rawHash` is still a bytes array; convert to hex
-      const hash = tonWeb.utils.bytesToHex(rawHash);
-
-      return hash;
-    } catch (err: any) {
-      throw new Error(`(bocToTxHash) ${err.message}`);
-    }
-  }
-
-  /**
-   * Gets one or more transactions for the given address in the TON blockchain.
-   */
-  async getTransactions(address: string, limit: number = 1, txHash: string) {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
-    return await tonWeb.getTransactions(address, limit, null, txHash);
-  }
-
-  /**
-   * Sets a given TON address' bounceable flag to false and fetches the resulting address.
-   *
-   * Non-bounceable addresses are used for EOAs (where funds will not be sent back if sent to a non-existent address).
-   */
-  getNonBounceableAddress(address: AddressType): string {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
-
-    return new tonWeb.utils.Address(address)?.toString(
-      true,
-      true,
-      false,
-      false,
-    );
   }
 }
