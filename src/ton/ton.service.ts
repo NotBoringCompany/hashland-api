@@ -10,14 +10,24 @@ import TonWeb, { AddressType } from 'tonweb';
 @Injectable()
 export class TonService {
   private tonWeb: TonWeb | null = null; // ✅ Lazy Initialization
+  private readonly receiverAddress: string;
 
   constructor(private configService: ConfigService) {
     const apiEndpoint = this.configService.get<string>('TON_API_ENDPOINT');
     const apiKey = this.configService.get<string>('TON_API_KEY');
+    this.receiverAddress = this.configService.get<string>(
+      'TON_RECEIVER_ADDRESS',
+    );
 
     if (!apiEndpoint || !apiKey) {
       throw new Error(
         'TON_API_ENDPOINT or TON_API_KEY is not set in the environment variables.',
+      );
+    }
+
+    if (!this.receiverAddress) {
+      console.warn(
+        'TON_RECEIVER_ADDRESS is not set. Transaction verification will fail.',
       );
     }
 
@@ -101,21 +111,42 @@ export class TonService {
         // ✅ Step 5: Extract the transaction message payload (which contains item, amount, and cost)
         let txParsedMessage: TxParsedMessage;
         try {
-          txParsedMessage = JSON.parse(firstOutMsg.message);
+          // Try to parse as JSON first
+          try {
+            txParsedMessage = JSON.parse(firstOutMsg.message);
+          } catch {
+            // If it's not valid JSON, handle as plain text message
+            console.log(
+              `Message is not JSON, treating as plain text: "${firstOutMsg.message}"`,
+            );
+
+            // Create a basic message structure for plain text
+            const textParts = firstOutMsg.message.split(' - ');
+            const item = textParts[0] || firstOutMsg.message;
+
+            // Create a message object that matches the TxParsedMessage type
+            const txValue = parseInt(firstOutMsg.value) / Math.pow(10, 9); // Convert nanotons to TON
+            txParsedMessage = {
+              item,
+              amt: 1, // Default to 1 as amount for plain text messages
+              cost: txValue, // Use the actual value from the transaction
+              curr: 'TON',
+            };
+          }
+
+          console.log(
+            `🔍 (verifyTONTransaction) Parsed message: ${JSON.stringify(txParsedMessage, null, 2)}`,
+          );
         } catch (parseErr) {
           throw new Error(
             `(verifyTONTransaction) Failed to parse message: ${parseErr.message}`,
           );
         }
 
-        console.log(
-          `🔍 (verifyTONTransaction) Parsed message: ${JSON.stringify(txParsedMessage, null, 2)}`,
-        );
-
         // ✅ Step 6: Ensure the receiver address matches the expected TON receiver address
-        if (receiverAddress !== process.env.TON_RECEIVER_ADDRESS) {
+        if (receiverAddress !== this.receiverAddress) {
           throw new Error(
-            `(verifyTONTransaction) Invalid receiver address: ${receiverAddress}, expected: ${process.env.TON_RECEIVER_ADDRESS}`,
+            `(verifyTONTransaction) Invalid receiver address: ${receiverAddress}, expected: ${this.receiverAddress}`,
           );
         }
 
