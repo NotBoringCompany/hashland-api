@@ -837,7 +837,6 @@ export class OperatorService {
         DrillVersion.BASIC,
         DrillConfig.BASIC,
         false,
-        1,
         0,
       )
       .catch((err: any) => {

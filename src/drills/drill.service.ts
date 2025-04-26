@@ -418,7 +418,6 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
     version: DrillVersion,
     config: DrillConfig,
     extractorAllowed: boolean,
-    level: number,
     actualEff: number,
   ): Promise<Types.ObjectId> {
     try {
@@ -485,4 +484,3 @@ export class DrillService implements OnModuleInit, OnModuleDestroy {
     return 1 + Math.log(1 + 0.0000596 * equity);
   }
 }
-
