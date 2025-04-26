@@ -82,14 +82,16 @@ export class Pool extends Document {
     example: {
       extractorOperator: 0.48,
       leader: 0.04,
-      activePoolOperators: 0.48,
+      activePoolOperators: 0.4,
+      activeGlobalOperators: 0.08,
     },
   })
   @Prop({
     type: {
       extractorOperator: { type: Number, required: true, default: 0.48 },
       leader: { type: Number, required: true, default: 0.04 },
-      activePoolOperators: { type: Number, required: true, default: 0.48 },
+      activePoolOperators: { type: Number, required: true, default: 0.4 },
+      activeGlobalOperators: { type: Number, required: true, default: 0.08 },
     },
     required: true,
     _id: false,
@@ -98,6 +100,7 @@ export class Pool extends Document {
     extractorOperator: number;
     leader: number;
     activePoolOperators: number;
+    activeGlobalOperators: number;
   };
 
   /**

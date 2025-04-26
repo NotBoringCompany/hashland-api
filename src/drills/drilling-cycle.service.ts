@@ -643,7 +643,18 @@ export class DrillingCycleService {
           activePoolOperatorIds.has(op._id.toString()),
         );
 
+        // 🆕 ADDED FOR GLOBAL REWARDS (those who are active but not part of the pool)
+        const weightedGlobalOperators = activeOperators.filter(
+          (op) => !activePoolOperatorIds.has(op._id.toString()),
+        );
+
         const totalPoolEff = weightedPoolOperators.reduce(
+          (sum, op) => sum + op.cumulativeEff,
+          0,
+        );
+
+        // 🆕 ADDED FOR GLOBAL REWARDS
+        const totalGlobalEff = weightedGlobalOperators.reduce(
           (sum, op) => sum + op.cumulativeEff,
           0,
         );
@@ -659,6 +670,8 @@ export class DrillingCycleService {
         const leaderReward = issuedHash * pool.rewardSystem.leader;
         const activePoolReward =
           issuedHash * pool.rewardSystem.activePoolOperators;
+        const activeGlobalReward =
+          issuedHash * pool.rewardSystem.activeGlobalOperators; // 🆕 Added for global active operators not part of this pool
 
         // Update total pool reward
         totalPoolReward = extractorReward + leaderReward + activePoolReward;
@@ -711,6 +724,22 @@ export class DrillingCycleService {
           };
         });
 
+        // 🆕 ADDED: Compute Weighted Global Rewards
+        const weightedGlobalRewards = weightedGlobalOperators.map(
+          (operator) => {
+            const opReward =
+              totalGlobalEff === 0
+                ? 0
+                : (operator.cumulativeEff / totalGlobalEff) *
+                  activeGlobalReward;
+
+            return {
+              operatorId: operator._id,
+              amount: opReward,
+            };
+          },
+        );
+
         // Create an array to hold all rewards that should be added to rewardData
         const poolRewardsToAdd = [
           { operatorId: extractorOperatorId, amount: extractorReward }, // Extractor Reward
@@ -725,7 +754,11 @@ export class DrillingCycleService {
         }
 
         // Add all poolRewardsToAdd along with the weighted pool rewards
-        rewardData.push(...poolRewardsToAdd, ...weightedPoolRewards);
+        rewardData.push(
+          ...poolRewardsToAdd,
+          ...weightedPoolRewards,
+          ...weightedGlobalRewards,
+        );
         this.logger.debug(
           `⏱️ (distributeCycleRewards) Step 5b - Calculate POOL rewards: ${(performance.now() - poolRewardTime).toFixed(2)}ms`,
         );
@@ -920,8 +953,9 @@ export class DrillingCycleService {
     if (!rewardData.length) return;
 
     // Filter out any null or undefined operatorIds to prevent errors
+    // Also filter out rewards that are 0
     const validRewardData = rewardData.filter(
-      (reward) => reward.operatorId != null,
+      (reward) => reward.operatorId != null && reward.amount > 0,
     );
 
     if (validRewardData.length !== rewardData.length) {
