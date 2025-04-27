@@ -63,7 +63,7 @@ export class OperatorWallet extends Document {
     description: 'The signature used to verify wallet ownership',
     example: '0xabcdef12345...',
   })
-  @Prop({ required: true })
+  @Prop()
   signature: string;
 
   /**
