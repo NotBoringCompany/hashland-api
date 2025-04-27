@@ -444,11 +444,11 @@ export class DrillingSessionService {
         },
       );
 
-      // Updates the operator's total HASH earned
-      await this.operatorService.incrementTotalHASHEarned(
-        operatorId,
-        session.earnedHASH,
-      );
+      // // Updates the operator's total HASH earned
+      // await this.operatorService.incrementTotalHASHEarned(
+      //   operatorId,
+      //   session.earnedHASH,
+      // );
 
       // Delete from Redis
       await this.redisService.del(sessionKey);
