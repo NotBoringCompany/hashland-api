@@ -553,24 +553,6 @@ export class OperatorService {
   }
 
   /**
-   * Increments an operator's `totalHASHEarned` field by a given amount.
-   *
-   * This is usually called after ending a drilling session.
-   */
-  async incrementTotalHASHEarned(operatorId: Types.ObjectId, amount: number) {
-    try {
-      await this.operatorModel.updateOne(
-        { _id: operatorId },
-        { $inc: { totalEarnedHASH: amount } },
-      );
-    } catch (err: any) {
-      throw new Error(
-        `(incrementTotalHASHEarned) Error incrementing total HASH earned: ${err.message}`,
-      );
-    }
-  }
-
-  /**
    * Checks if an operator has enough fuel to start/continue drilling.
    * First checks Redis cache, then falls back to database if needed.
    */
