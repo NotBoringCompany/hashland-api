@@ -205,6 +205,10 @@ export class OperatorWalletService {
             (addr) => `address=${addr}`,
           ).join('&');
 
+        this.logger.error(`
+          (fetchTotalBalanceForWallets) API URL: ${apiUrl} 
+        `);
+
         const response = await axios.get(apiUrl);
         if (response.data?.accounts) {
           const totalTonBalance = response.data.accounts.reduce(
@@ -214,7 +218,15 @@ export class OperatorWalletService {
             0,
           );
 
+          this.logger.error(
+            `(fetchTotalBalanceForWallets) Total TON Balance: ${totalTonBalance}`,
+          );
+
           totalUsdBalance += totalTonBalance * (rates.ton || 0);
+
+          this.logger.error(
+            `(fetchTotalBalanceForWallets) Total TON Balance in USD: ${totalUsdBalance}`,
+          );
 
           const tonXApiKey =
             this.configService.get<string>('TON_X_API_KEY') || '';
@@ -250,12 +262,20 @@ export class OperatorWalletService {
                   const jettonBalance =
                     parseFloat(balanceData.balance) /
                     Math.pow(10, balanceData.jetton.decimals || 9);
+
+                  this.logger.error(`
+                      (fetchTotalBalanceForWallets) Jetton Balance for jetton addr ${jettonAddr}: ${jettonBalance}
+                    `);
                   totalUsdBalance += jettonBalance; // Assume USDT/USDC = 1 USD
                 }
               }
             }
           }
         }
+
+        this.logger.error(
+          `(fetchTotalBalanceForWallets) Final USD Balance: ${totalUsdBalance}`,
+        );
       }
 
       // ✅ BERA Chain Handling
