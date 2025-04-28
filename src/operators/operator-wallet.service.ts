@@ -439,11 +439,28 @@ export class OperatorWalletService {
         }
       }
 
-      // Check if wallet is already connected to this operator for this chain
-      const existingWallet = await this.operatorWalletModel.findOne({
-        address: walletData.address.toLowerCase(),
-        chain: walletData.chain,
-      });
+      // --- 🔥 Updated: Normalize Address based on Chain ---
+      const normalizedAddress =
+        walletData.chain === AllowedChain.TON
+          ? walletData.address
+          : walletData.address.toLowerCase();
+
+      // --- 🔥 Updated: Find existing wallet (TON: match original and lowercase) ---
+      let existingWallet: OperatorWallet | null;
+
+      if (walletData.chain === AllowedChain.TON) {
+        existingWallet = await this.operatorWalletModel.findOne({
+          chain: walletData.chain,
+          address: {
+            $in: [walletData.address, walletData.address.toLowerCase()],
+          },
+        });
+      } else {
+        existingWallet = await this.operatorWalletModel.findOne({
+          chain: walletData.chain,
+          address: walletData.address.toLowerCase(),
+        });
+      }
 
       if (
         existingWallet &&
@@ -504,7 +521,7 @@ export class OperatorWalletService {
       // Create new wallet after validation
       const newWallet = new this.operatorWalletModel({
         operatorId,
-        address: walletData.address.toLowerCase(),
+        address: normalizedAddress,
         chain: walletData.chain,
         signature: walletData.signature,
         signatureMessage: walletData.signatureMessage,
@@ -1094,3 +1111,4 @@ export class OperatorWalletService {
     }
   }
 }
+
