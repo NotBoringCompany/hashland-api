@@ -147,8 +147,8 @@ export class PoolOperatorService {
     } catch (err: any) {
       throw new InternalServerErrorException(
         new ApiResponse<null>(
-          500,
-          `(createPoolOperator) Error joining pool: ${err.message}`,
+          err.status || 500,
+          `(removeOperatorFromPool) Error removing operator from pool: ${err.message}`,
         ),
       );
     }
@@ -205,7 +205,7 @@ export class PoolOperatorService {
     } catch (err: any) {
       throw new InternalServerErrorException(
         new ApiResponse<null>(
-          500,
+          err.status || 500,
           `(removeOperatorFromPool) Error removing operator from pool: ${err.message}`,
         ),
       );
