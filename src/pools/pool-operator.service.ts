@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { PoolOperator } from './schemas/pool-operator.schema';
 import { Model, Types } from 'mongoose';
@@ -7,6 +11,8 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolService } from './pool.service';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
 import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { Operator } from 'src/operators/schemas/operator.schema';
 
 @Injectable()
 export class PoolOperatorService {
@@ -14,6 +20,7 @@ export class PoolOperatorService {
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private readonly poolModel: Model<Pool>,
+    @InjectModel(Operator.name) private readonly operatorModel: Model<Operator>,
     private readonly poolService: PoolService,
     private readonly mixpanelService: MixpanelService,
   ) {}
@@ -43,17 +50,14 @@ export class PoolOperatorService {
       ]);
 
       if (operatorInPool) {
-        return new ApiResponse<null>(
-          400,
+        throw new HttpException(
           `(createPoolOperator) Operator is already in a pool.`,
+          400,
         );
       }
 
       if (!pool) {
-        return new ApiResponse<null>(
-          404,
-          `(createPoolOperator) Pool not found.`,
-        );
+        throw new HttpException(`(createPoolOperator) Pool not found.`, 404);
       }
 
       // ✅ Step 2: Check if the pool is full
@@ -61,11 +65,43 @@ export class PoolOperatorService {
         pool: poolId,
       });
       if (poolOperatorCount >= pool.maxOperators) {
-        return new ApiResponse<null>(400, `(joinPool) Pool is full.`);
+        throw new HttpException(
+          `(createPoolOperator) Pool is full. Max operators: ${pool.maxOperators}.`,
+          400,
+        );
       }
 
       // TO DO IN THE FUTURE:
       // Ensure that the pool prerequisites are met before joining.
+
+      // Ensure that the operator has exceeded the cooldown for joining a pool
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { lastJoinedPool: 1 })
+        .lean();
+
+      if (!operator) {
+        throw new HttpException(
+          `(createPoolOperator) Operator not found.`,
+          400,
+        );
+      }
+
+      if (
+        operator.lastJoinedPool &&
+        operator.lastJoinedPool.getTime() +
+          GAME_CONSTANTS.OPERATORS.JOIN_POOL_COOLDOWN * 1000 >
+          Date.now()
+      ) {
+        throw new HttpException(
+          `(createPoolOperator) Operator is on cooldown for joining a pool. Cooldown left: ${Math.ceil(
+            (operator.lastJoinedPool.getTime() +
+              GAME_CONSTANTS.OPERATORS.JOIN_POOL_COOLDOWN * 1000 -
+              Date.now()) /
+              1000,
+          )} seconds.`,
+          400,
+        );
+      }
 
       // ✅ Step 3: Insert operator into the pool using direct creation to avoid field name issues
       try {
@@ -75,10 +111,9 @@ export class PoolOperatorService {
         });
       } catch (createError) {
         if (createError.code === 11000) {
-          // Duplicate key error
-          return new ApiResponse<null>(
-            400,
+          throw new HttpException(
             `(createPoolOperator) Operator already joined this pool.`,
+            400,
           );
         }
         throw createError;
@@ -94,6 +129,12 @@ export class PoolOperatorService {
         );
       }
 
+      // Step 5: Update operator's last joined pool timestamp
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        { lastJoinedPool: new Date() },
+      );
+
       this.mixpanelService.track(EVENT_CONSTANTS.POOL_JOIN, {
         distinct_id: operatorId,
         pool,
@@ -105,10 +146,7 @@ export class PoolOperatorService {
       );
     } catch (err: any) {
       throw new InternalServerErrorException(
-        new ApiResponse<null>(
-          500,
-          `(createPoolOperator) Error joining pool: ${err.message}`,
-        ),
+        new ApiResponse<null>(err.status || 500, err.message),
       );
     }
   }
@@ -131,9 +169,9 @@ export class PoolOperatorService {
       );
 
       if (!poolOperator) {
-        return new ApiResponse<null>(
-          404,
+        throw new HttpException(
           `(removeOperatorFromPool) Operator is not in any pool.`,
+          404,
         );
       }
 
@@ -162,8 +200,8 @@ export class PoolOperatorService {
         `(removeOperatorFromPool) Operator successfully removed from pool.`,
       );
     } catch (err: any) {
-      throw new Error(
-        `(removeOperatorFromPool) Error removing operator from pool: ${err.message}`,
+      throw new InternalServerErrorException(
+        new ApiResponse<null>(err.status || 500, err.message),
       );
     }
   }

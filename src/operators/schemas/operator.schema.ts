@@ -147,6 +147,16 @@ export class Operator extends Document {
   totalEarnedHASH: number;
 
   /**
+   * The time when the operator last joined a pool.
+   */
+  @ApiProperty({
+    description: 'The timestamp when the operator last joined a pool',
+    example: '2024-03-19T12:00:00.000Z',
+  })
+  @Prop({ type: Date, required: false, default: null })
+  lastJoinedPool: Date | null;
+
+  /**
    * An optional Telegram profile. Should only be set if the operator logs in via Telegram.
    */
   @ApiProperty({
