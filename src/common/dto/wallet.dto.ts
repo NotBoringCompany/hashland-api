@@ -45,7 +45,6 @@ class TonProofDataDto {
   @ApiProperty({
     description: 'Domain information',
   })
-  @ValidateNested()
   @Type(() => TonProofDomainDto)
   domain: TonProofDomainDto;
 
