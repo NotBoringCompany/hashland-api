@@ -89,6 +89,14 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     env_file:
       - .env
+    sysctls:
+      - vm.overcommit_memory=1
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   hashland-mongo-data:
