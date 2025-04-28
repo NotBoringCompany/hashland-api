@@ -84,13 +84,12 @@ services:
     volumes:
       - hashland-redis-data:/data
     command: >
-      sh -c "redis-server --appendonly yes --replica-read-only no --requirepass \"$$REDIS_PASSWORD\""
+      sh -c "echo 'ignore-warnings overcommit-memory' > /tmp/redis.conf &&
+             redis-server /tmp/redis.conf --appendonly yes --replica-read-only no --requirepass \"$$REDIS_PASSWORD\""
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     env_file:
       - .env
-    sysctls:
-      - vm.overcommit_memory=1
     restart: always
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
