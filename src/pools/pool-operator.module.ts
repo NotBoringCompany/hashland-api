@@ -8,11 +8,16 @@ import {
 import { PoolModule } from './pool.module';
 import { PoolOperatorController } from './pool-operator.controller';
 import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
+import {
+  Operator,
+  OperatorSchema,
+} from 'src/operators/schemas/operator.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: PoolOperator.name, schema: PoolOperatorSchema },
+      { name: Operator.name, schema: OperatorSchema },
     ]), // Register Pool schema
     PoolModule,
     MixpanelModule,
