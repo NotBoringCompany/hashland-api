@@ -7,6 +7,8 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolService } from './pool.service';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
 import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
+import { Operator } from 'src/operators/schemas/operator.schema';
+import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
 
 @Injectable()
 export class PoolOperatorService {
@@ -14,6 +16,7 @@ export class PoolOperatorService {
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private readonly poolModel: Model<Pool>,
+    @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     private readonly poolService: PoolService,
     private readonly mixpanelService: MixpanelService,
   ) {}
@@ -67,6 +70,35 @@ export class PoolOperatorService {
       // TO DO IN THE FUTURE:
       // Ensure that the pool prerequisites are met before joining.
 
+      // Ensure that the operator has exceeded the cooldown for joining a pool
+      const operator = await this.operatorModel
+        .findOne({ _id: operatorId }, { lastJoinedPool: 1 })
+        .lean();
+
+      if (!operator) {
+        return new ApiResponse<null>(
+          400,
+          `(createPoolOperator) Operator not found.`,
+        );
+      }
+
+      if (
+        operator.lastJoinedPool &&
+        operator.lastJoinedPool.getTime() +
+          GAME_CONSTANTS.OPERATORS.JOIN_POOL_COOLDOWN * 1000 >
+          Date.now()
+      ) {
+        return new ApiResponse<null>(
+          400,
+          `(createPoolOperator) Operator is on cooldown for joining a pool. Cooldown left: ${Math.ceil(
+            (operator.lastJoinedPool.getTime() +
+              GAME_CONSTANTS.OPERATORS.JOIN_POOL_COOLDOWN * 1000 -
+              Date.now()) /
+              1000,
+          )} seconds.`,
+        );
+      }
+
       // ✅ Step 3: Insert operator into the pool using direct creation to avoid field name issues
       try {
         await this.poolOperatorModel.create({
@@ -93,6 +125,12 @@ export class PoolOperatorService {
           `Error updating pool efficiency after join: ${effError.message}`,
         );
       }
+
+      // Step 5: Update operator's last joined pool timestamp
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        { lastJoinedPool: new Date() },
+      );
 
       this.mixpanelService.track(EVENT_CONSTANTS.POOL_JOIN, {
         distinct_id: operatorId,
