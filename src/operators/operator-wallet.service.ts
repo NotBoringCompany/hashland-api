@@ -32,6 +32,7 @@ import { JwtTonProofService } from 'src/common/services/jwt-ton-proof.service';
 import { Cell, contractAddress, loadStateInit } from '@ton/core';
 import { sha256 } from '@ton/crypto';
 import { tryParsePublicKey } from 'src/common/utils/wallets-data';
+import { OperatorService } from './operator.service';
 
 @Injectable()
 export class OperatorWalletService {
@@ -51,6 +52,7 @@ export class OperatorWalletService {
     private readonly alchemyService: AlchemyService,
     private readonly mixpanelService: MixpanelService,
     private readonly configService: ConfigService,
+    private readonly operatorService: OperatorService,
     private readonly jwtTonProofService?: JwtTonProofService,
   ) {
     // Initialize TON client with TON4 endpoint
@@ -530,11 +532,20 @@ export class OperatorWalletService {
       await newWallet.save();
 
       // Update asset equity for operator now that a new wallet is connected
-      this.updateAssetEquityForOperator(operatorId).catch((err: any) => {
+      await this.updateAssetEquityForOperator(operatorId).catch((err: any) => {
         this.logger.error(
           `(connectWallet) Error updating asset equity for operator: ${err.message}`,
         );
       });
+
+      // Update cumulative EFF data for operator
+      await this.operatorService
+        .updateCumulativeEffForSingleOperator(operatorId)
+        .catch((err: any) => {
+          this.logger.error(
+            `(connectWallet) Error updating cumulative EFF for operator: ${err.message}`,
+          );
+        });
 
       this.mixpanelService.track(EVENT_CONSTANTS.WALLET_CONNECT, {
         distinct_id: operatorId,

@@ -13,6 +13,7 @@ import { Drill, DrillSchema } from 'src/drills/schemas/drill.schema';
 import { AlchemyModule } from 'src/alchemy/alchemy.module';
 import { MixpanelModule } from 'src/mixpanel/mixpanel.module';
 import { JwtTonProofService } from 'src/common/services/jwt-ton-proof.service';
+import { OperatorModule } from './operator.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { JwtTonProofService } from 'src/common/services/jwt-ton-proof.service';
     RedisModule,
     AlchemyModule,
     MixpanelModule,
+    OperatorModule,
   ],
   controllers: [OperatorWalletController], // Expose API endpoints
   providers: [OperatorWalletService, JwtTonProofService], // Business logic for Operators
