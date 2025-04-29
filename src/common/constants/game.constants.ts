@@ -7,6 +7,9 @@ export const GAME_CONSTANTS = {
      * The cooldown time (in seconds) for renaming an operator's username.
      */
     RENAME_COOLDOWN: 604_800, // 7 days in seconds
+    /**
+     * The cooldown time (in seconds) for joining a pool after previously having joined a pool (assuming the operator leaves).
+     */
     JOIN_POOL_COOLDOWN: 28_800, // 8 hours in seconds
   },
 

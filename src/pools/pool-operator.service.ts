@@ -11,8 +11,8 @@ import { ApiResponse } from 'src/common/dto/response.dto';
 import { PoolService } from './pool.service';
 import { MixpanelService } from 'src/mixpanel/mixpanel.service';
 import { EVENT_CONSTANTS } from 'src/common/constants/mixpanel.constants';
-import { Operator } from 'src/operators/schemas/operator.schema';
 import { GAME_CONSTANTS } from 'src/common/constants/game.constants';
+import { Operator } from 'src/operators/schemas/operator.schema';
 
 @Injectable()
 export class PoolOperatorService {
@@ -20,7 +20,7 @@ export class PoolOperatorService {
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
     @InjectModel(Pool.name) private readonly poolModel: Model<Pool>,
-    @InjectModel(Operator.name) private operatorModel: Model<Operator>,
+    @InjectModel(Operator.name) private readonly operatorModel: Model<Operator>,
     private readonly poolService: PoolService,
     private readonly mixpanelService: MixpanelService,
   ) {}
