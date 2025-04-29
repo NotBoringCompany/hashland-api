@@ -1054,10 +1054,7 @@ export class OperatorWalletService {
    * @returns The configured domain string
    */
   getConfiguredDomain(): string {
-    return this.configService.get<string>(
-      'TON_CONNECT_DOMAIN',
-      'hashland.ton.app',
-    );
+    return this.configService.get<string>('HASHLAND_URL', 'hashland.gg');
   }
 
   /**
@@ -1111,4 +1108,3 @@ export class OperatorWalletService {
     }
   }
 }
-
