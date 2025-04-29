@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import {
   BlockchainData,
@@ -9,25 +10,32 @@ import TonWeb, { AddressType } from 'tonweb';
 @Injectable()
 export class TonService {
   private tonWeb: TonWeb | null = null; // ✅ Lazy Initialization
+  private readonly receiverAddress: string;
 
-  /**
-   * Returns the TonWeb instance. Initializes if not already initialized.
-   */
-  private getTonWebInstance(): TonWeb {
-    if (!this.tonWeb) {
-      if (!process.env.TON_API_ENDPOINT || !process.env.TON_API_KEY) {
-        throw new Error(
-          `(TonService) TON_API_ENDPOINT or TON_API_KEY is not set in the environment variables.`,
-        );
-      }
+  constructor(private configService: ConfigService) {
+    const apiEndpoint = this.configService.get<string>('TON_API_ENDPOINT');
+    const apiKey = this.configService.get<string>('TON_API_KEY');
+    this.receiverAddress = this.configService.get<string>(
+      'TON_RECEIVER_ADDRESS',
+    );
 
-      this.tonWeb = new TonWeb(
-        new TonWeb.HttpProvider(process.env.TON_API_ENDPOINT, {
-          apiKey: process.env.TON_API_KEY,
-        }),
+    if (!apiEndpoint || !apiKey) {
+      throw new Error(
+        'TON_API_ENDPOINT or TON_API_KEY is not set in the environment variables.',
       );
     }
-    return this.tonWeb;
+
+    if (!this.receiverAddress) {
+      console.warn(
+        'TON_RECEIVER_ADDRESS is not set. Transaction verification will fail.',
+      );
+    }
+
+    this.tonWeb = new TonWeb(
+      new TonWeb.HttpProvider(apiEndpoint, {
+        apiKey,
+      }),
+    );
   }
 
   /**
@@ -103,21 +111,42 @@ export class TonService {
         // ✅ Step 5: Extract the transaction message payload (which contains item, amount, and cost)
         let txParsedMessage: TxParsedMessage;
         try {
-          txParsedMessage = JSON.parse(firstOutMsg.message);
+          // Try to parse as JSON first
+          try {
+            txParsedMessage = JSON.parse(firstOutMsg.message);
+          } catch {
+            // If it's not valid JSON, handle as plain text message
+            console.log(
+              `Message is not JSON, treating as plain text: "${firstOutMsg.message}"`,
+            );
+
+            // Create a basic message structure for plain text
+            const textParts = firstOutMsg.message.split(' - ');
+            const item = textParts[0] || firstOutMsg.message;
+
+            // Create a message object that matches the TxParsedMessage type
+            const txValue = parseInt(firstOutMsg.value) / Math.pow(10, 9); // Convert nanotons to TON
+            txParsedMessage = {
+              item,
+              amt: 1, // Default to 1 as amount for plain text messages
+              cost: txValue, // Use the actual value from the transaction
+              curr: 'TON',
+            };
+          }
+
+          console.log(
+            `🔍 (verifyTONTransaction) Parsed message: ${JSON.stringify(txParsedMessage, null, 2)}`,
+          );
         } catch (parseErr) {
           throw new Error(
             `(verifyTONTransaction) Failed to parse message: ${parseErr.message}`,
           );
         }
 
-        console.log(
-          `🔍 (verifyTONTransaction) Parsed message: ${JSON.stringify(txParsedMessage, null, 2)}`,
-        );
-
         // ✅ Step 6: Ensure the receiver address matches the expected TON receiver address
-        if (receiverAddress !== process.env.TON_RECEIVER_ADDRESS) {
+        if (receiverAddress !== this.receiverAddress) {
           throw new Error(
-            `(verifyTONTransaction) Invalid receiver address: ${receiverAddress}, expected: ${process.env.TON_RECEIVER_ADDRESS}`,
+            `(verifyTONTransaction) Invalid receiver address: ${receiverAddress}, expected: ${this.receiverAddress}`,
           );
         }
 
@@ -179,16 +208,15 @@ export class TonService {
    * Converts a BOC (bag of cells) for TON-related transactions into its corresponding transaction hash in hex format.
    */
   async bocToTxHash(boc: string): Promise<string | null> {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
     try {
       // convert base64-encoded boc string into byte array
-      const bocBytes = tonWeb.utils.base64ToBytes(boc);
+      const bocBytes = this.tonWeb.utils.base64ToBytes(boc);
       // decode boc into a single TON cell (`boc` should only contain one cell)
-      const cell = tonWeb.boc.Cell.oneFromBoc(bocBytes);
+      const cell = this.tonWeb.boc.Cell.oneFromBoc(bocBytes);
       // calculate hash of cell to get the tx hash
       const rawHash = await cell.hash();
       // `rawHash` is still a bytes array; convert to hex
-      const hash = tonWeb.utils.bytesToHex(rawHash);
+      const hash = this.tonWeb.utils.bytesToHex(rawHash);
 
       return hash;
     } catch (err: any) {
@@ -200,8 +228,7 @@ export class TonService {
    * Gets one or more transactions for the given address in the TON blockchain.
    */
   async getTransactions(address: string, limit: number = 1, txHash: string) {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
-    return await tonWeb.getTransactions(address, limit, null, txHash);
+    return await this.tonWeb.getTransactions(address, limit, null, txHash);
   }
 
   /**
@@ -210,9 +237,7 @@ export class TonService {
    * Non-bounceable addresses are used for EOAs (where funds will not be sent back if sent to a non-existent address).
    */
   getNonBounceableAddress(address: AddressType): string {
-    const tonWeb = this.getTonWebInstance(); // ✅ Use Lazy Initialization
-
-    return new tonWeb.utils.Address(address)?.toString(
+    return new this.tonWeb.utils.Address(address)?.toString(
       true,
       true,
       false,

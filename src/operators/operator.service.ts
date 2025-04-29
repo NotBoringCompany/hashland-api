@@ -748,6 +748,7 @@ export class OperatorService {
       maxActiveDrillsAllowed:
         GAME_CONSTANTS.DRILLS.INITIAL_ACTIVE_DRILLS_ALLOWED,
       totalEarnedHASH: 0,
+      lastJoinedPool: null,
       referralData: {
         referralCode: null,
         referredBy: null,

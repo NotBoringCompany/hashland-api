@@ -205,6 +205,10 @@ export class OperatorWalletService {
             (addr) => `address=${addr}`,
           ).join('&');
 
+        this.logger.error(`
+          (fetchTotalBalanceForWallets) API URL: ${apiUrl} 
+        `);
+
         const response = await axios.get(apiUrl);
         if (response.data?.accounts) {
           const totalTonBalance = response.data.accounts.reduce(
@@ -214,7 +218,15 @@ export class OperatorWalletService {
             0,
           );
 
+          this.logger.error(
+            `(fetchTotalBalanceForWallets) Total TON Balance: ${totalTonBalance}`,
+          );
+
           totalUsdBalance += totalTonBalance * (rates.ton || 0);
+
+          this.logger.error(
+            `(fetchTotalBalanceForWallets) Total TON Balance in USD: ${totalUsdBalance}`,
+          );
 
           const tonXApiKey =
             this.configService.get<string>('TON_X_API_KEY') || '';
@@ -250,12 +262,20 @@ export class OperatorWalletService {
                   const jettonBalance =
                     parseFloat(balanceData.balance) /
                     Math.pow(10, balanceData.jetton.decimals || 9);
+
+                  this.logger.error(`
+                      (fetchTotalBalanceForWallets) Jetton Balance for jetton addr ${jettonAddr}: ${jettonBalance}
+                    `);
                   totalUsdBalance += jettonBalance; // Assume USDT/USDC = 1 USD
                 }
               }
             }
           }
         }
+
+        this.logger.error(
+          `(fetchTotalBalanceForWallets) Final USD Balance: ${totalUsdBalance}`,
+        );
       }
 
       // ✅ BERA Chain Handling
@@ -419,11 +439,28 @@ export class OperatorWalletService {
         }
       }
 
-      // Check if wallet is already connected to this operator for this chain
-      const existingWallet = await this.operatorWalletModel.findOne({
-        address: walletData.address.toLowerCase(),
-        chain: walletData.chain,
-      });
+      // --- 🔥 Updated: Normalize Address based on Chain ---
+      const normalizedAddress =
+        walletData.chain === AllowedChain.TON
+          ? walletData.address
+          : walletData.address.toLowerCase();
+
+      // --- 🔥 Updated: Find existing wallet (TON: match original and lowercase) ---
+      let existingWallet: OperatorWallet | null;
+
+      if (walletData.chain === AllowedChain.TON) {
+        existingWallet = await this.operatorWalletModel.findOne({
+          chain: walletData.chain,
+          address: {
+            $in: [walletData.address, walletData.address.toLowerCase()],
+          },
+        });
+      } else {
+        existingWallet = await this.operatorWalletModel.findOne({
+          chain: walletData.chain,
+          address: walletData.address.toLowerCase(),
+        });
+      }
 
       if (
         existingWallet &&
@@ -484,7 +521,7 @@ export class OperatorWalletService {
       // Create new wallet after validation
       const newWallet = new this.operatorWalletModel({
         operatorId,
-        address: walletData.address.toLowerCase(),
+        address: normalizedAddress,
         chain: walletData.chain,
         signature: walletData.signature,
         signatureMessage: walletData.signatureMessage,
@@ -1017,10 +1054,7 @@ export class OperatorWalletService {
    * @returns The configured domain string
    */
   getConfiguredDomain(): string {
-    return this.configService.get<string>(
-      'TON_CONNECT_DOMAIN',
-      'hashland.ton.app',
-    );
+    return this.configService.get<string>('HASHLAND_URL', 'hashland.gg');
   }
 
   /**

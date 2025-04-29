@@ -147,7 +147,9 @@ export class Operator extends Document {
   totalEarnedHASH: number;
 
   /**
-   * The time when the operator last joined a pool.
+   * If the operator has recently joined a pool, this will be the timestamp when the operator joined that pool.
+   *
+   * This allows for cooldown periods to prevent spamming.
    */
   @ApiProperty({
     description: 'The timestamp when the operator last joined a pool',
