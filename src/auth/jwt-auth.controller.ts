@@ -1,4 +1,10 @@
-import { Controller, Get, Request, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Request,
+  UseGuards,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -40,14 +46,18 @@ export class JwtAuthController {
   @UseGuards(JwtAuthGuard)
   @Get('verify')
   async verifyToken(@Request() req): Promise<AppApiResponse<Operator>> {
-    const operatorId = new Types.ObjectId(req.user.operatorId);
+    try {
+      const operatorId = new Types.ObjectId(req.user.operatorId);
 
-    const operator = await this.operatorService.findById(operatorId);
+      const operator = await this.operatorService.findById(operatorId);
 
-    return new AppApiResponse<Operator>(
-      200,
-      'Token verified successfully',
-      operator,
-    );
+      return new AppApiResponse<Operator>(
+        200,
+        'Token verified successfully',
+        operator,
+      );
+    } catch {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
   }
 }
