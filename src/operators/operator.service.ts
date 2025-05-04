@@ -317,7 +317,7 @@ export class OperatorService {
         .find(
           { operatorId },
           {
-            _id: 0,
+            _id: 1,
             address: 1,
             chain: 1,
           },
