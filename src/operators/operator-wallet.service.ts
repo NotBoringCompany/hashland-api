@@ -593,6 +593,23 @@ export class OperatorWalletService {
     walletId: Types.ObjectId,
   ): Promise<OperatorWallet> {
     try {
+      const operator = await this.operatorModel.findById(operatorId);
+
+      if (!operator) {
+        throw new NotFoundException('(disconnectWallet) Operator not found');
+      }
+
+      const wallets = await this.operatorWalletModel.countDocuments({
+        operatorId,
+      });
+
+      if (wallets === 1 && !operator.tgProfile?.tgId) {
+        throw new HttpException(
+          '(disconnectWallet) Operator must have at least one wallet connected',
+          400,
+        );
+      }
+
       const wallet = await this.operatorWalletModel.findOneAndDelete({
         _id: walletId,
         operatorId,
