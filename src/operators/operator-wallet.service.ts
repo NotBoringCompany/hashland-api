@@ -421,35 +421,14 @@ export class OperatorWalletService {
         );
       }
 
-      // If the operator is connecting a second wallet.
-      // If yes, we need to set a minimum asset equity check (in USD) to allow them to connect their wallet.
-      if (existingWalletsInChain.length === 1) {
-        const minAssetEquity = 100;
-
-        const secondWalletUSDBalance = await this.fetchTotalBalanceForWallets([
-          {
-            address: walletData.address,
-            chain: walletData.chain as AllowedChain, // Explicitly cast to AllowedChain
-          },
-        ]);
-
-        if (secondWalletUSDBalance < minAssetEquity) {
-          throw new HttpException(
-            `(connectWallet) Operator must have at least $${minAssetEquity} in their second wallet to connect it.`,
-            400,
-          );
-        }
-      }
-
-      // --- 🔥 Updated: Normalize Address based on Chain ---
       const normalizedAddress =
         walletData.chain === AllowedChain.TON
           ? walletData.address
           : walletData.address.toLowerCase();
 
-      // --- 🔥 Updated: Find existing wallet (TON: match original and lowercase) ---
       let existingWallet: OperatorWallet | null;
 
+      // Check if the wallet is already connected to another operator
       if (walletData.chain === AllowedChain.TON) {
         existingWallet = await this.operatorWalletModel.findOne({
           chain: walletData.chain,
@@ -472,6 +451,26 @@ export class OperatorWalletService {
           '(connectWallet) Wallet already connected to another operator',
           400,
         );
+      }
+
+      // If the operator is connecting a second wallet.
+      // If yes, we need to set a minimum asset equity check (in USD) to allow them to connect their wallet.
+      if (existingWalletsInChain.length === 1) {
+        const minAssetEquity = 100;
+
+        const secondWalletUSDBalance = await this.fetchTotalBalanceForWallets([
+          {
+            address: walletData.address,
+            chain: walletData.chain as AllowedChain, // Explicitly cast to AllowedChain
+          },
+        ]);
+
+        if (secondWalletUSDBalance < minAssetEquity) {
+          throw new HttpException(
+            `(connectWallet) Operator must have at least $${minAssetEquity} in their second wallet to connect it.`,
+            400,
+          );
+        }
       }
 
       // Validate wallet ownership first, before making any updates
@@ -505,19 +504,6 @@ export class OperatorWalletService {
           '(connectWallet) Invalid wallet signature or proof.',
           400,
         );
-      }
-
-      if (existingWallet) {
-        // Update the existing wallet with new signature after validation
-        existingWallet.signature = walletData.signature;
-        existingWallet.signatureMessage = walletData.signatureMessage;
-        await existingWallet.save();
-
-        this.mixpanelService.track(EVENT_CONSTANTS.WALLET_CONNECT, {
-          distinct_id: operatorId,
-          wallet: existingWallet,
-        });
-        return existingWallet._id;
       }
 
       // Create new wallet after validation
