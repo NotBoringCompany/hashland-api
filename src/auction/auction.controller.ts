@@ -9,6 +9,8 @@ import {
   HttpStatus,
   ParseIntPipe,
   DefaultValuePipe,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,19 +18,22 @@ import {
   ApiResponse,
   ApiQuery,
   ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { AuctionService } from './auction.service';
 import { Auction, AuctionStatus } from './schemas/auction.schema';
 import { AuctionWhitelist } from './schemas/auction-whitelist.schema';
-import { Bid, BidType } from './schemas/bid.schema';
+import { Bid } from './schemas/bid.schema';
 import { AuctionHistory } from './schemas/auction-history.schema';
+import { CreateAuctionDto, PlaceBidDto, JoinWhitelistDto } from './dto';
 
 /**
  * Controller for auction management in the auction system
  */
 @ApiTags('Auctions')
 @Controller('auctions')
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class AuctionController {
   constructor(private readonly auctionService: AuctionService) {}
 
@@ -38,33 +43,16 @@ export class AuctionController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new auction' })
+  @ApiBody({ type: CreateAuctionDto })
   @ApiResponse({
     status: 201,
     description: 'Auction created successfully',
     type: Auction,
   })
-  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
+  @ApiResponse({ status: 404, description: 'NFT not found' })
   async createAuction(
-    @Body()
-    createAuctionDto: {
-      nftId: string;
-      title: string;
-      description: string;
-      startingPrice: number;
-      whitelistConfig: {
-        maxParticipants: number;
-        entryFee: number;
-        startTime: string;
-        endTime: string;
-      };
-      auctionConfig: {
-        startTime: string;
-        endTime: string;
-        minBidIncrement: number;
-        reservePrice?: number;
-        buyNowPrice?: number;
-      };
-    },
+    @Body() createAuctionDto: CreateAuctionDto,
   ): Promise<Auction> {
     return this.auctionService.createAuction({
       nftId: new Types.ObjectId(createAuctionDto.nftId),
@@ -166,16 +154,17 @@ export class AuctionController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Join auction whitelist' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
+  @ApiBody({ type: JoinWhitelistDto })
   @ApiResponse({
     status: 201,
     description: 'Successfully joined whitelist',
     type: AuctionWhitelist,
   })
-  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
   @ApiResponse({ status: 404, description: 'Auction not found' })
   async joinWhitelist(
     @Param('id') id: string,
-    @Body() joinWhitelistDto: { operatorId: string },
+    @Body() joinWhitelistDto: JoinWhitelistDto,
   ): Promise<AuctionWhitelist> {
     return this.auctionService.joinWhitelist(
       new Types.ObjectId(id),
@@ -190,28 +179,23 @@ export class AuctionController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Place a bid on an auction' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
+  @ApiBody({ type: PlaceBidDto })
   @ApiResponse({
     status: 201,
     description: 'Bid placed successfully',
     type: Bid,
   })
-  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
   @ApiResponse({ status: 404, description: 'Auction not found' })
   async placeBid(
     @Param('id') id: string,
-    @Body()
-    placeBidDto: {
-      bidderId: string;
-      amount: number;
-      bidType?: BidType;
-      metadata?: { userAgent?: string; ipAddress?: string };
-    },
+    @Body() placeBidDto: PlaceBidDto,
   ): Promise<Bid> {
     return this.auctionService.placeBid(
       new Types.ObjectId(id),
       new Types.ObjectId(placeBidDto.bidderId),
       placeBidDto.amount,
-      placeBidDto.bidType || BidType.REGULAR,
+      placeBidDto.bidType,
       placeBidDto.metadata,
     );
   }
