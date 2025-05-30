@@ -147,6 +147,27 @@ export class Operator extends Document {
   totalEarnedHASH: number;
 
   /**
+   * The current available $HASH balance of the operator.
+   */
+  @ApiProperty({
+    description: 'The current available $HASH balance of the operator',
+    example: 1500,
+  })
+  @Prop({ required: true, default: 0 })
+  currentHASH: number;
+
+  /**
+   * The $HASH amount held temporarily for active bids and transactions.
+   */
+  @ApiProperty({
+    description:
+      'The $HASH amount held temporarily for active bids and transactions',
+    example: 250,
+  })
+  @Prop({ required: true, default: 0 })
+  holdHASH: number;
+
+  /**
    * If the operator has recently joined a pool, this will be the timestamp when the operator joined that pool.
    *
    * This allows for cooldown periods to prevent spamming.

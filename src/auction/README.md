@@ -236,15 +236,15 @@ holdHASH: number; // HASH held temporarily for active bids
 ## TODO List
 
 ### Phase 0.5: Currency System Enhancement
-- [ ] Add `currentHASH` and `holdHASH` fields to Operator schema
-- [ ] Create `HashTransaction` schema for transaction history
-- [ ] Implement `deductHASH()` function in OperatorService
-- [ ] Implement `addHASH()` function in OperatorService
-- [ ] Implement `holdHASH()` function for bid amounts
-- [ ] Implement `releaseHold()` function for refunds
-- [ ] Add transaction history tracking for all HASH movements
-- [ ] Create validation for sufficient balance checks
-- [ ] Add atomic transaction handling for currency operations
+- [x] Add `currentHASH` and `holdHASH` fields to Operator schema
+- [x] Create `HashTransaction` schema for transaction history
+- [x] Implement `deductHASH()` function in OperatorService
+- [x] Implement `addHASH()` function in OperatorService
+- [x] Implement `holdHASH()` function for bid amounts
+- [x] Implement `releaseHold()` function for refunds
+- [x] Add transaction history tracking for all HASH movements
+- [x] Create validation for sufficient balance checks
+- [x] ~~Add atomic transaction handling for currency operations~~ (Removed for database compatibility)
 
 ### Phase 1: Core Infrastructure
 - [ ] Create database schemas and models
