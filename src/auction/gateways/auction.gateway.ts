@@ -59,6 +59,21 @@ export class AuctionGateway
    */
   async handleConnection(client: Socket): Promise<void> {
     try {
+      // Check connection rate limiting
+      const clientIp = this.webSocketAuthService.getClientIp(client);
+      const rateLimitCheck =
+        this.webSocketAuthService.checkConnectionRateLimit(clientIp);
+
+      if (!rateLimitCheck.allowed) {
+        this.logger.warn(`Connection rate limit exceeded for IP: ${clientIp}`);
+        client.emit('error', {
+          message: 'Too many connection attempts. Please try again later.',
+          resetTime: rateLimitCheck.resetTime,
+        });
+        client.disconnect();
+        return;
+      }
+
       const operatorId = this.webSocketAuthService.extractOperatorId(client);
       if (!operatorId) {
         client.disconnect();
@@ -107,6 +122,20 @@ export class AuctionGateway
 
       if (!operatorId) {
         client.emit('error', { message: 'Unauthorized' });
+        return;
+      }
+
+      // Validate auction access with comprehensive checks
+      const hasAccess = await this.webSocketAuthService.validateAuctionAccess(
+        operatorId,
+        auctionId,
+      );
+
+      if (!hasAccess) {
+        client.emit('error', {
+          message:
+            'Access denied to auction. You may not be whitelisted or auction may not be accessible.',
+        });
         return;
       }
 
@@ -193,14 +222,25 @@ export class AuctionGateway
         return;
       }
 
+      // Check bid rate limiting
+      const rateLimitCheck =
+        this.webSocketAuthService.checkBidRateLimit(operatorId);
+      if (!rateLimitCheck.allowed) {
+        client.emit('bid_error', {
+          message: 'Too many bid attempts. Please slow down.',
+          resetTime: rateLimitCheck.resetTime,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       // Validate bidder matches connected user
       if (placeBidDto.bidderId !== operatorId) {
         client.emit('error', { message: 'Invalid bidder ID' });
         return;
       }
 
-      // Extract auction ID from the bid data (assuming it's passed in metadata or we need to modify the DTO)
-      // For now, we'll need to get it from the room the client is in
+      // Extract auction ID from the room the client is in
       const rooms = Array.from(client.rooms);
       const auctionRoom = rooms.find((room) => room.startsWith('auction_'));
 
@@ -210,6 +250,66 @@ export class AuctionGateway
       }
 
       const auctionId = auctionRoom.replace('auction_', '');
+
+      // Validate operator permissions for bidding
+      const hasPermission =
+        await this.webSocketAuthService.validateOperatorPermissions(
+          operatorId,
+          'place_bid',
+        );
+
+      if (!hasPermission) {
+        client.emit('bid_error', {
+          message: 'You do not have permission to place bids',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Comprehensive bidding permission validation
+      const canBid = await this.webSocketAuthService.validateBiddingPermission(
+        operatorId,
+        auctionId,
+      );
+
+      if (!canBid) {
+        client.emit('bid_error', {
+          message:
+            'Bidding not allowed. Check auction status, whitelist, balance, and timing.',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Validate bid amount
+      const bidValidation = await this.webSocketAuthService.validateBidAmount(
+        auctionId,
+        placeBidDto.amount,
+      );
+
+      if (!bidValidation.valid) {
+        client.emit('bid_error', {
+          message: bidValidation.reason,
+          minAmount: bidValidation.minAmount,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Validate sufficient balance
+      const hasBalance =
+        await this.webSocketAuthService.validateSufficientBalance(
+          operatorId,
+          placeBidDto.amount,
+        );
+
+      if (!hasBalance) {
+        client.emit('bid_error', {
+          message: 'Insufficient HASH balance for this bid',
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
 
       // Place the bid
       const bid = await this.auctionService.placeBid(
@@ -222,6 +322,7 @@ export class AuctionGateway
           source: 'websocket',
           socketId: client.id,
           timestamp: new Date().toISOString(),
+          clientIp: this.webSocketAuthService.getClientIp(client),
         } as any,
       );
 
