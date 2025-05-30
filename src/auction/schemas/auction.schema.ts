@@ -8,6 +8,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export enum AuctionStatus {
   DRAFT = 'draft',
   WHITELIST_OPEN = 'whitelist_open',
+  WHITELIST_CLOSED = 'whitelist_closed',
   AUCTION_ACTIVE = 'auction_active',
   ENDED = 'ended',
   CANCELLED = 'cancelled',

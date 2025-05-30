@@ -7,6 +7,9 @@ import { ApiProperty } from '@nestjs/swagger';
  */
 export enum AuctionAction {
   WHITELIST_JOINED = 'whitelist_joined',
+  WHITELIST_OPENED = 'whitelist_opened',
+  WHITELIST_CLOSED = 'whitelist_closed',
+  AUCTION_STARTED = 'auction_started',
   BID_PLACED = 'bid_placed',
   BID_OUTBID = 'bid_outbid',
   AUCTION_WON = 'auction_won',

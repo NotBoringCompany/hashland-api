@@ -8,6 +8,7 @@ import { ApiProperty } from '@nestjs/swagger';
 export enum NFTStatus {
   DRAFT = 'draft',
   ACTIVE = 'active',
+  IN_AUCTION = 'in_auction',
   SOLD = 'sold',
   CANCELLED = 'cancelled',
 }

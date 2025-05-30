@@ -146,4 +146,64 @@ export class AuctionNotificationService {
       );
     }
   }
+
+  /**
+   * Notify whitelist opened
+   */
+  async notifyWhitelistOpened(
+    auctionId: string,
+    auction: Auction,
+  ): Promise<void> {
+    try {
+      await this.auctionGateway.broadcastAuctionUpdate(auctionId, {
+        type: 'whitelist_opened',
+        auction,
+        message: 'Whitelist is now open for registration',
+      });
+
+      this.logger.log(`Notified whitelist opened: ${auctionId}`);
+    } catch (error) {
+      this.logger.error(`Error notifying whitelist opened: ${error.message}`);
+    }
+  }
+
+  /**
+   * Notify whitelist closed
+   */
+  async notifyWhitelistClosed(
+    auctionId: string,
+    auction: Auction,
+  ): Promise<void> {
+    try {
+      await this.auctionGateway.broadcastAuctionUpdate(auctionId, {
+        type: 'whitelist_closed',
+        auction,
+        message: 'Whitelist registration has ended',
+      });
+
+      this.logger.log(`Notified whitelist closed: ${auctionId}`);
+    } catch (error) {
+      this.logger.error(`Error notifying whitelist closed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Notify auction started
+   */
+  async notifyAuctionStarted(
+    auctionId: string,
+    auction: Auction,
+  ): Promise<void> {
+    try {
+      await this.auctionGateway.broadcastAuctionUpdate(auctionId, {
+        type: 'auction_started',
+        auction,
+        message: 'Auction has started - bidding is now open',
+      });
+
+      this.logger.log(`Notified auction started: ${auctionId}`);
+    } catch (error) {
+      this.logger.error(`Error notifying auction started: ${error.message}`);
+    }
+  }
 }

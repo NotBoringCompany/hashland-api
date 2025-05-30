@@ -311,44 +311,75 @@ export class AuctionGateway
         return;
       }
 
-      // Place the bid
-      const bid = await this.auctionService.placeBid(
+      // Place the bid - use queue for high-frequency scenarios
+      const shouldUseQueue = await this.auctionService.shouldUseQueue(
         new Types.ObjectId(auctionId),
-        new Types.ObjectId(placeBidDto.bidderId),
-        placeBidDto.amount,
-        placeBidDto.bidType,
-        {
-          ...placeBidDto.metadata,
-          source: 'websocket',
-          socketId: client.id,
+      );
+
+      const bidMetadata = {
+        ...placeBidDto.metadata,
+        source: 'websocket',
+        socketId: client.id,
+        timestamp: new Date().toISOString(),
+        clientIp: this.webSocketAuthService.getClientIp(client),
+      };
+
+      if (shouldUseQueue) {
+        // Use queue for high-frequency processing
+        const queueResult = await this.auctionService.placeBidQueued(
+          new Types.ObjectId(auctionId),
+          new Types.ObjectId(placeBidDto.bidderId),
+          placeBidDto.amount,
+          placeBidDto.bidType,
+          bidMetadata,
+        );
+
+        // Send queue confirmation to bidder
+        client.emit('bid_placed', {
+          jobId: queueResult.jobId,
+          message: queueResult.message,
+          queued: true,
           timestamp: new Date().toISOString(),
-          clientIp: this.webSocketAuthService.getClientIp(client),
-        } as any,
-      );
+        });
 
-      // Get updated auction data
-      const updatedAuction = await this.auctionService.getAuctionById(
-        new Types.ObjectId(auctionId),
-        true,
-      );
+        this.logger.log(
+          `Bid queued via WebSocket: job ${queueResult.jobId} in auction ${auctionId}`,
+        );
+      } else {
+        // Use direct processing for low-frequency scenarios
+        const bid = await this.auctionService.placeBid(
+          new Types.ObjectId(auctionId),
+          new Types.ObjectId(placeBidDto.bidderId),
+          placeBidDto.amount,
+          placeBidDto.bidType,
+          bidMetadata,
+        );
 
-      // Broadcast bid to all users in auction room
-      this.server.to(auctionRoom).emit('new_bid', {
-        bid,
-        auction: updatedAuction,
-        timestamp: new Date().toISOString(),
-      });
+        // Get updated auction data
+        const updatedAuction = await this.auctionService.getAuctionById(
+          new Types.ObjectId(auctionId),
+          true,
+        );
 
-      // Send confirmation to bidder
-      client.emit('bid_placed', {
-        bid,
-        message: 'Bid placed successfully',
-        timestamp: new Date().toISOString(),
-      });
+        // Broadcast bid to all users in auction room
+        this.server.to(auctionRoom).emit('new_bid', {
+          bid,
+          auction: updatedAuction,
+          timestamp: new Date().toISOString(),
+        });
 
-      this.logger.log(
-        `Bid placed via WebSocket: ${bid._id} in auction ${auctionId}`,
-      );
+        // Send confirmation to bidder
+        client.emit('bid_placed', {
+          bid,
+          message: 'Bid placed successfully',
+          queued: false,
+          timestamp: new Date().toISOString(),
+        });
+
+        this.logger.log(
+          `Bid placed directly via WebSocket: ${bid._id} in auction ${auctionId}`,
+        );
+      }
     } catch (error) {
       this.logger.error(`Error placing bid: ${error.message}`);
       client.emit('bid_error', {

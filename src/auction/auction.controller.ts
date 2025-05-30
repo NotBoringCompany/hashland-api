@@ -254,4 +254,100 @@ export class AuctionController {
       limit,
     );
   }
+
+  /**
+   * Place a bid via queue (for high-frequency scenarios)
+   */
+  @Post(':id/bid/queue')
+  @ApiOperation({
+    summary: 'Place a bid via queue',
+    description:
+      'Place a bid using the queue system for high-frequency scenarios',
+  })
+  @ApiParam({ name: 'id', description: 'Auction ID' })
+  @ApiBody({ type: PlaceBidDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Bid queued successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        jobId: { type: 'string' },
+        message: { type: 'string' },
+        queued: { type: 'boolean' },
+        timestamp: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid bid data' })
+  @ApiResponse({ status: 404, description: 'Auction not found' })
+  async placeBidQueued(
+    @Param('id') id: string,
+    @Body() placeBidDto: PlaceBidDto,
+  ): Promise<{
+    jobId: string;
+    message: string;
+    queued: boolean;
+    timestamp: string;
+  }> {
+    const result = await this.auctionService.placeBidQueued(
+      new Types.ObjectId(id),
+      new Types.ObjectId(placeBidDto.bidderId),
+      placeBidDto.amount,
+      placeBidDto.bidType,
+      {
+        source: 'api',
+        timestamp: new Date().toISOString(),
+      },
+    );
+
+    return {
+      ...result,
+      queued: true,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Check if auction should use queue
+   */
+  @Get(':id/queue-status')
+  @ApiOperation({
+    summary: 'Check if auction should use queue',
+    description:
+      'Check if auction is in high-frequency mode and should use queue processing',
+  })
+  @ApiParam({ name: 'id', description: 'Auction ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Queue status retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        shouldUseQueue: { type: 'boolean' },
+        reason: { type: 'string' },
+        timestamp: { type: 'string' },
+      },
+    },
+  })
+  async getQueueStatus(@Param('id') id: string): Promise<{
+    shouldUseQueue: boolean;
+    reason: string;
+    timestamp: string;
+  }> {
+    const shouldUseQueue = await this.auctionService.shouldUseQueue(
+      new Types.ObjectId(id),
+    );
+
+    let reason = 'Low activity - direct processing';
+    if (shouldUseQueue) {
+      reason = 'High activity or ending soon - queue processing recommended';
+    }
+
+    return {
+      shouldUseQueue,
+      reason,
+      timestamp: new Date().toISOString(),
+    };
+  }
 }

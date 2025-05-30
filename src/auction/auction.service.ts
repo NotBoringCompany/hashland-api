@@ -4,6 +4,8 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -25,6 +27,9 @@ import { HashTransactionCategory } from 'src/operators/schemas/hash-transaction.
 // External services
 import { OperatorService } from 'src/operators/operator.service';
 
+// Queue service (forward reference to avoid circular dependency)
+import type { BidQueueService } from './services/bid-queue.service';
+
 /**
  * Service for managing auctions in the auction system
  */
@@ -41,6 +46,8 @@ export class AuctionService {
     private historyModel: Model<AuctionHistory>,
     @InjectModel(NFT.name) private nftModel: Model<NFT>,
     private operatorService: OperatorService,
+    @Inject(forwardRef(() => 'BidQueueService'))
+    private bidQueueService?: BidQueueService,
   ) {}
 
   /**
@@ -586,6 +593,85 @@ export class AuctionService {
         error.stack,
       );
       // Don't throw error for history recording failures
+    }
+  }
+
+  /**
+   * Place a bid via queue system for high-frequency handling
+   */
+  async placeBidQueued(
+    auctionId: Types.ObjectId,
+    bidderId: Types.ObjectId,
+    amount: number,
+    bidType: BidType = BidType.REGULAR,
+    metadata?: any,
+  ): Promise<{ jobId: string; message: string }> {
+    try {
+      if (!this.bidQueueService) {
+        // Fallback to direct bid placement if queue service not available
+        this.logger.warn('Queue service not available, placing bid directly');
+        const bid = await this.placeBid(
+          auctionId,
+          bidderId,
+          amount,
+          bidType,
+          metadata,
+        );
+        return {
+          jobId: 'direct',
+          message: `Bid placed directly: ${bid._id}`,
+        };
+      }
+
+      // Add bid to queue for processing
+      const job = await this.bidQueueService.addBidToQueue(
+        auctionId.toString(),
+        bidderId.toString(),
+        amount,
+        bidType,
+        metadata,
+      );
+
+      this.logger.log(
+        `Bid queued: job ${job.id} (auction: ${auctionId}, bidder: ${bidderId}, amount: ${amount})`,
+      );
+
+      return {
+        jobId: job.id?.toString() || 'unknown',
+        message: 'Bid queued for processing',
+      };
+    } catch (error) {
+      this.logger.error(`Error queueing bid: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Failed to queue bid');
+    }
+  }
+
+  /**
+   * Check if auction is in high-frequency mode (ending soon or high activity)
+   */
+  async shouldUseQueue(auctionId: Types.ObjectId): Promise<boolean> {
+    try {
+      const auction = await this.getAuctionById(auctionId, false);
+      const now = new Date();
+      const endTime = auction.auctionConfig.endTime;
+      const timeUntilEnd = endTime.getTime() - now.getTime();
+
+      // Use queue if auction ends within 30 minutes
+      const thirtyMinutes = 30 * 60 * 1000;
+      if (timeUntilEnd <= thirtyMinutes && timeUntilEnd > 0) {
+        return true;
+      }
+
+      // Use queue if auction has high bid activity (more than 50 bids)
+      if (auction.totalBids > 50) {
+        return true;
+      }
+
+      // Use queue for buy-now bids (always high priority)
+      return false;
+    } catch (error) {
+      this.logger.error(`Error checking queue usage: ${error.message}`);
+      return false; // Default to direct processing
     }
   }
 }
