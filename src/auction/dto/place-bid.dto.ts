@@ -32,6 +32,33 @@ export class BidMetadataDto {
   @IsOptional()
   @IsString()
   ipAddress?: string;
+
+  @ApiProperty({
+    description: 'Source of the bid (api, websocket, etc.)',
+    example: 'websocket',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @ApiProperty({
+    description: 'Socket ID for WebSocket bids',
+    example: 'socket_123456',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  socketId?: string;
+
+  @ApiProperty({
+    description: 'Additional timestamp for bid tracking',
+    example: '2024-03-19T12:00:00.000Z',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  timestamp?: string;
 }
 
 /**

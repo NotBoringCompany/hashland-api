@@ -11,5 +11,8 @@ export * from './place-bid.dto';
 // Whitelist DTOs
 export * from './join-whitelist.dto';
 
+// WebSocket DTOs
+export * from './websocket-events.dto';
+
 // Response DTOs
 export * from './response.dto';

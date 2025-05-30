@@ -319,21 +319,91 @@ Enhanced REST API endpoints with comprehensive validation and error handling:
 - ✅ Enhanced error responses with detailed information
 - ✅ Type-safe request/response handling
 
-### 🔄 Phase 3: WebSocket Integration (NEXT)
-Real-time bidding functionality:
-- Socket.IO integration
-- Real-time bid updates
-- Auction status notifications
-- Connection management
-- Event broadcasting
+### ✅ Phase 3: WebSocket Integration ✅ COMPLETE
 
-### 📋 Phase 4: Queue System
-High-frequency request handling:
-- Bull queue integration
-- Bid processing queue
-- Payment processing queue
-- Notification queue
-- Queue monitoring
+**Goal**: Implement real-time bidding functionality using Socket.IO
+
+### WebSocket Gateway (`AuctionGateway`)
+- **Namespace**: `/auction`
+- **Authentication**: JWT token validation via WebSocketAuthService
+- **Room Management**: Auction-specific rooms (`auction_{auctionId}`)
+
+#### WebSocket Events
+
+**Client → Server Events:**
+- `join_auction` - Join auction room for real-time updates
+- `leave_auction` - Leave auction room
+- `place_bid` - Place bid via WebSocket
+- `get_auction_status` - Get current auction status
+
+**Server → Client Events:**
+- `connection_confirmed` - Connection establishment confirmation
+- `auction_status` - Current auction data
+- `new_bid` - New bid placed notification
+- `bid_placed` - Bid placement confirmation
+- `bid_error` - Bid placement error
+- `bid_outbid` - User's bid was outbid
+- `user_joined` - User joined auction room
+- `user_left` - User left auction room
+- `auction_updated` - General auction updates
+- `auction_ending_soon` - Auction ending warning
+- `auction_ended` - Auction completion
+- `whitelist_status_changed` - Whitelist status change
+- `error` - General error messages
+
+### Services
+
+#### WebSocketAuthService
+- JWT token extraction and validation
+- Operator ID extraction from socket handshake
+- Permission validation for auction access and bidding
+
+#### AuctionNotificationService
+- Real-time notification broadcasting
+- Integration with AuctionGateway for event distribution
+- Comprehensive logging for all notification events
+
+### Authentication Flow
+1. Client connects with JWT token in handshake auth or headers
+2. WebSocketAuthService validates token and extracts operator ID
+3. Connection established and operator mapped to socket ID
+4. Client can join auction rooms and receive real-time updates
+
+### Real-time Features
+- **Live Bidding**: Instant bid updates to all auction participants
+- **Outbid Notifications**: Direct notifications to outbid users
+- **Auction Status**: Real-time auction state changes
+- **User Presence**: Track users joining/leaving auction rooms
+- **Ending Warnings**: Automated notifications for auction endings
+
+### Technical Implementation
+- Socket.IO with NestJS WebSocket decorators
+- Room-based event broadcasting
+- JWT authentication integration
+- Comprehensive error handling and logging
+- Type-safe DTOs for all WebSocket events
+
+---
+
+## Phase 4: Queue System & High-Frequency Handling 🔄 PENDING
+
+**Goal**: Implement queue system for high-frequency bid processing
+
+### Requirements
+- Redis-based queue system using Bull
+- Rate limiting for bid submissions
+- Queue processing with priority handling
+- Bid validation and conflict resolution
+- Performance monitoring and metrics
+
+### Components to Implement
+1. **BidQueueService** - Queue management and processing
+2. **RateLimitingGuard** - Request rate limiting
+3. **BidProcessor** - Queue job processing
+4. **ConflictResolver** - Handle simultaneous bids
+5. **MetricsService** - Performance monitoring
+
+---
 
 ### 📋 Phase 5: Business Logic
 Advanced auction features:
