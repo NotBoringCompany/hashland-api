@@ -7,7 +7,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { OperatorModule } from '../operators/operator.module';
 
 // Queue configuration
-import { getBullConfig, QUEUE_NAMES } from './config/queue.config';
+import { QUEUE_NAMES } from './config/queue.config';
 
 // Schemas
 import { NFT, NFTSchema } from './schemas/nft.schema';
@@ -63,7 +63,7 @@ import { AuctionExceptionFilter } from './filters/auction-exception.filter';
     ScheduleModule.forRoot(),
 
     // Bull Queue Module
-    BullModule.forRoot(getBullConfig()),
+    // BullModule.forRoot(getBullConfig()),
     BullModule.registerQueue({
       name: QUEUE_NAMES.BID_PROCESSING,
     }),
