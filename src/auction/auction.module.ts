@@ -33,16 +33,16 @@ import {
 } from 'src/operators/schemas/hash-transaction.schema';
 
 // Services
-import { AuctionService } from './auction.service';
-import { NFTService } from './nft.service';
+import { AuctionService } from './services/auction.service';
+import { NFTService } from './services/nft.service';
 import { WebSocketAuthService } from './services/websocket-auth.service';
 import { AuctionNotificationService } from './services/auction-notification.service';
 import { BidQueueService } from './services/bid-queue.service';
 import { AuctionLifecycleService } from './services/auction-lifecycle.service';
 
 // Controllers
-import { AuctionController } from './auction.controller';
-import { NFTController } from './nft.controller';
+import { AuctionController } from './controllers/auction.controller';
+import { NFTController } from './controllers/nft.controller';
 import { QueueController } from './controllers/queue.controller';
 import { LifecycleController } from './controllers/lifecycle.controller';
 

@@ -11,24 +11,24 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 
 // Schemas
-import { Auction, AuctionStatus } from './schemas/auction.schema';
+import { Auction, AuctionStatus } from '../schemas/auction.schema';
 import {
   AuctionWhitelist,
   WhitelistStatus,
-} from './schemas/auction-whitelist.schema';
-import { Bid, BidStatus, BidType } from './schemas/bid.schema';
+} from '../schemas/auction-whitelist.schema';
+import { Bid, BidStatus, BidType } from '../schemas/bid.schema';
 import {
   AuctionHistory,
   AuctionAction,
-} from './schemas/auction-history.schema';
-import { NFT, NFTStatus } from './schemas/nft.schema';
+} from '../schemas/auction-history.schema';
+import { NFT, NFTStatus } from '../schemas/nft.schema';
 import { HashTransactionCategory } from 'src/operators/schemas/hash-transaction.schema';
 
 // External services
 import { OperatorService } from 'src/operators/operator.service';
 
 // Queue service (forward reference to avoid circular dependency)
-import type { BidQueueService } from './services/bid-queue.service';
+import type { BidQueueService } from '../services/bid-queue.service';
 
 /**
  * Service for managing auctions in the auction system

@@ -23,15 +23,15 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { Types } from 'mongoose';
-import { NFTService } from './nft.service';
-import { NFT, NFTStatus } from './schemas/nft.schema';
+import { NFTService } from '../services/nft.service';
+import { NFT, NFTStatus } from '../schemas/nft.schema';
 import {
   CreateNFTDto,
   UpdateNFTDto,
   UpdateNFTStatusDto,
   PaginatedNFTResponseDto,
   ApiErrorResponseDto,
-} from './dto';
+} from '../dto';
 
 /**
  * Controller for NFT management in the auction system

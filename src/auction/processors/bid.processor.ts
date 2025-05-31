@@ -4,7 +4,7 @@ import { Job } from 'bull';
 import { Types } from 'mongoose';
 import { BidQueueJobDto, QueueJobResultDto } from '../dto/queue.dto';
 import { QUEUE_NAMES, JOB_TYPES } from '../config/queue.config';
-import { AuctionService } from '../auction.service';
+import { AuctionService } from '../services/auction.service';
 import { AuctionNotificationService } from '../services/auction-notification.service';
 import { WebSocketAuthService } from '../services/websocket-auth.service';
 

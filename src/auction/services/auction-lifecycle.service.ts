@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { AuctionService } from '../auction.service';
+import { AuctionService } from './auction.service';
 import { AuctionNotificationService } from './auction-notification.service';
 import { Auction, AuctionStatus } from '../schemas/auction.schema';
 import { NFT, NFTStatus } from '../schemas/nft.schema';

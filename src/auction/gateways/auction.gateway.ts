@@ -11,7 +11,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Logger, UsePipes, ValidationPipe } from '@nestjs/common';
 import { Types } from 'mongoose';
-import { AuctionService } from '../auction.service';
+import { AuctionService } from '../services/auction.service';
 import { WebSocketAuthService } from '../services/websocket-auth.service';
 import {
   PlaceBidDto,

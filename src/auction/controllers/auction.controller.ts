@@ -21,12 +21,12 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { Types } from 'mongoose';
-import { AuctionService } from './auction.service';
-import { Auction, AuctionStatus } from './schemas/auction.schema';
-import { AuctionWhitelist } from './schemas/auction-whitelist.schema';
-import { Bid } from './schemas/bid.schema';
-import { AuctionHistory } from './schemas/auction-history.schema';
-import { CreateAuctionDto, PlaceBidDto, JoinWhitelistDto } from './dto';
+import { AuctionService } from '../services/auction.service';
+import { Auction, AuctionStatus } from '../schemas/auction.schema';
+import { AuctionWhitelist } from '../schemas/auction-whitelist.schema';
+import { Bid } from '../schemas/bid.schema';
+import { AuctionHistory } from '../schemas/auction-history.schema';
+import { CreateAuctionDto, PlaceBidDto, JoinWhitelistDto } from '../dto';
 
 /**
  * Controller for auction management in the auction system

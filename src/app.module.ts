@@ -20,6 +20,7 @@ import { TaskModule } from './tasks/task.module';
 import { AdminModule } from './admin/admin.module';
 import { MixpanelModule } from './mixpanel/mixpanel.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { AuctionModule } from './auction/auction.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { TelegramModule } from './telegram/telegram.module';
     AdminModule,
     MixpanelModule,
     TelegramModule,
+    AuctionModule,
   ],
   controllers: [AppController],
   providers: [AppService],
