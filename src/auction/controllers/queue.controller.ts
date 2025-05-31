@@ -12,7 +12,7 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
+  ApiResponse as SwaggerApiResponse,
   ApiParam,
   ApiQuery,
   ApiBearerAuth,
@@ -20,6 +20,7 @@ import {
 import { BidQueueService } from '../services/bid-queue.service';
 import { QueueMetricsDto } from '../dto/queue.dto';
 import { JwtAuthGuard } from '../../auth/jwt/jwt-auth.guard';
+import { ApiResponse } from '../../common/dto/response.dto';
 
 /**
  * Controller for queue monitoring and management
@@ -39,13 +40,18 @@ export class QueueController {
     summary: 'Get queue metrics',
     description: 'Retrieve current queue performance metrics and statistics',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Queue metrics retrieved successfully',
-    type: QueueMetricsDto,
+    type: ApiResponse.withType(QueueMetricsDto),
   })
-  async getMetrics(): Promise<QueueMetricsDto> {
-    return this.queueService.getQueueMetrics();
+  async getMetrics(): Promise<ApiResponse<QueueMetricsDto>> {
+    const metrics = await this.queueService.getQueueMetrics();
+    return new ApiResponse(
+      HttpStatus.OK,
+      'Queue metrics retrieved successfully',
+      metrics,
+    );
   }
 
   /**
@@ -56,24 +62,24 @@ export class QueueController {
     summary: 'Get queue health status',
     description: 'Check queue health and identify potential issues',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Queue health status retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        isHealthy: { type: 'boolean' },
-        metrics: { $ref: '#/components/schemas/QueueMetricsDto' },
-        issues: { type: 'array', items: { type: 'string' } },
-      },
-    },
+    type: ApiResponse,
   })
-  async getHealth(): Promise<{
-    isHealthy: boolean;
-    metrics: QueueMetricsDto;
-    issues: string[];
-  }> {
-    return this.queueService.getQueueHealth();
+  async getHealth(): Promise<
+    ApiResponse<{
+      isHealthy: boolean;
+      metrics: QueueMetricsDto;
+      issues: string[];
+    }>
+  > {
+    const data = await this.queueService.getQueueHealth();
+    return new ApiResponse(
+      HttpStatus.OK,
+      'Queue health status retrieved successfully',
+      data,
+    );
   }
 
   /**
@@ -89,35 +95,26 @@ export class QueueController {
     description: 'The ID of the job to retrieve',
     example: '12345',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Job status retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        data: { type: 'object' },
-        progress: { type: 'number' },
-        state: { type: 'string' },
-        createdAt: { type: 'string', format: 'date-time' },
-        processedAt: { type: 'string', format: 'date-time', nullable: true },
-        finishedAt: { type: 'string', format: 'date-time', nullable: true },
-        failedReason: { type: 'string', nullable: true },
-        attemptsMade: { type: 'number' },
-        opts: { type: 'object' },
-      },
-    },
+    type: ApiResponse,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Job not found',
+    type: ApiResponse,
   })
-  async getJobStatus(@Param('jobId') jobId: string): Promise<any> {
+  async getJobStatus(@Param('jobId') jobId: string): Promise<ApiResponse<any>> {
     const status = await this.queueService.getJobStatus(jobId);
     if (!status) {
       throw new Error('Job not found');
     }
-    return status;
+    return new ApiResponse(
+      HttpStatus.OK,
+      'Job status retrieved successfully',
+      status,
+    );
   }
 
   /**
@@ -133,31 +130,29 @@ export class QueueController {
     description: 'The ID of the job to retry',
     example: '12345',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Job retried successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        jobId: { type: 'string' },
-      },
-    },
+    type: ApiResponse,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Job not found',
+    type: ApiResponse,
   })
   @HttpCode(HttpStatus.OK)
-  async retryJob(@Param('jobId') jobId: string): Promise<{
-    message: string;
-    jobId: string;
-  }> {
+  async retryJob(@Param('jobId') jobId: string): Promise<
+    ApiResponse<{
+      message: string;
+      jobId: string;
+    }>
+  > {
     await this.queueService.retryJob(jobId);
-    return {
+    const data = {
       message: 'Job retried successfully',
       jobId,
     };
+    return new ApiResponse(HttpStatus.OK, 'Job retried successfully', data);
   }
 
   /**
@@ -173,30 +168,28 @@ export class QueueController {
     description: 'The ID of the job to remove',
     example: '12345',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Job removed successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        jobId: { type: 'string' },
-      },
-    },
+    type: ApiResponse,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Job not found',
+    type: ApiResponse,
   })
-  async removeJob(@Param('jobId') jobId: string): Promise<{
-    message: string;
-    jobId: string;
-  }> {
+  async removeJob(@Param('jobId') jobId: string): Promise<
+    ApiResponse<{
+      message: string;
+      jobId: string;
+    }>
+  > {
     await this.queueService.removeJob(jobId);
-    return {
+    const data = {
       message: 'Job removed successfully',
       jobId,
     };
+    return new ApiResponse(HttpStatus.OK, 'Job removed successfully', data);
   }
 
   /**
@@ -214,28 +207,25 @@ export class QueueController {
     required: false,
     example: 86400000,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Jobs cleaned up successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        olderThan: { type: 'number' },
-      },
-    },
+    type: ApiResponse,
   })
   @HttpCode(HttpStatus.OK)
-  async cleanupJobs(@Query('olderThan') olderThan?: number): Promise<{
-    message: string;
-    olderThan: number;
-  }> {
+  async cleanupJobs(@Query('olderThan') olderThan?: number): Promise<
+    ApiResponse<{
+      message: string;
+      olderThan: number;
+    }>
+  > {
     const cleanupTime = olderThan || 24 * 60 * 60 * 1000; // Default 24 hours
     await this.queueService.cleanupJobs(cleanupTime);
-    return {
+    const data = {
       message: 'Jobs cleaned up successfully',
       olderThan: cleanupTime,
     };
+    return new ApiResponse(HttpStatus.OK, 'Jobs cleaned up successfully', data);
   }
 
   /**
@@ -246,27 +236,24 @@ export class QueueController {
     summary: 'Pause queue',
     description: 'Pause processing of new jobs in the queue',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Queue paused successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        status: { type: 'string' },
-      },
-    },
+    type: ApiResponse,
   })
   @HttpCode(HttpStatus.OK)
-  async pauseQueue(): Promise<{
-    message: string;
-    status: string;
-  }> {
+  async pauseQueue(): Promise<
+    ApiResponse<{
+      message: string;
+      status: string;
+    }>
+  > {
     await this.queueService.pauseQueue();
-    return {
+    const data = {
       message: 'Queue paused successfully',
       status: 'paused',
     };
+    return new ApiResponse(HttpStatus.OK, 'Queue paused successfully', data);
   }
 
   /**
@@ -277,26 +264,23 @@ export class QueueController {
     summary: 'Resume queue',
     description: 'Resume processing of jobs in the queue',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Queue resumed successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        status: { type: 'string' },
-      },
-    },
+    type: ApiResponse,
   })
   @HttpCode(HttpStatus.OK)
-  async resumeQueue(): Promise<{
-    message: string;
-    status: string;
-  }> {
+  async resumeQueue(): Promise<
+    ApiResponse<{
+      message: string;
+      status: string;
+    }>
+  > {
     await this.queueService.resumeQueue();
-    return {
+    const data = {
       message: 'Queue resumed successfully',
       status: 'active',
     };
+    return new ApiResponse(HttpStatus.OK, 'Queue resumed successfully', data);
   }
 }

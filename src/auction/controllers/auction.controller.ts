@@ -15,7 +15,7 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
+  ApiResponse as SwaggerApiResponse,
   ApiQuery,
   ApiParam,
   ApiBody,
@@ -27,6 +27,8 @@ import { AuctionWhitelist } from '../schemas/auction-whitelist.schema';
 import { Bid } from '../schemas/bid.schema';
 import { AuctionHistory } from '../schemas/auction-history.schema';
 import { CreateAuctionDto, PlaceBidDto, JoinWhitelistDto } from '../dto';
+import { ApiResponse } from '../../common/dto/response.dto';
+import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 
 /**
  * Controller for auction management in the auction system
@@ -44,17 +46,25 @@ export class AuctionController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new auction' })
   @ApiBody({ type: CreateAuctionDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 201,
     description: 'Auction created successfully',
-    type: Auction,
+    type: ApiResponse.withType(Auction),
   })
-  @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
-  @ApiResponse({ status: 404, description: 'NFT not found' })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Bad request - validation failed',
+    type: ApiResponse,
+  })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'NFT not found',
+    type: ApiResponse,
+  })
   async createAuction(
     @Body() createAuctionDto: CreateAuctionDto,
-  ): Promise<Auction> {
-    return this.auctionService.createAuction({
+  ): Promise<ApiResponse<Auction>> {
+    const auction = await this.auctionService.createAuction({
       nftId: new Types.ObjectId(createAuctionDto.nftId),
       title: createAuctionDto.title,
       description: createAuctionDto.description,
@@ -73,6 +83,12 @@ export class AuctionController {
         buyNowPrice: createAuctionDto.auctionConfig.buyNowPrice,
       },
     });
+
+    return new ApiResponse(
+      HttpStatus.CREATED,
+      'Auction created successfully',
+      auction,
+    );
   }
 
   /**
@@ -104,19 +120,34 @@ export class AuctionController {
     type: Boolean,
     description: 'Populate NFT data',
   })
-  @ApiResponse({ status: 200, description: 'Auctions retrieved successfully' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Auctions retrieved successfully',
+    type: PaginatedResponse.withType(Auction),
+  })
   async getAuctions(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('status') status?: AuctionStatus,
     @Query('populateNFT', new DefaultValuePipe(true)) populateNFT?: boolean,
-  ): Promise<{
-    auctions: Auction[];
-    total: number;
-    page: number;
-    totalPages: number;
-  }> {
-    return this.auctionService.getAuctions(page, limit, status, populateNFT);
+  ): Promise<PaginatedResponse<Auction>> {
+    const result = await this.auctionService.getAuctions(
+      page,
+      limit,
+      status,
+      populateNFT,
+    );
+
+    return new PaginatedResponse(
+      HttpStatus.OK,
+      'Auctions retrieved successfully',
+      {
+        items: result.auctions,
+        page: result.page,
+        limit,
+        total: result.total,
+      },
+    );
   }
 
   /**
@@ -131,19 +162,29 @@ export class AuctionController {
     type: Boolean,
     description: 'Populate NFT data',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Auction retrieved successfully',
-    type: Auction,
+    type: ApiResponse.withType(Auction),
   })
-  @ApiResponse({ status: 404, description: 'Auction not found' })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Auction not found',
+    type: ApiResponse,
+  })
   async getAuctionById(
     @Param('id') id: string,
     @Query('populateNFT', new DefaultValuePipe(true)) populateNFT?: boolean,
-  ): Promise<Auction> {
-    return this.auctionService.getAuctionById(
+  ): Promise<ApiResponse<Auction>> {
+    const auction = await this.auctionService.getAuctionById(
       new Types.ObjectId(id),
       populateNFT,
+    );
+
+    return new ApiResponse(
+      HttpStatus.OK,
+      'Auction retrieved successfully',
+      auction,
     );
   }
 
@@ -155,20 +196,34 @@ export class AuctionController {
   @ApiOperation({ summary: 'Join auction whitelist' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
   @ApiBody({ type: JoinWhitelistDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 201,
     description: 'Successfully joined whitelist',
-    type: AuctionWhitelist,
+    type: ApiResponse.withType(AuctionWhitelist),
   })
-  @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
-  @ApiResponse({ status: 404, description: 'Auction not found' })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Bad request - validation failed',
+    type: ApiResponse,
+  })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Auction not found',
+    type: ApiResponse,
+  })
   async joinWhitelist(
     @Param('id') id: string,
     @Body() joinWhitelistDto: JoinWhitelistDto,
-  ): Promise<AuctionWhitelist> {
-    return this.auctionService.joinWhitelist(
+  ): Promise<ApiResponse<AuctionWhitelist>> {
+    const whitelist = await this.auctionService.joinWhitelist(
       new Types.ObjectId(id),
       new Types.ObjectId(joinWhitelistDto.operatorId),
+    );
+
+    return new ApiResponse(
+      HttpStatus.CREATED,
+      'Successfully joined whitelist',
+      whitelist,
     );
   }
 
@@ -180,24 +235,34 @@ export class AuctionController {
   @ApiOperation({ summary: 'Place a bid on an auction' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
   @ApiBody({ type: PlaceBidDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 201,
     description: 'Bid placed successfully',
-    type: Bid,
+    type: ApiResponse.withType(Bid),
   })
-  @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
-  @ApiResponse({ status: 404, description: 'Auction not found' })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Bad request - validation failed',
+    type: ApiResponse,
+  })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Auction not found',
+    type: ApiResponse,
+  })
   async placeBid(
     @Param('id') id: string,
     @Body() placeBidDto: PlaceBidDto,
-  ): Promise<Bid> {
-    return this.auctionService.placeBid(
+  ): Promise<ApiResponse<Bid>> {
+    const bid = await this.auctionService.placeBid(
       new Types.ObjectId(id),
       new Types.ObjectId(placeBidDto.bidderId),
       placeBidDto.amount,
       placeBidDto.bidType,
       placeBidDto.metadata,
     );
+
+    return new ApiResponse(HttpStatus.CREATED, 'Bid placed successfully', bid);
   }
 
   /**
@@ -206,14 +271,25 @@ export class AuctionController {
   @Post(':id/end')
   @ApiOperation({ summary: 'End an auction' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Auction ended successfully',
-    type: Auction,
+    type: ApiResponse.withType(Auction),
   })
-  @ApiResponse({ status: 404, description: 'Auction not found' })
-  async endAuction(@Param('id') id: string): Promise<Auction> {
-    return this.auctionService.endAuction(new Types.ObjectId(id));
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Auction not found',
+    type: ApiResponse,
+  })
+  async endAuction(@Param('id') id: string): Promise<ApiResponse<Auction>> {
+    const auction = await this.auctionService.endAuction(
+      new Types.ObjectId(id),
+    );
+    return new ApiResponse(
+      HttpStatus.OK,
+      'Auction ended successfully',
+      auction,
+    );
   }
 
   /**
@@ -234,24 +310,31 @@ export class AuctionController {
     type: Number,
     description: 'Items per page',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Auction history retrieved successfully',
+    type: PaginatedResponse.withType(AuctionHistory),
   })
   async getAuctionHistory(
     @Param('id') id: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
-  ): Promise<{
-    history: AuctionHistory[];
-    total: number;
-    page: number;
-    totalPages: number;
-  }> {
-    return this.auctionService.getAuctionHistory(
+  ): Promise<PaginatedResponse<AuctionHistory>> {
+    const result = await this.auctionService.getAuctionHistory(
       new Types.ObjectId(id),
       page,
       limit,
+    );
+
+    return new PaginatedResponse(
+      HttpStatus.OK,
+      'Auction history retrieved successfully',
+      {
+        items: result.history,
+        page: result.page,
+        limit,
+        total: result.total,
+      },
     );
   }
 
@@ -266,30 +349,32 @@ export class AuctionController {
   })
   @ApiParam({ name: 'id', description: 'Auction ID' })
   @ApiBody({ type: PlaceBidDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 201,
     description: 'Bid queued successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        jobId: { type: 'string' },
-        message: { type: 'string' },
-        queued: { type: 'boolean' },
-        timestamp: { type: 'string' },
-      },
-    },
+    type: ApiResponse,
   })
-  @ApiResponse({ status: 400, description: 'Invalid bid data' })
-  @ApiResponse({ status: 404, description: 'Auction not found' })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Invalid bid data',
+    type: ApiResponse,
+  })
+  @SwaggerApiResponse({
+    status: 404,
+    description: 'Auction not found',
+    type: ApiResponse,
+  })
   async placeBidQueued(
     @Param('id') id: string,
     @Body() placeBidDto: PlaceBidDto,
-  ): Promise<{
-    jobId: string;
-    message: string;
-    queued: boolean;
-    timestamp: string;
-  }> {
+  ): Promise<
+    ApiResponse<{
+      jobId: string;
+      message: string;
+      queued: boolean;
+      timestamp: string;
+    }>
+  > {
     const result = await this.auctionService.placeBidQueued(
       new Types.ObjectId(id),
       new Types.ObjectId(placeBidDto.bidderId),
@@ -301,11 +386,17 @@ export class AuctionController {
       },
     );
 
-    return {
+    const responseData = {
       ...result,
       queued: true,
       timestamp: new Date().toISOString(),
     };
+
+    return new ApiResponse(
+      HttpStatus.CREATED,
+      'Bid queued successfully',
+      responseData,
+    );
   }
 
   /**
@@ -318,23 +409,18 @@ export class AuctionController {
       'Check if auction is in high-frequency mode and should use queue processing',
   })
   @ApiParam({ name: 'id', description: 'Auction ID' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'Queue status retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        shouldUseQueue: { type: 'boolean' },
-        reason: { type: 'string' },
-        timestamp: { type: 'string' },
-      },
-    },
+    type: ApiResponse,
   })
-  async getQueueStatus(@Param('id') id: string): Promise<{
-    shouldUseQueue: boolean;
-    reason: string;
-    timestamp: string;
-  }> {
+  async getQueueStatus(@Param('id') id: string): Promise<
+    ApiResponse<{
+      shouldUseQueue: boolean;
+      reason: string;
+      timestamp: string;
+    }>
+  > {
     const shouldUseQueue = await this.auctionService.shouldUseQueue(
       new Types.ObjectId(id),
     );
@@ -344,10 +430,16 @@ export class AuctionController {
       reason = 'High activity or ending soon - queue processing recommended';
     }
 
-    return {
+    const responseData = {
       shouldUseQueue,
       reason,
       timestamp: new Date().toISOString(),
     };
+
+    return new ApiResponse(
+      HttpStatus.OK,
+      'Queue status retrieved successfully',
+      responseData,
+    );
   }
 }

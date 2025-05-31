@@ -10,13 +10,14 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
+  ApiResponse as SwaggerApiResponse,
   ApiParam,
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuctionLifecycleService } from '../services/auction-lifecycle.service';
 import { AuctionStatus } from '../schemas/auction.schema';
 import { JwtAuthGuard } from '../../auth/jwt/jwt-auth.guard';
+import { ApiResponse } from '../../common/dto/response.dto';
 
 /**
  * Controller for auction lifecycle management
@@ -42,57 +43,37 @@ export class LifecycleController {
     description: 'Auction ID',
     example: '507f1f77bcf86cd799439012',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Lifecycle status retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        currentStatus: {
-          type: 'string',
-          enum: Object.values(AuctionStatus),
-        },
-        nextTransition: {
-          type: 'object',
-          properties: {
-            status: { type: 'string' },
-            scheduledTime: { type: 'string', format: 'date-time' },
-            timeUntil: { type: 'number' },
-          },
-          nullable: true,
-        },
-        timeline: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              status: { type: 'string' },
-              time: { type: 'string', format: 'date-time' },
-              completed: { type: 'boolean' },
-            },
-          },
-        },
-      },
-    },
+    type: ApiResponse,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Auction not found',
+    type: ApiResponse,
   })
-  async getLifecycleStatus(@Param('id') id: string): Promise<{
-    currentStatus: AuctionStatus;
-    nextTransition?: {
-      status: AuctionStatus;
-      scheduledTime: Date;
-      timeUntil: number;
-    };
-    timeline: Array<{
-      status: AuctionStatus;
-      time: Date;
-      completed: boolean;
-    }>;
-  }> {
-    return this.lifecycleService.getLifecycleStatus(id);
+  async getLifecycleStatus(@Param('id') id: string): Promise<
+    ApiResponse<{
+      currentStatus: AuctionStatus;
+      nextTransition?: {
+        status: AuctionStatus;
+        scheduledTime: Date;
+        timeUntil: number;
+      };
+      timeline: Array<{
+        status: AuctionStatus;
+        time: Date;
+        completed: boolean;
+      }>;
+    }>
+  > {
+    const data = await this.lifecycleService.getLifecycleStatus(id);
+    return new ApiResponse(
+      HttpStatus.OK,
+      'Lifecycle status retrieved successfully',
+      data,
+    );
   }
 
   /**
@@ -109,43 +90,41 @@ export class LifecycleController {
     description: 'Auction ID',
     example: '507f1f77bcf86cd799439012',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'State transition triggered successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        message: { type: 'string' },
-        newStatus: {
-          type: 'string',
-          enum: Object.values(AuctionStatus),
-          nullable: true,
-        },
-        timestamp: { type: 'string', format: 'date-time' },
-      },
-    },
+    type: ApiResponse,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Auction not found',
+    type: ApiResponse,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.BAD_REQUEST,
     description: 'No transition needed or invalid state',
+    type: ApiResponse,
   })
   @HttpCode(HttpStatus.OK)
-  async triggerStateTransition(@Param('id') id: string): Promise<{
-    success: boolean;
-    message: string;
-    newStatus?: AuctionStatus;
-    timestamp: string;
-  }> {
+  async triggerStateTransition(@Param('id') id: string): Promise<
+    ApiResponse<{
+      success: boolean;
+      message: string;
+      newStatus?: AuctionStatus;
+      timestamp: string;
+    }>
+  > {
     const result = await this.lifecycleService.triggerStateTransition(id);
-    return {
+    const data = {
       ...result,
       timestamp: new Date().toISOString(),
     };
+
+    return new ApiResponse(
+      HttpStatus.OK,
+      'State transition triggered successfully',
+      data,
+    );
   }
 
   /**
@@ -157,32 +136,25 @@ export class LifecycleController {
     description:
       'Get information about the automated lifecycle processing system',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: HttpStatus.OK,
     description: 'Lifecycle processing status retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        isRunning: { type: 'boolean' },
-        lastProcessed: { type: 'string', format: 'date-time' },
-        nextScheduled: { type: 'string', format: 'date-time' },
-        processingInterval: { type: 'string' },
-        message: { type: 'string' },
-      },
-    },
+    type: ApiResponse,
   })
-  async getLifecycleProcessingStatus(): Promise<{
-    isRunning: boolean;
-    lastProcessed: string;
-    nextScheduled: string;
-    processingInterval: string;
-    message: string;
-  }> {
+  async getLifecycleProcessingStatus(): Promise<
+    ApiResponse<{
+      isRunning: boolean;
+      lastProcessed: string;
+      nextScheduled: string;
+      processingInterval: string;
+      message: string;
+    }>
+  > {
     const now = new Date();
     const nextMinute = new Date(now.getTime() + 60000);
     nextMinute.setSeconds(0, 0);
 
-    return {
+    const data = {
       isRunning: true,
       lastProcessed: new Date(
         now.getTime() - now.getSeconds() * 1000,
@@ -191,5 +163,11 @@ export class LifecycleController {
       processingInterval: 'Every minute',
       message: 'Lifecycle processing is active and running automatically',
     };
+
+    return new ApiResponse(
+      HttpStatus.OK,
+      'Lifecycle processing status retrieved successfully',
+      data,
+    );
   }
 }

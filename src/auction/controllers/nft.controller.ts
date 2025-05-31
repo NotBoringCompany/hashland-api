@@ -17,7 +17,7 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
+  ApiResponse as SwaggerApiResponse,
   ApiQuery,
   ApiParam,
   ApiBody,
@@ -25,13 +25,9 @@ import {
 import { Types } from 'mongoose';
 import { NFTService } from '../services/nft.service';
 import { NFT, NFTStatus } from '../schemas/nft.schema';
-import {
-  CreateNFTDto,
-  UpdateNFTDto,
-  UpdateNFTStatusDto,
-  PaginatedNFTResponseDto,
-  ApiErrorResponseDto,
-} from '../dto';
+import { CreateNFTDto, UpdateNFTDto, UpdateNFTStatusDto } from '../dto';
+import { ApiResponse } from '../../common/dto/response.dto';
+import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 
 /**
  * Controller for NFT management in the auction system
@@ -49,18 +45,21 @@ export class NFTController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new NFT' })
   @ApiBody({ type: CreateNFTDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 201,
     description: 'NFT created successfully',
-    type: NFT,
+    type: ApiResponse.withType(NFT),
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 400,
     description: 'Bad request - validation failed',
-    type: ApiErrorResponseDto,
+    type: ApiResponse,
   })
-  async createNFT(@Body() createNFTDto: CreateNFTDto): Promise<NFT> {
-    return this.nftService.createNFT(createNFTDto);
+  async createNFT(
+    @Body() createNFTDto: CreateNFTDto,
+  ): Promise<ApiResponse<NFT>> {
+    const nft = await this.nftService.createNFT(createNFTDto);
+    return new ApiResponse(HttpStatus.CREATED, 'NFT created successfully', nft);
   }
 
   /**
@@ -98,10 +97,10 @@ export class NFTController {
     type: String,
     description: 'Filter by collection',
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'NFTs retrieved successfully',
-    type: PaginatedNFTResponseDto,
+    type: PaginatedResponse.withType(NFT),
   })
   async getNFTs(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -109,8 +108,21 @@ export class NFTController {
     @Query('status') status?: NFTStatus,
     @Query('rarity') rarity?: string,
     @Query('collection') collection?: string,
-  ): Promise<PaginatedNFTResponseDto> {
-    return this.nftService.getNFTs(page, limit, status, rarity, collection);
+  ): Promise<PaginatedResponse<NFT>> {
+    const result = await this.nftService.getNFTs(
+      page,
+      limit,
+      status,
+      rarity,
+      collection,
+    );
+
+    return new PaginatedResponse(HttpStatus.OK, 'NFTs retrieved successfully', {
+      items: result.nfts,
+      page: result.page,
+      limit,
+      total: result.total,
+    });
   }
 
   /**
@@ -119,18 +131,19 @@ export class NFTController {
   @Get(':id')
   @ApiOperation({ summary: 'Get NFT by ID' })
   @ApiParam({ name: 'id', description: 'NFT ID' })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'NFT retrieved successfully',
-    type: NFT,
+    type: ApiResponse.withType(NFT),
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 404,
     description: 'NFT not found',
-    type: ApiErrorResponseDto,
+    type: ApiResponse,
   })
-  async getNFTById(@Param('id') id: string): Promise<NFT> {
-    return this.nftService.getNFTById(new Types.ObjectId(id));
+  async getNFTById(@Param('id') id: string): Promise<ApiResponse<NFT>> {
+    const nft = await this.nftService.getNFTById(new Types.ObjectId(id));
+    return new ApiResponse(HttpStatus.OK, 'NFT retrieved successfully', nft);
   }
 
   /**
@@ -140,26 +153,30 @@ export class NFTController {
   @ApiOperation({ summary: 'Update NFT' })
   @ApiParam({ name: 'id', description: 'NFT ID' })
   @ApiBody({ type: UpdateNFTDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'NFT updated successfully',
-    type: NFT,
+    type: ApiResponse.withType(NFT),
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 404,
     description: 'NFT not found',
-    type: ApiErrorResponseDto,
+    type: ApiResponse,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 400,
     description: 'Bad request - validation failed',
-    type: ApiErrorResponseDto,
+    type: ApiResponse,
   })
   async updateNFT(
     @Param('id') id: string,
     @Body() updateNFTDto: UpdateNFTDto,
-  ): Promise<NFT> {
-    return this.nftService.updateNFT(new Types.ObjectId(id), updateNFTDto);
+  ): Promise<ApiResponse<NFT>> {
+    const nft = await this.nftService.updateNFT(
+      new Types.ObjectId(id),
+      updateNFTDto,
+    );
+    return new ApiResponse(HttpStatus.OK, 'NFT updated successfully', nft);
   }
 
   /**
@@ -169,14 +186,23 @@ export class NFTController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete NFT' })
   @ApiParam({ name: 'id', description: 'NFT ID' })
-  @ApiResponse({ status: 204, description: 'NFT deleted successfully' })
-  @ApiResponse({
+  @SwaggerApiResponse({
+    status: 204,
+    description: 'NFT deleted successfully',
+    type: ApiResponse,
+  })
+  @SwaggerApiResponse({
     status: 404,
     description: 'NFT not found',
-    type: ApiErrorResponseDto,
+    type: ApiResponse,
   })
-  async deleteNFT(@Param('id') id: string): Promise<void> {
-    return this.nftService.deleteNFT(new Types.ObjectId(id));
+  async deleteNFT(@Param('id') id: string): Promise<ApiResponse<null>> {
+    await this.nftService.deleteNFT(new Types.ObjectId(id));
+    return new ApiResponse(
+      HttpStatus.NO_CONTENT,
+      'NFT deleted successfully',
+      null,
+    );
   }
 
   /**
@@ -186,28 +212,33 @@ export class NFTController {
   @ApiOperation({ summary: 'Update NFT status' })
   @ApiParam({ name: 'id', description: 'NFT ID' })
   @ApiBody({ type: UpdateNFTStatusDto })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 200,
     description: 'NFT status updated successfully',
-    type: NFT,
+    type: ApiResponse.withType(NFT),
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 404,
     description: 'NFT not found',
-    type: ApiErrorResponseDto,
+    type: ApiResponse,
   })
-  @ApiResponse({
+  @SwaggerApiResponse({
     status: 400,
     description: 'Bad request - validation failed',
-    type: ApiErrorResponseDto,
+    type: ApiResponse,
   })
   async updateNFTStatus(
     @Param('id') id: string,
     @Body() statusDto: UpdateNFTStatusDto,
-  ): Promise<NFT> {
-    return this.nftService.updateNFTStatus(
+  ): Promise<ApiResponse<NFT>> {
+    const nft = await this.nftService.updateNFTStatus(
       new Types.ObjectId(id),
       statusDto.status,
+    );
+    return new ApiResponse(
+      HttpStatus.OK,
+      'NFT status updated successfully',
+      nft,
     );
   }
 }
