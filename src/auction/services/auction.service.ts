@@ -4,8 +4,6 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Logger,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -27,8 +25,8 @@ import { HashTransactionCategory } from 'src/operators/schemas/hash-transaction.
 // External services
 import { OperatorService } from 'src/operators/operator.service';
 
-// Queue service (forward reference to avoid circular dependency)
-import type { BidQueueService } from '../services/bid-queue.service';
+// Queue service
+import { BidQueueService } from '../services/bid-queue.service';
 
 /**
  * Service for managing auctions in the auction system
@@ -46,8 +44,7 @@ export class AuctionService {
     private historyModel: Model<AuctionHistory>,
     @InjectModel(NFT.name) private nftModel: Model<NFT>,
     private operatorService: OperatorService,
-    @Inject(forwardRef(() => 'BidQueueService'))
-    private bidQueueService?: BidQueueService,
+    private bidQueueService: BidQueueService,
   ) {}
 
   /**
@@ -607,22 +604,6 @@ export class AuctionService {
     metadata?: any,
   ): Promise<{ jobId: string; message: string }> {
     try {
-      if (!this.bidQueueService) {
-        // Fallback to direct bid placement if queue service not available
-        this.logger.warn('Queue service not available, placing bid directly');
-        const bid = await this.placeBid(
-          auctionId,
-          bidderId,
-          amount,
-          bidType,
-          metadata,
-        );
-        return {
-          jobId: 'direct',
-          message: `Bid placed directly: ${bid._id}`,
-        };
-      }
-
       // Add bid to queue for processing
       const job = await this.bidQueueService.addBidToQueue(
         auctionId.toString(),
