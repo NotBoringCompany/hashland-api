@@ -16,6 +16,12 @@ import { Drill } from 'src/drills/schemas/drill.schema';
 import { DrillService } from 'src/drills/drill.service';
 import { RedisService } from 'src/common/redis.service';
 import { OperatorWallet } from './schemas/operator-wallet.schema';
+import {
+  HashTransaction,
+  HashTransactionType,
+  HashTransactionCategory,
+  HashTransactionStatus,
+} from './schemas/hash-transaction.schema';
 import { PoolOperator } from 'src/pools/schemas/pool-operator.schema';
 import { ApiResponse } from 'src/common/dto/response.dto';
 import { HASHReserve } from 'src/hash-reserve/schemas/hash-reserve.schema';
@@ -31,6 +37,8 @@ export class OperatorService {
     @InjectModel(Operator.name) private operatorModel: Model<Operator>,
     @InjectModel(OperatorWallet.name)
     private operatorWalletModel: Model<OperatorWallet>,
+    @InjectModel(HashTransaction.name)
+    private hashTransactionModel: Model<HashTransaction>,
     @InjectModel(Drill.name) private drillModel: Model<Drill>,
     @InjectModel(PoolOperator.name)
     private poolOperatorModel: Model<PoolOperator>,
@@ -1559,6 +1567,388 @@ export class OperatorService {
         error.stack,
       );
       return null;
+    }
+  }
+
+  // ===== HASH CURRENCY MANAGEMENT FUNCTIONS =====
+
+  /**
+   * Deduct HASH from operator's current balance with transaction history
+   */
+  async deductHASH(
+    operatorId: Types.ObjectId,
+    amount: number,
+    category: HashTransactionCategory,
+    description: string,
+    relatedEntityId?: Types.ObjectId,
+    relatedEntityType?: string,
+    metadata?: any,
+  ): Promise<{
+    success: boolean;
+    transaction?: HashTransaction;
+    error?: string;
+  }> {
+    if (amount <= 0) {
+      return { success: false, error: 'Amount must be greater than 0' };
+    }
+
+    try {
+      // Get current operator data
+      const operator = await this.operatorModel.findById(operatorId);
+      if (!operator) {
+        return { success: false, error: 'Operator not found' };
+      }
+
+      // Check sufficient balance
+      if (operator.currentHASH < amount) {
+        return { success: false, error: 'Insufficient HASH balance' };
+      }
+
+      const balanceBefore = operator.currentHASH;
+      const balanceAfter = balanceBefore - amount;
+
+      // Update operator balance
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        { $inc: { currentHASH: -amount } },
+      );
+
+      // Create transaction record
+      const transaction = new this.hashTransactionModel({
+        operatorId,
+        transactionType: HashTransactionType.DEBIT,
+        amount,
+        category,
+        description,
+        relatedEntityId,
+        relatedEntityType,
+        balanceBefore,
+        balanceAfter,
+        status: HashTransactionStatus.COMPLETED,
+        metadata,
+      });
+
+      await transaction.save();
+
+      this.logger.log(
+        `Deducted ${amount} HASH from operator ${operatorId}. Balance: ${balanceBefore} -> ${balanceAfter}`,
+      );
+
+      return { success: true, transaction };
+    } catch (error) {
+      this.logger.error(
+        `(deductHASH) Error deducting HASH for operator ${operatorId}: ${error.message}`,
+        error.stack,
+      );
+      return { success: false, error: 'Failed to deduct HASH' };
+    }
+  }
+
+  /**
+   * Add HASH to operator's current balance with transaction history
+   */
+  async addHASH(
+    operatorId: Types.ObjectId,
+    amount: number,
+    category: HashTransactionCategory,
+    description: string,
+    relatedEntityId?: Types.ObjectId,
+    relatedEntityType?: string,
+    metadata?: any,
+  ): Promise<{
+    success: boolean;
+    transaction?: HashTransaction;
+    error?: string;
+  }> {
+    if (amount <= 0) {
+      return { success: false, error: 'Amount must be greater than 0' };
+    }
+
+    try {
+      // Get current operator data
+      const operator = await this.operatorModel.findById(operatorId);
+      if (!operator) {
+        return { success: false, error: 'Operator not found' };
+      }
+
+      const balanceBefore = operator.currentHASH;
+      const balanceAfter = balanceBefore + amount;
+
+      // Update operator balance
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        { $inc: { currentHASH: amount } },
+      );
+
+      // Create transaction record
+      const transaction = new this.hashTransactionModel({
+        operatorId,
+        transactionType: HashTransactionType.CREDIT,
+        amount,
+        category,
+        description,
+        relatedEntityId,
+        relatedEntityType,
+        balanceBefore,
+        balanceAfter,
+        status: HashTransactionStatus.COMPLETED,
+        metadata,
+      });
+
+      await transaction.save();
+
+      this.logger.log(
+        `Added ${amount} HASH to operator ${operatorId}. Balance: ${balanceBefore} -> ${balanceAfter}`,
+      );
+
+      return { success: true, transaction };
+    } catch (error) {
+      this.logger.error(
+        `(addHASH) Error adding HASH for operator ${operatorId}: ${error.message}`,
+        error.stack,
+      );
+      return { success: false, error: 'Failed to add HASH' };
+    }
+  }
+
+  /**
+   * Hold HASH amount temporarily (move from current to hold balance)
+   */
+  async holdHASH(
+    operatorId: Types.ObjectId,
+    amount: number,
+    category: HashTransactionCategory,
+    description: string,
+    relatedEntityId?: Types.ObjectId,
+    relatedEntityType?: string,
+    metadata?: any,
+  ): Promise<{
+    success: boolean;
+    transaction?: HashTransaction;
+    error?: string;
+  }> {
+    if (amount <= 0) {
+      return { success: false, error: 'Amount must be greater than 0' };
+    }
+
+    try {
+      // Get current operator data
+      const operator = await this.operatorModel.findById(operatorId);
+      if (!operator) {
+        return { success: false, error: 'Operator not found' };
+      }
+
+      // Check sufficient balance
+      if (operator.currentHASH < amount) {
+        return { success: false, error: 'Insufficient HASH balance' };
+      }
+
+      const balanceBefore = operator.currentHASH;
+      const balanceAfter = balanceBefore - amount;
+
+      // Move from current to hold balance
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        {
+          $inc: {
+            currentHASH: -amount,
+            holdHASH: amount,
+          },
+        },
+      );
+
+      // Create transaction record
+      const transaction = new this.hashTransactionModel({
+        operatorId,
+        transactionType: HashTransactionType.DEBIT,
+        amount,
+        category,
+        description,
+        relatedEntityId,
+        relatedEntityType,
+        balanceBefore,
+        balanceAfter,
+        status: HashTransactionStatus.COMPLETED,
+        metadata,
+      });
+
+      await transaction.save();
+
+      this.logger.log(
+        `Held ${amount} HASH for operator ${operatorId}. Current balance: ${balanceBefore} -> ${balanceAfter}`,
+      );
+
+      return { success: true, transaction };
+    } catch (error) {
+      this.logger.error(
+        `(holdHASH) Error holding HASH for operator ${operatorId}: ${error.message}`,
+        error.stack,
+      );
+      return { success: false, error: 'Failed to hold HASH' };
+    }
+  }
+
+  /**
+   * Release held HASH amount (move from hold back to current balance)
+   */
+  async releaseHold(
+    operatorId: Types.ObjectId,
+    amount: number,
+    category: HashTransactionCategory,
+    description: string,
+    relatedEntityId?: Types.ObjectId,
+    relatedEntityType?: string,
+    metadata?: any,
+  ): Promise<{
+    success: boolean;
+    transaction?: HashTransaction;
+    error?: string;
+  }> {
+    if (amount <= 0) {
+      return { success: false, error: 'Amount must be greater than 0' };
+    }
+
+    try {
+      // Get current operator data
+      const operator = await this.operatorModel.findById(operatorId);
+      if (!operator) {
+        return { success: false, error: 'Operator not found' };
+      }
+
+      // Check sufficient hold balance
+      if (operator.holdHASH < amount) {
+        return { success: false, error: 'Insufficient held HASH balance' };
+      }
+
+      const balanceBefore = operator.currentHASH;
+      const balanceAfter = balanceBefore + amount;
+
+      // Move from hold back to current balance
+      await this.operatorModel.updateOne(
+        { _id: operatorId },
+        {
+          $inc: {
+            currentHASH: amount,
+            holdHASH: -amount,
+          },
+        },
+      );
+
+      // Create transaction record
+      const transaction = new this.hashTransactionModel({
+        operatorId,
+        transactionType: HashTransactionType.CREDIT,
+        amount,
+        category,
+        description,
+        relatedEntityId,
+        relatedEntityType,
+        balanceBefore,
+        balanceAfter,
+        status: HashTransactionStatus.COMPLETED,
+        metadata,
+      });
+
+      await transaction.save();
+
+      this.logger.log(
+        `Released ${amount} HASH for operator ${operatorId}. Current balance: ${balanceBefore} -> ${balanceAfter}`,
+      );
+
+      return { success: true, transaction };
+    } catch (error) {
+      this.logger.error(
+        `(releaseHold) Error releasing held HASH for operator ${operatorId}: ${error.message}`,
+        error.stack,
+      );
+      return { success: false, error: 'Failed to release held HASH' };
+    }
+  }
+
+  /**
+   * Get operator's HASH transaction history
+   */
+  async getHashTransactionHistory(
+    operatorId: Types.ObjectId,
+    limit = 50,
+    offset = 0,
+    category?: HashTransactionCategory,
+  ): Promise<{
+    transactions: HashTransaction[];
+    total: number;
+    currentBalance: number;
+    holdBalance: number;
+  }> {
+    try {
+      const filter: any = { operatorId };
+      if (category) {
+        filter.category = category;
+      }
+
+      const [transactions, total, operator] = await Promise.all([
+        this.hashTransactionModel
+          .find(filter)
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .skip(offset)
+          .exec(),
+        this.hashTransactionModel.countDocuments(filter),
+        this.operatorModel.findById(operatorId, 'currentHASH holdHASH'),
+      ]);
+
+      return {
+        transactions,
+        total,
+        currentBalance: operator?.currentHASH || 0,
+        holdBalance: operator?.holdHASH || 0,
+      };
+    } catch (error) {
+      this.logger.error(
+        `(getHashTransactionHistory) Error getting transaction history for operator ${operatorId}: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException(
+        'Failed to get transaction history',
+      );
+    }
+  }
+
+  /**
+   * Validate if operator has sufficient balance for a transaction
+   */
+  async validateSufficientBalance(
+    operatorId: Types.ObjectId,
+    amount: number,
+  ): Promise<{
+    valid: boolean;
+    currentBalance: number;
+    error?: string;
+  }> {
+    try {
+      const operator = await this.operatorModel.findById(
+        operatorId,
+        'currentHASH',
+      );
+      if (!operator) {
+        return { valid: false, currentBalance: 0, error: 'Operator not found' };
+      }
+
+      return {
+        valid: operator.currentHASH >= amount,
+        currentBalance: operator.currentHASH,
+        error:
+          operator.currentHASH < amount ? 'Insufficient balance' : undefined,
+      };
+    } catch (error) {
+      this.logger.error(
+        `(validateSufficientBalance) Error validating balance for operator ${operatorId}: ${error.message}`,
+        error.stack,
+      );
+      return {
+        valid: false,
+        currentBalance: 0,
+        error: 'Failed to validate balance',
+      };
     }
   }
 }

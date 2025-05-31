@@ -13,6 +13,10 @@ import {
   OperatorWallet,
   OperatorWalletSchema,
 } from './schemas/operator-wallet.schema';
+import {
+  HashTransaction,
+  HashTransactionSchema,
+} from './schemas/hash-transaction.schema';
 import { OperatorController } from './operator.controller';
 import {
   HASHReserve,
@@ -27,6 +31,7 @@ import { ReferralModule } from 'src/referral/referral.module';
       { name: Operator.name, schema: OperatorSchema },
       { name: Drill.name, schema: DrillSchema },
       { name: OperatorWallet.name, schema: OperatorWalletSchema },
+      { name: HashTransaction.name, schema: HashTransactionSchema },
       { name: HASHReserve.name, schema: HashReserveSchema },
     ]),
     BullModule.registerQueue({
