@@ -4,7 +4,6 @@ import {
   IsUrl,
   IsArray,
   ValidateNested,
-  IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
@@ -53,15 +52,6 @@ export class NFTMetadataDto {
   @IsString()
   @IsNotEmpty()
   rarity: string;
-
-  @ApiProperty({
-    description: 'The collection the NFT belongs to',
-    example: 'Digital Art Collection',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  collection?: string;
 }
 
 /**

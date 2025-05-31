@@ -27,7 +27,6 @@ export class NFTService {
     metadata: {
       attributes: Array<{ trait_type: string; value: string | number }>;
       rarity: string;
-      collection?: string;
     };
   }): Promise<NFT> {
     try {
@@ -79,7 +78,6 @@ export class NFTService {
     limit = 20,
     status?: NFTStatus,
     rarity?: string,
-    collection?: string,
   ): Promise<{
     nfts: NFT[];
     total: number;
@@ -94,9 +92,6 @@ export class NFTService {
       }
       if (rarity) {
         filter['metadata.rarity'] = rarity;
-      }
-      if (collection) {
-        filter['metadata.collection'] = collection;
       }
 
       const skip = (page - 1) * limit;
@@ -140,7 +135,6 @@ export class NFTService {
       metadata: {
         attributes: Array<{ trait_type: string; value: string | number }>;
         rarity: string;
-        collection?: string;
       };
       status: NFTStatus;
     }>,

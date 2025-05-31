@@ -27,7 +27,6 @@ export interface NFTAttribute {
 export interface NFTMetadata {
   attributes: NFTAttribute[];
   rarity: string;
-  collection?: string;
 }
 
 /**
@@ -94,7 +93,6 @@ export class NFT extends Document {
         { trait_type: 'Rarity', value: 'Legendary' },
       ],
       rarity: 'Legendary',
-      collection: 'Digital Art Collection',
     },
   })
   @Prop({
@@ -106,7 +104,6 @@ export class NFT extends Document {
         },
       ],
       rarity: { type: String, required: true },
-      collection: { type: String, required: false },
     },
     required: true,
   })
@@ -155,5 +152,4 @@ export const NFTSchema = SchemaFactory.createForClass(NFT);
 // Create indexes for better query performance
 NFTSchema.index({ status: 1 });
 NFTSchema.index({ 'metadata.rarity': 1 });
-NFTSchema.index({ 'metadata.collection': 1 });
 NFTSchema.index({ createdAt: -1 });

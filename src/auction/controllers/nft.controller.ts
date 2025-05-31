@@ -91,12 +91,6 @@ export class NFTController {
     type: String,
     description: 'Filter by rarity',
   })
-  @ApiQuery({
-    name: 'collection',
-    required: false,
-    type: String,
-    description: 'Filter by collection',
-  })
   @SwaggerApiResponse({
     status: 200,
     description: 'NFTs retrieved successfully',
@@ -107,15 +101,8 @@ export class NFTController {
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('status') status?: NFTStatus,
     @Query('rarity') rarity?: string,
-    @Query('collection') collection?: string,
   ): Promise<PaginatedResponse<NFT>> {
-    const result = await this.nftService.getNFTs(
-      page,
-      limit,
-      status,
-      rarity,
-      collection,
-    );
+    const result = await this.nftService.getNFTs(page, limit, status, rarity);
 
     return new PaginatedResponse(HttpStatus.OK, 'NFTs retrieved successfully', {
       items: result.nfts,
