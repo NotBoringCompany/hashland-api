@@ -66,7 +66,7 @@ export class Auction extends Document {
     description: 'The NFT being auctioned',
     example: '507f1f77bcf86cd799439012',
   })
-  @Prop({ type: Types.ObjectId, ref: 'NFTs', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: 'NFTs', required: true })
   nftId: Types.ObjectId;
 
   /**
