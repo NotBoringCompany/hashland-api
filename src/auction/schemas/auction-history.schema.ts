@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
-
+import { Auction } from './auction.schema';
+import { Operator } from 'src/operators/schemas/operator.schema';
 /**
  * Enum defining the types of auction actions
  */
@@ -32,6 +33,8 @@ export interface AuctionHistoryDetails {
   timestamps: true,
   collection: 'AuctionHistory',
   versionKey: false,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
 })
 export class AuctionHistory extends Document {
   /**
@@ -55,8 +58,21 @@ export class AuctionHistory extends Document {
     description: 'The auction this history record belongs to',
     example: '507f1f77bcf86cd799439012',
   })
-  @Prop({ type: Types.ObjectId, ref: 'Auctions', required: true, index: true })
+  @Prop({
+    type: Types.ObjectId,
+    ref: Auction.name,
+    required: true,
+    index: true,
+  })
   auctionId: Types.ObjectId;
+
+  /**
+   * The auction this history record belongs to
+   */
+  @ApiProperty({
+    description: 'The auction this history record belongs to',
+  })
+  auction: Auction;
 
   /**
    * The operator who performed the action
@@ -65,8 +81,21 @@ export class AuctionHistory extends Document {
     description: 'The operator who performed the action',
     example: '507f1f77bcf86cd799439013',
   })
-  @Prop({ type: Types.ObjectId, ref: 'Operators', required: true, index: true })
+  @Prop({
+    type: Types.ObjectId,
+    ref: Operator.name,
+    required: true,
+    index: true,
+  })
   operatorId: Types.ObjectId;
+
+  /**
+   * The operator who performed the action
+   */
+  @ApiProperty({
+    description: 'The operator who performed the action',
+  })
+  operator: Operator;
 
   /**
    * The action that was performed
@@ -136,3 +165,15 @@ AuctionHistorySchema.index({ auctionId: 1, timestamp: -1 });
 AuctionHistorySchema.index({ operatorId: 1, timestamp: -1 });
 AuctionHistorySchema.index({ action: 1, timestamp: -1 });
 AuctionHistorySchema.index({ auctionId: 1, action: 1 });
+AuctionHistorySchema.virtual('auction', {
+  ref: Auction.name,
+  localField: 'auctionId',
+  foreignField: '_id',
+  justOne: true,
+});
+AuctionHistorySchema.virtual('operator', {
+  ref: Operator.name,
+  localField: 'operatorId',
+  foreignField: '_id',
+  justOne: true,
+});

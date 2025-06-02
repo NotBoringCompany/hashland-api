@@ -233,12 +233,14 @@ export class TelegramAuthService {
         type: 'login',
       };
 
-      if (!operatorData) {
+      if (!operatorData.operator) {
         operatorData = await this.operatorService.findOrCreateOperator({
           id: testUser.id.toString(),
           username: testUser.username,
         });
       }
+
+      console.log(operatorData);
 
       const accessToken = this.generateToken({
         _id: operatorData.operator._id,

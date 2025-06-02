@@ -136,16 +136,12 @@ export class AuctionService {
   /**
    * Get auction by ID with populated data
    */
-  async getAuctionById(
-    auctionId: Types.ObjectId,
-    populateNFT = true,
-  ): Promise<Auction> {
+  async getAuctionById(auctionId: Types.ObjectId): Promise<Auction> {
     try {
       let query = this.auctionModel.findById(auctionId);
 
-      if (populateNFT) {
-        query = query.populate('nftId');
-      }
+      query = query.populate('nft');
+      query = query.populate('currentWinner', '_id username');
 
       const auction = await query.exec();
       if (!auction) {
@@ -171,7 +167,6 @@ export class AuctionService {
     page = 1,
     limit = 20,
     status?: AuctionStatus,
-    populateNFT = true,
   ): Promise<{
     auctions: Auction[];
     total: number;
@@ -193,9 +188,8 @@ export class AuctionService {
         .skip(skip)
         .limit(limit);
 
-      if (populateNFT) {
-        query = query.populate('nftId');
-      }
+      query = query.populate('nft');
+      query = query.populate('currentWinner', '_id username');
 
       const [auctions, total] = await Promise.all([
         query.exec(),
@@ -228,7 +222,7 @@ export class AuctionService {
   ): Promise<AuctionWhitelist> {
     try {
       // Get auction
-      const auction = await this.getAuctionById(auctionId, false);
+      const auction = await this.getAuctionById(auctionId);
 
       // Validate whitelist is open
       if (auction.status !== AuctionStatus.WHITELIST_OPEN) {
@@ -325,7 +319,7 @@ export class AuctionService {
   ): Promise<Bid> {
     try {
       // Get auction
-      const auction = await this.getAuctionById(auctionId, false);
+      const auction = await this.getAuctionById(auctionId);
 
       // Validate auction is active
       if (auction.status !== AuctionStatus.AUCTION_ACTIVE) {
@@ -478,7 +472,7 @@ export class AuctionService {
    */
   async endAuction(auctionId: Types.ObjectId): Promise<Auction> {
     try {
-      const auction = await this.getAuctionById(auctionId, false);
+      const auction = await this.getAuctionById(auctionId);
 
       if (auction.status === AuctionStatus.ENDED) {
         return auction;
@@ -512,7 +506,7 @@ export class AuctionService {
       );
 
       this.logger.log(`Auction ended: ${auctionId}`);
-      return await this.getAuctionById(auctionId, false);
+      return await this.getAuctionById(auctionId);
     } catch (error) {
       this.logger.error(
         `(endAuction) Error ending auction: ${error.message}`,
@@ -541,7 +535,7 @@ export class AuctionService {
       const [history, total] = await Promise.all([
         this.historyModel
           .find({ auctionId })
-          .populate('operatorId', 'username email')
+          .populate('operator', '_id username')
           .sort({ timestamp: -1 })
           .skip(skip)
           .limit(limit)
@@ -632,7 +626,7 @@ export class AuctionService {
    */
   async shouldUseQueue(auctionId: Types.ObjectId): Promise<boolean> {
     try {
-      const auction = await this.getAuctionById(auctionId, false);
+      const auction = await this.getAuctionById(auctionId);
       const now = new Date();
       const endTime = auction.auctionConfig.endTime;
       const timeUntilEnd = endTime.getTime() - now.getTime();

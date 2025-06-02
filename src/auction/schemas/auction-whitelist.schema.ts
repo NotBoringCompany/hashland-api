@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
-
+import { Auction } from './auction.schema';
+import { Operator } from 'src/operators/schemas/operator.schema';
 /**
  * Enum defining the status of whitelist entries
  */
@@ -16,6 +17,8 @@ export enum WhitelistStatus {
   timestamps: true,
   collection: 'AuctionWhitelists',
   versionKey: false,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
 })
 export class AuctionWhitelist extends Document {
   /**
@@ -39,8 +42,21 @@ export class AuctionWhitelist extends Document {
     description: 'The auction this whitelist entry belongs to',
     example: '507f1f77bcf86cd799439012',
   })
-  @Prop({ type: Types.ObjectId, ref: 'Auctions', required: true, index: true })
+  @Prop({
+    type: Types.ObjectId,
+    ref: Auction.name,
+    required: true,
+    index: true,
+  })
   auctionId: Types.ObjectId;
+
+  /**
+   * The auction this whitelist entry belongs to
+   */
+  @ApiProperty({
+    description: 'The auction this whitelist entry belongs to',
+  })
+  auction: Auction;
 
   /**
    * The operator who joined the whitelist
@@ -49,8 +65,21 @@ export class AuctionWhitelist extends Document {
     description: 'The operator who joined the whitelist',
     example: '507f1f77bcf86cd799439013',
   })
-  @Prop({ type: Types.ObjectId, ref: 'Operators', required: true, index: true })
+  @Prop({
+    type: Types.ObjectId,
+    ref: Operator.name,
+    required: true,
+    index: true,
+  })
   operatorId: Types.ObjectId;
+
+  /**
+   * The operator who joined the whitelist
+   */
+  @ApiProperty({
+    description: 'The operator who joined the whitelist',
+  })
+  operator: Operator;
 
   /**
    * The entry fee paid to join the whitelist
@@ -115,10 +144,6 @@ export class AuctionWhitelist extends Document {
     example: '2024-03-19T12:00:00.000Z',
   })
   updatedAt: Date;
-
-  // Populated fields for quick access
-  operator?: any; // Will be populated with Operator data
-  auction?: any; // Will be populated with Auction data
 }
 
 /**
@@ -132,3 +157,15 @@ AuctionWhitelistSchema.index({ auctionId: 1, operatorId: 1 }, { unique: true });
 AuctionWhitelistSchema.index({ auctionId: 1, joinedAt: 1 });
 AuctionWhitelistSchema.index({ operatorId: 1, createdAt: -1 });
 AuctionWhitelistSchema.index({ status: 1 });
+AuctionWhitelistSchema.virtual('auction', {
+  ref: Auction.name,
+  localField: 'auctionId',
+  foreignField: '_id',
+  justOne: true,
+});
+AuctionWhitelistSchema.virtual('operator', {
+  ref: Operator.name,
+  localField: 'operatorId',
+  foreignField: '_id',
+  justOne: true,
+});

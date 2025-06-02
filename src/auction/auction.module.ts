@@ -70,8 +70,8 @@ import { AuctionExceptionFilter } from './filters/auction-exception.filter';
 
     MongooseModule.forFeature([
       // Auction system schemas
-      { name: NFT.name, schema: NFTSchema },
       { name: Auction.name, schema: AuctionSchema },
+      { name: NFT.name, schema: NFTSchema },
       { name: AuctionWhitelist.name, schema: AuctionWhitelistSchema },
       { name: Bid.name, schema: BidSchema },
       { name: AuctionHistory.name, schema: AuctionHistorySchema },

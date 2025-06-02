@@ -1,6 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
+import { NFT } from './nft.schema';
+import { Operator } from 'src/operators/schemas/operator.schema';
 
 /**
  * Enum defining the status of auctions
@@ -43,6 +45,8 @@ export interface AuctionConfig {
   timestamps: true,
   collection: 'Auctions',
   versionKey: false,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
 })
 export class Auction extends Document {
   /**
@@ -66,8 +70,16 @@ export class Auction extends Document {
     description: 'The NFT being auctioned',
     example: '507f1f77bcf86cd799439012',
   })
-  @Prop({ type: Types.ObjectId, ref: 'NFTs', required: true })
+  @Prop({ type: Types.ObjectId, ref: NFT.name, required: true })
   nftId: Types.ObjectId;
+
+  /**
+   * The NFT being auctioned
+   */
+  @ApiProperty({
+    description: 'The NFT being auctioned',
+  })
+  nft: NFT;
 
   /**
    * The title of the auction
@@ -114,12 +126,12 @@ export class Auction extends Document {
    */
   @ApiProperty({
     description: 'The current winning bidder',
-    example: '507f1f77bcf86cd799439013',
     required: false,
+    type: Operator,
   })
   @Prop({
     type: Types.ObjectId,
-    ref: 'Operators',
+    ref: Operator.name,
     required: false,
     default: null,
   })
@@ -248,3 +260,9 @@ AuctionSchema.index({
   'auctionConfig.endTime': 1,
 });
 AuctionSchema.index({ createdAt: -1 });
+AuctionSchema.virtual('nft', {
+  ref: NFT.name,
+  localField: 'nftId',
+  foreignField: '_id',
+  justOne: true,
+});

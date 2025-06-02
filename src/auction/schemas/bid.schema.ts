@@ -1,7 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ApiProperty } from '@nestjs/swagger';
-
+import { Auction } from './auction.schema';
+import { Operator } from 'src/operators/schemas/operator.schema';
 /**
  * Enum defining the types of bids
  */
@@ -36,6 +37,8 @@ export interface BidMetadata {
   timestamps: true,
   collection: 'Bids',
   versionKey: false,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
 })
 export class Bid extends Document {
   /**
@@ -59,8 +62,22 @@ export class Bid extends Document {
     description: 'The auction this bid belongs to',
     example: '507f1f77bcf86cd799439012',
   })
-  @Prop({ type: Types.ObjectId, ref: 'Auctions', required: true, index: true })
+  @Prop({
+    type: Types.ObjectId,
+    ref: Auction.name,
+    required: true,
+    index: true,
+  })
   auctionId: Types.ObjectId;
+
+  /**
+   * The auction this bid belongs to
+   */
+  @ApiProperty({
+    description: 'The auction this bid belongs to',
+    example: '507f1f77bcf86cd799439012',
+  })
+  auction: Auction;
 
   /**
    * The operator who placed the bid
@@ -69,8 +86,22 @@ export class Bid extends Document {
     description: 'The operator who placed the bid',
     example: '507f1f77bcf86cd799439013',
   })
-  @Prop({ type: Types.ObjectId, ref: 'Operators', required: true, index: true })
+  @Prop({
+    type: Types.ObjectId,
+    ref: Operator.name,
+    required: true,
+    index: true,
+  })
   bidderId: Types.ObjectId;
+
+  /**
+   * The operator who placed the bid
+   */
+  @ApiProperty({
+    description: 'The operator who placed the bid',
+    example: '507f1f77bcf86cd799439013',
+  })
+  bidder: Operator;
 
   /**
    * The bid amount in HASH currency
@@ -163,10 +194,6 @@ export class Bid extends Document {
     example: '2024-03-19T12:00:00.000Z',
   })
   updatedAt: Date;
-
-  // Populated fields for quick access
-  bidder?: any; // Will be populated with Operator data
-  auction?: any; // Will be populated with Auction data
 }
 
 /**
@@ -181,3 +208,15 @@ BidSchema.index({ bidderId: 1, createdAt: -1 });
 BidSchema.index({ status: 1 });
 BidSchema.index({ bidType: 1 });
 BidSchema.index({ auctionId: 1, bidderId: 1 });
+BidSchema.virtual('auction', {
+  ref: Auction.name,
+  localField: 'auctionId',
+  foreignField: '_id',
+  justOne: true,
+});
+BidSchema.virtual('bidder', {
+  ref: Operator.name,
+  localField: 'bidderId',
+  foreignField: '_id',
+  justOne: true,
+});
