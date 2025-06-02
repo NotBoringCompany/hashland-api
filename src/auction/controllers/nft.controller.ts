@@ -28,6 +28,7 @@ import { NFT, NFTStatus } from '../schemas/nft.schema';
 import { CreateNFTDto, UpdateNFTDto, UpdateNFTStatusDto } from '../dto';
 import { ApiResponse } from '../../common/dto/response.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
+import { AdminProtected } from '../../auth/admin';
 
 /**
  * Controller for NFT management in the auction system
@@ -42,6 +43,7 @@ export class NFTController {
    * Create a new NFT
    */
   @Post()
+  @AdminProtected()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new NFT' })
   @ApiBody({ type: CreateNFTDto })
@@ -137,6 +139,7 @@ export class NFTController {
    * Update NFT
    */
   @Put(':id')
+  @AdminProtected()
   @ApiOperation({ summary: 'Update NFT' })
   @ApiParam({ name: 'id', description: 'NFT ID' })
   @ApiBody({ type: UpdateNFTDto })
@@ -170,6 +173,7 @@ export class NFTController {
    * Delete NFT
    */
   @Delete(':id')
+  @AdminProtected()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete NFT' })
   @ApiParam({ name: 'id', description: 'NFT ID' })
@@ -196,6 +200,7 @@ export class NFTController {
    * Update NFT status
    */
   @Put(':id/status')
+  @AdminProtected()
   @ApiOperation({ summary: 'Update NFT status' })
   @ApiParam({ name: 'id', description: 'NFT ID' })
   @ApiBody({ type: UpdateNFTStatusDto })

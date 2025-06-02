@@ -5,27 +5,24 @@ import {
   Param,
   HttpStatus,
   HttpCode,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse as SwaggerApiResponse,
   ApiParam,
-  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuctionLifecycleService } from '../services/auction-lifecycle.service';
 import { AuctionStatus } from '../schemas/auction.schema';
-import { JwtAuthGuard } from '../../auth/jwt/jwt-auth.guard';
 import { ApiResponse } from '../../common/dto/response.dto';
+import { AdminProtected } from '../../auth/admin';
 
 /**
  * Controller for auction lifecycle management
  */
 @ApiTags('Auction Lifecycle')
 @Controller('auctions')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@AdminProtected()
 export class LifecycleController {
   constructor(private readonly lifecycleService: AuctionLifecycleService) {}
 

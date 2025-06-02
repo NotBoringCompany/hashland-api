@@ -5,7 +5,6 @@ import {
   Delete,
   Param,
   Query,
-  UseGuards,
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
@@ -15,20 +14,18 @@ import {
   ApiResponse as SwaggerApiResponse,
   ApiParam,
   ApiQuery,
-  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { BidQueueService } from '../services/bid-queue.service';
 import { QueueMetricsDto } from '../dto/queue.dto';
-import { JwtAuthGuard } from '../../auth/jwt/jwt-auth.guard';
 import { ApiResponse } from '../../common/dto/response.dto';
+import { AdminProtected } from '../../auth/admin';
 
 /**
  * Controller for queue monitoring and management
  */
 @ApiTags('Queue Management')
 @Controller('queue')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@AdminProtected()
 export class QueueController {
   constructor(private readonly queueService: BidQueueService) {}
 
