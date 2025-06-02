@@ -4,6 +4,8 @@ export * from './update-nft.dto';
 
 // Auction DTOs
 export * from './create-auction.dto';
+export * from './get-auctions-query.dto';
+export * from './get-auction-history-query.dto';
 
 // Bid DTOs
 export * from './place-bid.dto';

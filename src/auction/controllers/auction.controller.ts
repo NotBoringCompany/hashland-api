@@ -7,8 +7,6 @@ import {
   Query,
   HttpCode,
   HttpStatus,
-  ParseIntPipe,
-  DefaultValuePipe,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -22,11 +20,17 @@ import {
 } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { AuctionService } from '../services/auction.service';
-import { Auction, AuctionStatus } from '../schemas/auction.schema';
+import { Auction } from '../schemas/auction.schema';
 import { AuctionWhitelist } from '../schemas/auction-whitelist.schema';
 import { Bid } from '../schemas/bid.schema';
 import { AuctionHistory } from '../schemas/auction-history.schema';
-import { CreateAuctionDto, PlaceBidDto, JoinWhitelistDto } from '../dto';
+import {
+  CreateAuctionDto,
+  PlaceBidDto,
+  JoinWhitelistDto,
+  GetAuctionsQueryDto,
+  GetAuctionHistoryQueryDto,
+} from '../dto';
 import { ApiResponse } from '../../common/dto/response.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 
@@ -95,47 +99,42 @@ export class AuctionController {
    * Get all auctions with pagination and filtering
    */
   @Get()
-  @ApiOperation({ summary: 'Get all auctions with pagination and filtering' })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page',
-  })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    enum: AuctionStatus,
-    description: 'Filter by status',
-  })
-  @ApiQuery({
-    name: 'populateNFT',
-    required: false,
-    type: Boolean,
-    description: 'Populate NFT data',
-  })
+  @ApiOperation({ summary: 'Get all auctionss with pagination and filtering' })
   @SwaggerApiResponse({
     status: 200,
     description: 'Auctions retrieved successfully',
     type: PaginatedResponse.withType(Auction),
   })
   async getAuctions(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('status') status?: AuctionStatus,
-    @Query('populateNFT', new DefaultValuePipe(true)) populateNFT?: boolean,
+    @Query() query: GetAuctionsQueryDto,
   ): Promise<PaginatedResponse<Auction>> {
     const result = await this.auctionService.getAuctions(
-      page,
-      limit,
-      status,
-      populateNFT,
+      query.page || 1,
+      query.limit || 20,
+      query.status,
+      {
+        nftId: query.nftId,
+        currentWinner: query.currentWinner,
+        titleSearch: query.titleSearch,
+        descriptionSearch: query.descriptionSearch,
+        minStartingPrice: query.minStartingPrice,
+        maxStartingPrice: query.maxStartingPrice,
+        minCurrentBid: query.minCurrentBid,
+        maxCurrentBid: query.maxCurrentBid,
+        auctionStartAfter: query.auctionStartAfter,
+        auctionStartBefore: query.auctionStartBefore,
+        auctionEndAfter: query.auctionEndAfter,
+        auctionEndBefore: query.auctionEndBefore,
+        createdAfter: query.createdAfter,
+        createdBefore: query.createdBefore,
+        minTotalBids: query.minTotalBids,
+        maxTotalBids: query.maxTotalBids,
+        minTotalParticipants: query.minTotalParticipants,
+        maxTotalParticipants: query.maxTotalParticipants,
+        populateNFT: query.populateNFT,
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder,
+      },
     );
 
     return new PaginatedResponse(
@@ -144,7 +143,7 @@ export class AuctionController {
       {
         items: result.auctions,
         page: result.page,
-        limit,
+        limit: query.limit || 20,
         total: result.total,
       },
     );
@@ -172,13 +171,9 @@ export class AuctionController {
     description: 'Auction not found',
     type: ApiResponse,
   })
-  async getAuctionById(
-    @Param('id') id: string,
-    @Query('populateNFT', new DefaultValuePipe(true)) populateNFT?: boolean,
-  ): Promise<ApiResponse<Auction>> {
+  async getAuctionById(@Param('id') id: string): Promise<ApiResponse<Auction>> {
     const auction = await this.auctionService.getAuctionById(
       new Types.ObjectId(id),
-      populateNFT,
     );
 
     return new ApiResponse(
@@ -298,18 +293,6 @@ export class AuctionController {
   @Get(':id/history')
   @ApiOperation({ summary: 'Get auction history' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page',
-  })
   @SwaggerApiResponse({
     status: 200,
     description: 'Auction history retrieved successfully',
@@ -317,13 +300,26 @@ export class AuctionController {
   })
   async getAuctionHistory(
     @Param('id') id: string,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query() query: GetAuctionHistoryQueryDto,
   ): Promise<PaginatedResponse<AuctionHistory>> {
     const result = await this.auctionService.getAuctionHistory(
       new Types.ObjectId(id),
-      page,
-      limit,
+      query.page || 1,
+      query.limit || 50,
+      {
+        action: query.action,
+        operatorId: query.operatorId,
+        timestampAfter: query.timestampAfter,
+        timestampBefore: query.timestampBefore,
+        minAmount: query.minAmount,
+        maxAmount: query.maxAmount,
+        createdAfter: query.createdAfter,
+        createdBefore: query.createdBefore,
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder,
+        populateAuction: query.populateAuction,
+        populateOperator: query.populateOperator,
+      },
     );
 
     return new PaginatedResponse(
@@ -332,7 +328,7 @@ export class AuctionController {
       {
         items: result.history,
         page: result.page,
-        limit,
+        limit: query.limit || 50,
         total: result.total,
       },
     );

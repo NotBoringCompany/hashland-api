@@ -167,6 +167,29 @@ export class AuctionService {
     page = 1,
     limit = 20,
     status?: AuctionStatus,
+    filters?: {
+      nftId?: string;
+      currentWinner?: string;
+      titleSearch?: string;
+      descriptionSearch?: string;
+      minStartingPrice?: number;
+      maxStartingPrice?: number;
+      minCurrentBid?: number;
+      maxCurrentBid?: number;
+      auctionStartAfter?: string;
+      auctionStartBefore?: string;
+      auctionEndAfter?: string;
+      auctionEndBefore?: string;
+      createdAfter?: string;
+      createdBefore?: string;
+      minTotalBids?: number;
+      maxTotalBids?: number;
+      minTotalParticipants?: number;
+      maxTotalParticipants?: number;
+      populateNFT?: boolean;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+    },
   ): Promise<{
     auctions: Auction[];
     total: number;
@@ -180,15 +203,139 @@ export class AuctionService {
         filter.status = status;
       }
 
+      if (filters) {
+        // NFT and winner filters
+        if (filters.nftId) {
+          filter.nftId = new Types.ObjectId(filters.nftId);
+        }
+        if (filters.currentWinner) {
+          filter.currentWinner = new Types.ObjectId(filters.currentWinner);
+        }
+
+        // Text search filters
+        if (filters.titleSearch) {
+          filter.title = { $regex: filters.titleSearch, $options: 'i' };
+        }
+        if (filters.descriptionSearch) {
+          filter.description = {
+            $regex: filters.descriptionSearch,
+            $options: 'i',
+          };
+        }
+
+        // Price range filters
+        if (
+          filters.minStartingPrice !== undefined ||
+          filters.maxStartingPrice !== undefined
+        ) {
+          filter.startingPrice = {};
+          if (filters.minStartingPrice !== undefined) {
+            filter.startingPrice.$gte = filters.minStartingPrice;
+          }
+          if (filters.maxStartingPrice !== undefined) {
+            filter.startingPrice.$lte = filters.maxStartingPrice;
+          }
+        }
+
+        if (
+          filters.minCurrentBid !== undefined ||
+          filters.maxCurrentBid !== undefined
+        ) {
+          filter.currentHighestBid = {};
+          if (filters.minCurrentBid !== undefined) {
+            filter.currentHighestBid.$gte = filters.minCurrentBid;
+          }
+          if (filters.maxCurrentBid !== undefined) {
+            filter.currentHighestBid.$lte = filters.maxCurrentBid;
+          }
+        }
+
+        // Date range filters for auction times
+        if (filters.auctionStartAfter || filters.auctionStartBefore) {
+          filter['auctionConfig.startTime'] = {};
+          if (filters.auctionStartAfter) {
+            filter['auctionConfig.startTime'].$gte = new Date(
+              filters.auctionStartAfter,
+            );
+          }
+          if (filters.auctionStartBefore) {
+            filter['auctionConfig.startTime'].$lte = new Date(
+              filters.auctionStartBefore,
+            );
+          }
+        }
+
+        if (filters.auctionEndAfter || filters.auctionEndBefore) {
+          filter['auctionConfig.endTime'] = {};
+          if (filters.auctionEndAfter) {
+            filter['auctionConfig.endTime'].$gte = new Date(
+              filters.auctionEndAfter,
+            );
+          }
+          if (filters.auctionEndBefore) {
+            filter['auctionConfig.endTime'].$lte = new Date(
+              filters.auctionEndBefore,
+            );
+          }
+        }
+
+        // Date range filters for creation time
+        if (filters.createdAfter || filters.createdBefore) {
+          filter.createdAt = {};
+          if (filters.createdAfter) {
+            filter.createdAt.$gte = new Date(filters.createdAfter);
+          }
+          if (filters.createdBefore) {
+            filter.createdAt.$lte = new Date(filters.createdBefore);
+          }
+        }
+
+        // Bid and participant count filters
+        if (
+          filters.minTotalBids !== undefined ||
+          filters.maxTotalBids !== undefined
+        ) {
+          filter.totalBids = {};
+          if (filters.minTotalBids !== undefined) {
+            filter.totalBids.$gte = filters.minTotalBids;
+          }
+          if (filters.maxTotalBids !== undefined) {
+            filter.totalBids.$lte = filters.maxTotalBids;
+          }
+        }
+
+        if (
+          filters.minTotalParticipants !== undefined ||
+          filters.maxTotalParticipants !== undefined
+        ) {
+          filter.totalParticipants = {};
+          if (filters.minTotalParticipants !== undefined) {
+            filter.totalParticipants.$gte = filters.minTotalParticipants;
+          }
+          if (filters.maxTotalParticipants !== undefined) {
+            filter.totalParticipants.$lte = filters.maxTotalParticipants;
+          }
+        }
+      }
+
       const skip = (page - 1) * limit;
+
+      // Build sort object
+      const sortField = filters?.sortBy || 'createdAt';
+      const sortDirection = filters?.sortOrder === 'asc' ? 1 : -1;
+      const sort: any = {};
+      sort[sortField] = sortDirection;
 
       let query = this.auctionModel
         .find(filter)
-        .sort({ createdAt: -1 })
+        .sort(sort)
         .skip(skip)
         .limit(limit);
 
-      query = query.populate('nft');
+      // Conditional population
+      if (filters?.populateNFT) {
+        query = query.populate('nft');
+      }
       query = query.populate('currentWinner', '_id username');
 
       const [auctions, total] = await Promise.all([
@@ -523,6 +670,20 @@ export class AuctionService {
     auctionId: Types.ObjectId,
     page = 1,
     limit = 50,
+    filters?: {
+      action?: string;
+      operatorId?: string;
+      timestampAfter?: string;
+      timestampBefore?: string;
+      minAmount?: number;
+      maxAmount?: number;
+      createdAfter?: string;
+      createdBefore?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      populateAuction?: boolean;
+      populateOperator?: boolean;
+    },
   ): Promise<{
     history: AuctionHistory[];
     total: number;
@@ -530,17 +691,81 @@ export class AuctionService {
     totalPages: number;
   }> {
     try {
+      const filter: any = { auctionId };
+
+      if (filters) {
+        // Action filter
+        if (filters.action) {
+          filter.action = filters.action;
+        }
+
+        // Operator filter
+        if (filters.operatorId) {
+          filter.operatorId = new Types.ObjectId(filters.operatorId);
+        }
+
+        // Timestamp range filters
+        if (filters.timestampAfter || filters.timestampBefore) {
+          filter.timestamp = {};
+          if (filters.timestampAfter) {
+            filter.timestamp.$gte = new Date(filters.timestampAfter);
+          }
+          if (filters.timestampBefore) {
+            filter.timestamp.$lte = new Date(filters.timestampBefore);
+          }
+        }
+
+        // Amount range filters (for bid-related actions)
+        if (
+          filters.minAmount !== undefined ||
+          filters.maxAmount !== undefined
+        ) {
+          filter['details.amount'] = {};
+          if (filters.minAmount !== undefined) {
+            filter['details.amount'].$gte = filters.minAmount;
+          }
+          if (filters.maxAmount !== undefined) {
+            filter['details.amount'].$lte = filters.maxAmount;
+          }
+        }
+
+        // Created date range filters
+        if (filters.createdAfter || filters.createdBefore) {
+          filter.createdAt = {};
+          if (filters.createdAfter) {
+            filter.createdAt.$gte = new Date(filters.createdAfter);
+          }
+          if (filters.createdBefore) {
+            filter.createdAt.$lte = new Date(filters.createdBefore);
+          }
+        }
+      }
+
       const skip = (page - 1) * limit;
 
+      // Build sort object
+      const sortField = filters?.sortBy || 'timestamp';
+      const sortDirection = filters?.sortOrder === 'asc' ? 1 : -1;
+      const sort: any = {};
+      sort[sortField] = sortDirection;
+
+      let query = this.historyModel
+        .find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit);
+
+      // Conditional population
+      if (filters?.populateAuction) {
+        query = query.populate('auction');
+      }
+      if (filters?.populateOperator !== false) {
+        query = query.populate('operator', '_id username');
+      }
+
       const [history, total] = await Promise.all([
-        this.historyModel
-          .find({ auctionId })
-          .populate('operator', '_id username')
-          .sort({ timestamp: -1 })
-          .skip(skip)
-          .limit(limit)
-          .exec(),
-        this.historyModel.countDocuments({ auctionId }),
+        query.exec(),
+        this.historyModel.countDocuments(filter),
       ]);
 
       const totalPages = Math.ceil(total / limit);
