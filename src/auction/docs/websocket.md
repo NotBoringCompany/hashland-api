@@ -1,40 +1,62 @@
-# WebSocket Documentation
+# WebSocket Real-time Communication
 
 ## Overview
 
-The Auction System provides real-time functionality through WebSocket connections using Socket.IO. This enables live bidding updates, auction status changes, and immediate notifications for all participants.
+The Auction System provides real-time bidding and updates through WebSocket connections, enabling instant notifications for bid updates, auction status changes, and user interactions.
 
+**WebSocket Endpoint**: `wss://api.hashland.com/auction`  
 **Namespace**: `/auction`  
-**Protocol**: Socket.IO  
+**Protocol**: Socket.IO v4.x  
 **Authentication**: JWT Bearer Token
 
-## Connection Setup
+## Connection Management
 
-### Client Connection
+### Establishing Connection
 
+**Basic Connection**:
 ```javascript
-import io from 'socket.io-client';
+import { io } from 'socket.io-client';
 
-const socket = io('ws://localhost:3000/auction', {
+const socket = io('wss://api.hashland.com/auction', {
   auth: {
     token: 'your-jwt-token'
   },
-  // Alternative authentication methods
-  extraHeaders: {
-    'Authorization': 'Bearer your-jwt-token'
-  },
-  query: {
+  transports: ['websocket']
+});
+```
+
+**Connection with Options**:
+```javascript
+const socket = io('wss://api.hashland.com/auction', {
+  auth: {
     token: 'your-jwt-token'
+  },
+  transports: ['websocket'],
+  timeout: 20000,
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
+});
+```
+
+### Authentication
+
+**JWT Token Authentication**:
+```javascript
+// Include token in connection auth
+const socket = io('wss://api.hashland.com/auction', {
+  auth: {
+    token: localStorage.getItem('authToken')
   }
 });
 
-// Connection events
+// Handle authentication response
 socket.on('connect', () => {
   console.log('Connected to auction system');
 });
 
-socket.on('disconnect', () => {
-  console.log('Disconnected from auction system');
+socket.on('connection_confirmed', (data) => {
+  console.log('Authenticated as:', data.operator);
 });
 
 socket.on('connect_error', (error) => {
@@ -42,229 +64,188 @@ socket.on('connect_error', (error) => {
 });
 ```
 
-### Authentication
-
-The WebSocket gateway supports multiple authentication methods:
-
-1. **Auth object** (recommended):
-   ```javascript
-   { auth: { token: 'your-jwt-token' } }
-   ```
-
-2. **Authorization header**:
-   ```javascript
-   { extraHeaders: { 'Authorization': 'Bearer your-jwt-token' } }
-   ```
-
-3. **Query parameter**:
-   ```javascript
-   { query: { token: 'your-jwt-token' } }
-   ```
-
-### Connection Confirmation
-
-Upon successful connection and authentication:
-
-```javascript
-socket.on('connection_confirmed', (data) => {
-  console.log('Authenticated as:', data.operatorId);
-  console.log('Connection ID:', data.socketId);
-  console.log('Connected at:', data.timestamp);
-});
-```
-
 ## Room Management
 
 ### Joining Auction Rooms
 
-Join specific auction rooms to receive real-time updates:
-
+**Join Auction**:
 ```javascript
-// Join auction room
 socket.emit('join_auction', {
   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4'
 });
 
-// Confirmation of joining
-socket.on('user_joined', (data) => {
-  console.log('Joined auction:', data.auctionId);
-  console.log('Room participants:', data.participantCount);
+socket.on('auction_status', (data) => {
+  console.log('Joined auction:', data.auction);
+  console.log('Current status:', data.auction.status);
 });
 ```
 
-### Leaving Auction Rooms
-
+**Leave Auction**:
 ```javascript
-// Leave auction room
 socket.emit('leave_auction', {
   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4'
 });
 
-// Confirmation of leaving
 socket.on('user_left', (data) => {
   console.log('Left auction:', data.auctionId);
 });
 ```
 
-## Bidding Events
+## Real-time Bidding
 
 ### Placing Bids
 
+**Standard Bid**:
 ```javascript
-// Place bid via WebSocket
 socket.emit('place_bid', {
   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
   amount: 150,
   bidType: 'regular',
   metadata: {
-    source: 'websocket',
-    userAgent: navigator.userAgent,
-    note: 'Quick bid from mobile'
+    note: 'Great artwork!',
+    source: 'web'
   }
 });
+```
 
-// Bid placement confirmation
+**Buy Now Bid**:
+```javascript
+socket.emit('place_bid', {
+  auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
+  amount: 1000,
+  bidType: 'buy_now',
+  metadata: {
+    note: 'Must have this piece!',
+    source: 'web'
+  }
+});
+```
+
+### Bid Responses
+
+**Successful Bid**:
+```javascript
 socket.on('bid_placed', (data) => {
-  console.log('Bid placed successfully:', data);
-  // {
-  //   success: true,
-  //   bidId: '60f1b2b3b3b3b3b3b3b3b3b7',
-  //   amount: 150,
-  //   position: 1,
-  //   timestamp: '2023-01-01T14:30:00.000Z'
-  // }
-});
-
-// Bid placement error
-socket.on('bid_error', (error) => {
-  console.error('Bid failed:', error);
-  // {
-  //   error: 'INSUFFICIENT_BID_AMOUNT',
-  //   message: 'Bid amount too low',
-  //   details: {
-  //     minimumRequired: 160,
-  //     provided: 150
-  //   }
-  // }
+  if (data.queued) {
+    console.log('Bid queued:', data.jobId);
+    console.log('Queue position:', data.queuePosition);
+  } else {
+    console.log('Bid placed immediately:', data.bid);
+  }
 });
 ```
 
-### Receiving Bid Updates
-
+**Bid Errors**:
 ```javascript
-// New bid placed by any user
+socket.on('bid_error', (data) => {
+  console.error('Bid failed:', data.message);
+  if (data.minAmount) {
+    console.log('Minimum bid amount:', data.minAmount);
+  }
+});
+```
+
+## Event Listeners
+
+### Auction Events
+
+**New Bid Notifications**:
+```javascript
 socket.on('new_bid', (data) => {
-  console.log('New bid placed:', data);
-  // {
-  //   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
-  //   bidId: '60f1b2b3b3b3b3b3b3b3b3b8',
-  //   amount: 180,
-  //   bidder: {
-  //     id: '60f1b2b3b3b3b3b3b3b3b3b9',
-  //     username: 'competitor456'
-  //   },
-  //   bidType: 'regular',
-  //   timestamp: '2023-01-01T14:35:00.000Z',
-  //   isNewLeader: true
-  // }
-});
-
-// User's bid was outbid
-socket.on('bid_outbid', (data) => {
-  console.log('Your bid was outbid:', data);
-  // {
-  //   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
-  //   yourBidId: '60f1b2b3b3b3b3b3b3b3b3b7',
-  //   yourAmount: 150,
-  //   newHighestBid: 180,
-  //   newLeader: {
-  //     username: 'competitor456'
-  //   },
-  //   timestamp: '2023-01-01T14:35:00.000Z'
-  // }
+  console.log('New bid placed:');
+  console.log('Bidder:', data.bid.bidder.username);
+  console.log('Amount:', data.bid.amount);
+  console.log('New highest bid:', data.auction.currentHighestBid);
+  
+  // Update UI with new bid information
+  updateAuctionDisplay(data.auction);
+  addBidToHistory(data.bid);
 });
 ```
 
-## Auction Status Events
-
-### Getting Current Status
-
+**Auction Status Updates**:
 ```javascript
-// Request current auction status
-socket.emit('get_auction_status', {
-  auctionId: '60f1b2b3b3b3b3b3b3b3b3b4'
-});
-
-// Receive auction status
 socket.on('auction_status', (data) => {
-  console.log('Auction status:', data);
-  // {
-  //   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
-  //   status: 'auction_active',
-  //   currentHighestBid: 180,
-  //   currentWinner: {
-  //     username: 'competitor456'
-  //   },
-  //   totalBids: 12,
-  //   totalParticipants: 8,
-  //   timeRemaining: 3600000,
-  //   lastUpdate: '2023-01-01T14:35:00.000Z'
-  // }
+  console.log('Auction status update:');
+  console.log('Status:', data.auction.status);
+  console.log('Time remaining:', data.auction.timeRemaining);
+  console.log('Current highest bid:', data.auction.currentHighestBid);
+  
+  updateAuctionTimer(data.auction.timeRemaining);
+  updateBidDisplay(data.auction.currentHighestBid);
 });
 ```
 
-### Auction Lifecycle Events
-
+**Outbid Notifications**:
 ```javascript
-// Auction status changes
-socket.on('auction_updated', (data) => {
-  console.log('Auction updated:', data);
-  // {
-  //   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
-  //   previousStatus: 'whitelist_open',
-  //   newStatus: 'whitelist_closed',
-  //   timestamp: '2023-01-01T18:00:00.000Z',
-  //   action: 'whitelist_closed'
-  // }
+socket.on('bid_outbid', (data) => {
+  console.log('You have been outbid!');
+  console.log('Your bid:', data.previousBid.amount);
+  console.log('New highest bid:', data.newHighestBid);
+  console.log('New leader:', data.newLeader);
+  
+  // Show notification to user
+  showNotification('You have been outbid!', 'warning');
+  
+  // Update bid button to show new minimum
+  updateMinimumBid(data.newHighestBid);
 });
+```
 
-// Whitelist status changes
-socket.on('whitelist_status_changed', (data) => {
-  console.log('Whitelist status changed:', data);
-  // {
-  //   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
-  //   status: 'closed',
-  //   totalParticipants: 47,
-  //   maxParticipants: 50,
-  //   closedAt: '2023-01-01T18:00:00.000Z'
-  // }
-});
-
-// Auction ending warnings
+**Auction Ending Warnings**:
+```javascript
 socket.on('auction_ending_soon', (data) => {
-  console.log('Auction ending soon:', data);
-  // {
-  //   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
-  //   timeRemaining: 300000, // 5 minutes in milliseconds
-  //   warningType: '5_minutes',
-  //   finalBidReminder: true
-  // }
+  console.log(`Auction ending in ${data.minutesLeft} minutes!`);
+  
+  // Show urgency indicator
+  showEndingWarning(data.minutesLeft);
+  
+  // Start countdown timer if final minute
+  if (data.minutesLeft <= 1) {
+    startFinalCountdown();
+  }
+});
+```
+
+**Auction Ended**:
+```javascript
+socket.on('auction_ended', (data) => {
+  console.log('Auction has ended!');
+  console.log('Final price:', data.auction.finalPrice);
+  console.log('Winner:', data.auction.winner?.username || 'No winner');
+  
+  // Disable bidding interface
+  disableBidding();
+  
+  // Show final results
+  showAuctionResults(data.auction);
+});
+```
+
+### User Events
+
+**User Joined/Left Room**:
+```javascript
+socket.on('user_joined', (data) => {
+  console.log('User joined auction:', data.operator);
+  updateParticipantCount('+1');
 });
 
-// Auction ended
-socket.on('auction_ended', (data) => {
-  console.log('Auction ended:', data);
-  // {
-  //   auctionId: '60f1b2b3b3b3b3b3b3b3b3b4',
-  //   winner: {
-  //     id: '60f1b2b3b3b3b3b3b3b3b3b9',
-  //     username: 'competitor456'
-  //   },
-  //   winningBid: 350,
-  //   totalBids: 28,
-  //   endedAt: '2023-01-01T20:00:00.000Z',
-  //   reason: 'time_expired'
-  // }
+socket.on('user_left', (data) => {
+  console.log('User left auction:', data.operator);
+  updateParticipantCount('-1');
+});
+```
+
+**Whitelist Status Changes**:
+```javascript
+socket.on('whitelist_status_changed', (data) => {
+  console.log('Whitelist status changed:', data.status);
+  console.log('Auction:', data.auctionId);
+  
+  if (data.status === 'closed') {
+    showMessage('Whitelist has closed. Auction starting soon!');
+  }
 });
 ```
 
@@ -272,216 +253,168 @@ socket.on('auction_ended', (data) => {
 
 ### Connection Errors
 
+**Connection Lost**:
 ```javascript
-socket.on('connect_error', (error) => {
-  console.error('Connection error:', error.message);
+socket.on('disconnect', (reason) => {
+  console.log('Disconnected:', reason);
   
-  // Common error types
-  switch (error.type) {
-    case 'AUTHENTICATION_FAILED':
-      // Invalid or expired token
-      redirectToLogin();
-      break;
-    case 'RATE_LIMIT_EXCEEDED':
-      // Too many connection attempts
-      setTimeout(() => socket.connect(), 60000);
-      break;
-    case 'SERVER_ERROR':
-      // Server-side error
-      showErrorMessage('Server temporarily unavailable');
-      break;
+  if (reason === 'io server disconnect') {
+    // Server initiated disconnect - don't reconnect automatically
+    showError('Connection terminated by server');
+  } else {
+    // Client or network issue - will auto-reconnect
+    showMessage('Connection lost. Reconnecting...');
   }
 });
 ```
 
-### Operation Errors
-
+**Reconnection Handling**:
 ```javascript
-socket.on('error', (error) => {
-  console.error('Operation error:', error);
-  // {
-  //   type: 'VALIDATION_ERROR',
-  //   message: 'Invalid auction ID format',
-  //   details: {
-  //     field: 'auctionId',
-  //     provided: 'invalid-id'
-  //   }
-  // }
+socket.on('reconnect', (attemptNumber) => {
+  console.log('Reconnected after', attemptNumber, 'attempts');
+  
+  // Rejoin auction rooms
+  rejoinAuctionRooms();
+  
+  // Refresh auction status
+  refreshCurrentAuction();
+});
+
+socket.on('reconnect_error', (error) => {
+  console.error('Reconnection failed:', error);
+});
+
+socket.on('reconnect_failed', () => {
+  console.error('Failed to reconnect');
+  showError('Unable to reconnect. Please refresh the page.');
+});
+```
+
+### Validation Errors
+
+**Invalid Data**:
+```javascript
+socket.on('error', (data) => {
+  console.error('Socket error:', data.message);
+  
+  switch (data.message) {
+    case 'Unauthorized':
+      // Token expired or invalid
+      handleAuthError();
+      break;
+    case 'Not whitelisted':
+      showError('You are not whitelisted for this auction');
+      break;
+    case 'Auction not found':
+      showError('Auction no longer exists');
+      break;
+    default:
+      showError(data.message);
+  }
 });
 ```
 
 ## Rate Limiting
 
-### Bid Rate Limiting
+### Connection Limits
 
-The system implements rate limiting for bid submissions:
+**Rate Limits**:
+- **Connections**: 5 per minute per IP
+- **Bid Events**: 30 per minute per user
+- **Room Join/Leave**: 10 per minute per user
 
+**Rate Limit Handling**:
 ```javascript
-socket.on('rate_limit_exceeded', (data) => {
-  console.warn('Rate limit exceeded:', data);
-  // {
-  //   type: 'BID_RATE_LIMIT',
-  //   limit: 10,
-  //   window: 60000,
-  //   resetTime: '2023-01-01T14:31:00.000Z',
-  //   retryAfter: 15000
-  // }
-  
-  // Wait before retrying
-  setTimeout(() => {
-    // Retry bid submission
-  }, data.retryAfter);
-});
-```
-
-### Connection Rate Limiting
-
-```javascript
-socket.on('connect_error', (error) => {
-  if (error.type === 'RATE_LIMIT_EXCEEDED') {
-    const retryAfter = error.data.retryAfter;
-    console.log(`Rate limited. Retry after ${retryAfter}ms`);
+socket.on('bid_error', (data) => {
+  if (data.message.includes('rate limit')) {
+    console.log('Rate limited. Reset time:', data.resetTime);
     
-    setTimeout(() => {
-      socket.connect();
-    }, retryAfter);
+    // Disable bidding temporarily
+    disableBiddingUntil(data.resetTime);
+    
+    // Show countdown to user
+    showRateLimitCountdown(data.resetTime);
   }
 });
 ```
 
-## Best Practices
+## Complete Example
 
-### Connection Management
+### Auction Client Implementation
 
 ```javascript
-class AuctionWebSocket {
+class AuctionClient {
   constructor(token) {
     this.token = token;
     this.socket = null;
+    this.joinedRooms = new Set();
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
   }
 
   connect() {
-    this.socket = io('ws://localhost:3000/auction', {
+    this.socket = io('wss://api.hashland.com/auction', {
       auth: { token: this.token },
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
       timeout: 20000,
-      forceNew: true
+      reconnection: true,
+      reconnectionAttempts: this.maxReconnectAttempts,
+      reconnectionDelay: 1000
     });
 
-    this.setupEventHandlers();
+    this.setupEventListeners();
   }
 
-  setupEventHandlers() {
+  setupEventListeners() {
+    // Connection events
     this.socket.on('connect', () => {
       console.log('Connected to auction system');
       this.reconnectAttempts = 0;
     });
 
+    this.socket.on('connection_confirmed', (data) => {
+      console.log('Authenticated as operator:', data.operator);
+      this.operator = data.operator;
+    });
+
     this.socket.on('disconnect', (reason) => {
       console.log('Disconnected:', reason);
-      
-      if (reason === 'io server disconnect') {
-        // Server disconnected, don't reconnect automatically
-        return;
-      }
-      
-      this.handleReconnection();
+      this.handleDisconnection(reason);
     });
 
-    this.socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
-      this.handleReconnection();
+    // Auction events
+    this.socket.on('auction_status', (data) => {
+      this.handleAuctionStatus(data);
     });
-  }
 
-  handleReconnection() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      const delay = Math.pow(2, this.reconnectAttempts) * 1000; // Exponential backoff
-      
-      setTimeout(() => {
-        console.log(`Reconnection attempt ${this.reconnectAttempts}`);
-        this.connect();
-      }, delay);
-    } else {
-      console.error('Max reconnection attempts reached');
-      this.onMaxReconnectAttemptsReached();
-    }
-  }
+    this.socket.on('new_bid', (data) => {
+      this.handleNewBid(data);
+    });
 
-  onMaxReconnectAttemptsReached() {
-    // Implement fallback behavior
-    // e.g., show offline message, switch to HTTP polling
-  }
+    this.socket.on('bid_placed', (data) => {
+      this.handleBidPlaced(data);
+    });
 
-  disconnect() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-  }
-}
-```
+    this.socket.on('bid_outbid', (data) => {
+      this.handleBidOutbid(data);
+    });
 
-### Event Management
+    this.socket.on('auction_ending_soon', (data) => {
+      this.handleAuctionEndingSoon(data);
+    });
 
-```javascript
-class AuctionEventManager {
-  constructor(socket) {
-    this.socket = socket;
-    this.eventListeners = new Map();
-  }
+    this.socket.on('auction_ended', (data) => {
+      this.handleAuctionEnded(data);
+    });
 
-  on(event, callback) {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, []);
-      
-      // Set up socket listener
-      this.socket.on(event, (data) => {
-        const listeners = this.eventListeners.get(event) || [];
-        listeners.forEach(listener => {
-          try {
-            listener(data);
-          } catch (error) {
-            console.error(`Error in event listener for ${event}:`, error);
-          }
-        });
-      });
-    }
+    // Error handling
+    this.socket.on('error', (data) => {
+      this.handleError(data);
+    });
 
-    this.eventListeners.get(event).push(callback);
-  }
-
-  off(event, callback) {
-    const listeners = this.eventListeners.get(event);
-    if (listeners) {
-      const index = listeners.indexOf(callback);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    }
-  }
-
-  emit(event, data) {
-    this.socket.emit(event, data);
-  }
-
-  cleanup() {
-    this.eventListeners.clear();
-    this.socket.removeAllListeners();
-  }
-}
-```
-
-### Auction Room Management
-
-```javascript
-class AuctionRoomManager {
-  constructor(eventManager) {
-    this.eventManager = eventManager;
-    this.joinedRooms = new Set();
+    this.socket.on('bid_error', (data) => {
+      this.handleBidError(data);
+    });
   }
 
   joinAuction(auctionId) {
@@ -490,7 +423,7 @@ class AuctionRoomManager {
       return;
     }
 
-    this.eventManager.emit('join_auction', { auctionId });
+    this.socket.emit('join_auction', { auctionId });
     this.joinedRooms.add(auctionId);
 
     // Set up auction-specific listeners
@@ -503,7 +436,7 @@ class AuctionRoomManager {
       return;
     }
 
-    this.eventManager.emit('leave_auction', { auctionId });
+    this.socket.emit('leave_auction', { auctionId });
     this.joinedRooms.delete(auctionId);
 
     // Clean up auction-specific listeners
@@ -511,148 +444,326 @@ class AuctionRoomManager {
   }
 
   setupAuctionListeners(auctionId) {
-    this.eventManager.on('new_bid', (data) => {
-      if (data.auctionId === auctionId) {
-        this.handleNewBid(data);
-      }
-    });
-
-    this.eventManager.on('auction_updated', (data) => {
+    // Listen for events specific to this auction
+    this.socket.on('auction_updated', (data) => {
       if (data.auctionId === auctionId) {
         this.handleAuctionUpdate(data);
       }
     });
+
+    this.socket.on('user_joined', (data) => {
+      if (data.auctionId === auctionId) {
+        this.handleUserJoined(data);
+      }
+    });
+  }
+
+  placeBid(auctionId, amount, bidType = 'regular', metadata = {}) {
+    if (!this.joinedRooms.has(auctionId)) {
+      console.error('Must join auction before bidding');
+      return;
+    }
+
+    this.socket.emit('place_bid', {
+      auctionId,
+      amount,
+      bidType,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+
+  getAuctionStatus(auctionId) {
+    this.socket.emit('get_auction_status', { auctionId });
+  }
+
+  // Event handlers
+  handleAuctionStatus(data) {
+    console.log('Auction status:', data.auction.status);
+    // Update UI with auction data
   }
 
   handleNewBid(data) {
-    // Update UI with new bid
-    console.log('New bid in auction:', data);
+    console.log('New bid:', data.bid);
+    // Update bid history and auction display
   }
 
-  handleAuctionUpdate(data) {
-    // Update auction status in UI
-    console.log('Auction updated:', data);
+  handleBidPlaced(data) {
+    if (data.queued) {
+      console.log('Bid queued with job ID:', data.jobId);
+    } else {
+      console.log('Bid placed successfully:', data.bid);
+    }
   }
 
-  leaveAllAuctions() {
+  handleBidOutbid(data) {
+    console.log('Outbid! New highest bid:', data.newHighestBid);
+    // Show notification and update UI
+  }
+
+  handleAuctionEndingSoon(data) {
+    console.log(`Auction ending in ${data.minutesLeft} minutes!`);
+    // Show urgency warnings
+  }
+
+  handleAuctionEnded(data) {
+    console.log('Auction ended. Winner:', data.auction.winner);
+    // Disable bidding and show results
+  }
+
+  handleError(data) {
+    console.error('Socket error:', data.message);
+    // Handle specific error types
+  }
+
+  handleBidError(data) {
+    console.error('Bid error:', data.message);
+    // Show user-friendly error messages
+  }
+
+  handleDisconnection(reason) {
+    if (reason === 'io server disconnect') {
+      // Server terminated connection
+      console.log('Server disconnected the client');
+    } else {
+      // Network or client issue
+      console.log('Connection lost, attempting to reconnect...');
+    }
+  }
+
+  // Cleanup on disconnect
+  disconnect() {
     this.joinedRooms.forEach(auctionId => {
       this.leaveAuction(auctionId);
     });
+    
+    if (this.socket) {
+      this.socket.disconnect();
+    }
   }
 }
 ```
 
-## Testing WebSocket Connections
-
-### Unit Testing
+### Usage Example
 
 ```javascript
-import { io } from 'socket.io-client';
+// Initialize auction client
+const auctionClient = new AuctionClient(authToken);
+auctionClient.connect();
+
+// Join auction and start bidding
+const auctionId = '60f1b2b3b3b3b3b3b3b3b3b4';
+auctionClient.joinAuction(auctionId);
+
+// Place bid
+document.getElementById('bidButton').addEventListener('click', () => {
+  const amount = parseFloat(document.getElementById('bidAmount').value);
+  auctionClient.placeBid(auctionId, amount, 'regular', {
+    note: 'My bid via web interface'
+  });
+});
+
+// Leave auction when navigating away
+window.addEventListener('beforeunload', () => {
+  auctionClient.disconnect();
+});
+```
+
+## Testing WebSocket Events
+
+### Manual Testing
+
+**Connection Test**:
+```javascript
+const socket = io('wss://api.hashland.com/auction', {
+  auth: { token: 'test-token' }
+});
+
+socket.on('connect', () => {
+  console.log('✓ Connection successful');
+});
+
+socket.on('connection_confirmed', (data) => {
+  console.log('✓ Authentication successful');
+  expect(data.operator).toBeDefined();
+});
+```
+
+**Bid Flow Test**:
+```javascript
+// Join auction
+socket.emit('join_auction', {
+  auctionId: 'test-auction-id',
+});
+
+// Wait for confirmation then place bid
+socket.on('auction_status', () => {
+  socket.emit('place_bid', {
+    auctionId: 'test-auction-id',
+    amount: 100,
+    bidType: 'regular'
+  });
+});
+
+// Verify bid placement
+socket.on('bid_placed', (data) => {
+  console.log('✓ Bid placed successfully');
+});
+```
+
+### Automated Testing
+
+**Jest Test Example**:
+```javascript
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import Client from 'socket.io-client';
 
 describe('Auction WebSocket', () => {
-  let clientSocket;
-  let serverSocket;
+  let io, serverSocket, clientSocket;
 
   beforeAll((done) => {
-    // Start test server
-    server.listen(() => {
-      const port = server.address().port;
-      clientSocket = io(`http://localhost:${port}/auction`, {
-        auth: { token: 'test-token' }
-      });
-      
-      server.on('connection', (socket) => {
+    const httpServer = createServer();
+    io = new Server(httpServer);
+    httpServer.listen(() => {
+      const port = httpServer.address().port;
+      clientSocket = new Client(`http://localhost:${port}`);
+      io.on('connection', (socket) => {
         serverSocket = socket;
       });
-      
       clientSocket.on('connect', done);
     });
   });
 
   afterAll(() => {
-    server.close();
+    io.close();
     clientSocket.close();
   });
 
-  test('should connect with valid token', (done) => {
-    clientSocket.on('connection_confirmed', (data) => {
-      expect(data.operatorId).toBeDefined();
-      done();
-    });
-  });
-
-  test('should place bid successfully', (done) => {
-    clientSocket.emit('place_bid', {
-      auctionId: 'test-auction-id',
-      amount: 100,
-      bidType: 'regular'
-    });
-
-    clientSocket.on('bid_placed', (data) => {
-      expect(data.success).toBe(true);
-      expect(data.amount).toBe(100);
+  test('should join auction room', (done) => {
+    clientSocket.emit('join_auction', { auctionId: 'test' });
+    serverSocket.on('join_auction', (data) => {
+      expect(data.auctionId).toBe('test');
       done();
     });
   });
 });
 ```
 
+## Performance Monitoring
+
+### Metrics Collection
+
+**Client-side Metrics**:
+```javascript
+class PerformanceMonitor {
+  constructor(socket) {
+    this.socket = socket;
+    this.metrics = {
+      connectionTime: 0,
+      bidLatency: [],
+      messageCount: 0,
+      errors: 0
+    };
+
+    this.setupMonitoring();
+  }
+
+  setupMonitoring() {
+    const startTime = Date.now();
+    
+    this.socket.on('connect', () => {
+      this.metrics.connectionTime = Date.now() - startTime;
+    });
+
+    this.socket.on('bid_placed', (data) => {
+      if (data.metadata && data.metadata.clientTimestamp) {
+        const latency = Date.now() - data.metadata.clientTimestamp;
+        this.metrics.bidLatency.push(latency);
+      }
+    });
+
+    // Track all incoming messages
+    const originalOn = this.socket.on;
+    this.socket.on = (event, handler) => {
+      return originalOn.call(this.socket, event, (...args) => {
+        this.metrics.messageCount++;
+        return handler(...args);
+      });
+    };
+  }
+
+  getMetrics() {
+    return {
+      ...this.metrics,
+      avgBidLatency: this.metrics.bidLatency.length > 0 
+        ? this.metrics.bidLatency.reduce((a, b) => a + b) / this.metrics.bidLatency.length
+        : 0
+    };
+  }
+}
+```
+
+**Usage with Monitoring**:
+```javascript
+const socket = io('wss://api.hashland.com/auction', {
+  auth: { token: authToken }
+});
+
+const monitor = new PerformanceMonitor(socket);
+
+// Enhanced bid placement with timing
+function placeBidWithTiming(auctionId, amount) {
+  const bidData = {
+    auctionId,
+    amount,
+    bidType: 'regular',
+    metadata: {
+      clientTimestamp: Date.now(),
+      source: 'web'
+    }
+  };
+
+  socket.emit('place_bid', bidData);
+}
+
+// Report metrics periodically
+setInterval(() => {
+  const metrics = monitor.getMetrics();
+  console.log('WebSocket Performance:', metrics);
+  
+  // Send to analytics service
+  analytics.track('websocket_performance', metrics);
+}, 30000);
+```
+
 ## Security Considerations
 
 ### Token Management
 
+**Token Refresh**:
 ```javascript
-class SecureTokenManager {
-  constructor() {
-    this.token = null;
-    this.refreshTimer = null;
+class SecureAuctionClient extends AuctionClient {
+  constructor(token, refreshTokenFn) {
+    super(token);
+    this.refreshTokenFn = refreshTokenFn;
   }
 
-  setToken(token) {
-    this.token = token;
-    this.scheduleTokenRefresh();
-  }
-
-  scheduleTokenRefresh() {
-    // Refresh token before expiration
-    const tokenPayload = this.parseJWT(this.token);
-    const expiresAt = tokenPayload.exp * 1000;
-    const refreshTime = expiresAt - Date.now() - 60000; // 1 minute before expiry
-
-    if (refreshTime > 0) {
-      this.refreshTimer = setTimeout(() => {
-        this.refreshToken();
-      }, refreshTime);
-    }
-  }
-
-  parseJWT(token) {
+  async handleAuthError() {
     try {
-      return JSON.parse(atob(token.split('.')[1]));
-    } catch (error) {
-      console.error('Invalid JWT token');
-      return {};
-    }
-  }
-
-  async refreshToken() {
-    try {
-      const response = await fetch('/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        this.setToken(data.access_token);
-        
-        // Reconnect socket with new token
-        this.reconnectSocket();
-      }
+      // Refresh token
+      const newToken = await this.refreshTokenFn();
+      
+      // Reconnect with new token
+      this.socket.disconnect();
+      this.token = newToken;
+      this.connect();
     } catch (error) {
       console.error('Token refresh failed:', error);
+      // Redirect to login
+      window.location.href = '/login';
     }
   }
 }
@@ -660,8 +771,9 @@ class SecureTokenManager {
 
 ### Input Validation
 
+**Client-side Validation**:
 ```javascript
-function validateBidInput(bidData) {
+function validateBidData(bidData) {
   const errors = [];
 
   if (!bidData.auctionId || typeof bidData.auctionId !== 'string') {
@@ -672,65 +784,106 @@ function validateBidInput(bidData) {
     errors.push('Invalid bid amount');
   }
 
-  if (!['regular', 'buy_now'].includes(bidData.bidType)) {
+  if (bidData.bidType && !['regular', 'buy_now'].includes(bidData.bidType)) {
     errors.push('Invalid bid type');
   }
 
-  return {
-    isValid: errors.length === 0,
-    errors
-  };
-}
-
-// Usage
-function placeBid(bidData) {
-  const validation = validateBidInput(bidData);
-  
-  if (!validation.isValid) {
-    console.error('Invalid bid data:', validation.errors);
-    return;
+  if (errors.length > 0) {
+    throw new Error(`Validation failed: ${errors.join(', ')}`);
   }
 
-  socket.emit('place_bid', bidData);
+  return true;
+}
+
+// Use validation before emitting
+function placeBid(auctionId, amount, bidType = 'regular') {
+  const bidData = { auctionId, amount, bidType };
+  
+  try {
+    validateBidData(bidData);
+    socket.emit('place_bid', bidData);
+  } catch (error) {
+    console.error('Bid validation failed:', error.message);
+    showError(error.message);
+  }
 }
 ```
+
+---
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Connection Issues
-- **Invalid Token**: Ensure JWT token is valid and not expired
-- **CORS Errors**: Configure CORS settings on the server
-- **Network Issues**: Check firewall and network connectivity
+**Connection Problems**:
+1. **Token Expired**: Refresh authentication token
+2. **Network Issues**: Check internet connectivity
+3. **Server Maintenance**: Wait for service restoration
+4. **Rate Limiting**: Reduce request frequency
 
-#### Event Issues
-- **Events Not Received**: Verify room membership and event listeners
-- **Memory Leaks**: Properly remove event listeners when components unmount
-- **Rate Limiting**: Implement proper rate limiting handling
+**Bidding Issues**:
+1. **Not Whitelisted**: Join auction whitelist first
+2. **Insufficient Balance**: Add more HASH to account
+3. **Bid Too Low**: Check minimum bid requirements
+4. **Auction Ended**: Auction no longer accepting bids
 
-#### Performance Issues
-- **Too Many Connections**: Implement connection pooling
-- **Heavy Event Traffic**: Debounce or throttle event handlers
-- **Memory Usage**: Monitor and cleanup unused connections
+**Performance Issues**:
+1. **High Latency**: Check network connection
+2. **Connection Drops**: Enable auto-reconnection
+3. **Memory Leaks**: Properly cleanup event listeners
 
-### Debugging
+### Debug Mode
 
+**Enable Debug Logging**:
 ```javascript
-// Enable Socket.IO debug logging
 localStorage.debug = 'socket.io-client:socket';
 
-// Monitor connection state
-socket.on('connect', () => console.log('Connected'));
-socket.on('disconnect', (reason) => console.log('Disconnected:', reason));
-socket.on('connect_error', (error) => console.error('Connection error:', error));
+const socket = io('wss://api.hashland.com/auction', {
+  auth: { token: authToken },
+  forceNew: true
+});
+```
 
-// Log all events
-const originalOn = socket.on;
-socket.on = function(event, callback) {
-  return originalOn.call(this, event, (...args) => {
-    console.log(`[${event}]`, ...args);
-    return callback(...args);
-  });
-};
-``` 
+**Custom Debug Logger**:
+```javascript
+class DebugLogger {
+  constructor(socket) {
+    this.socket = socket;
+    this.logs = [];
+    this.setupLogging();
+  }
+
+  setupLogging() {
+    // Log all events
+    const originalEmit = this.socket.emit;
+    this.socket.emit = (...args) => {
+      this.log('EMIT', args);
+      return originalEmit.apply(this.socket, args);
+    };
+
+    const originalOn = this.socket.on;
+    this.socket.on = (event, handler) => {
+      return originalOn.call(this.socket, event, (...args) => {
+        this.log('RECEIVE', [event, ...args]);
+        return handler(...args);
+      });
+    };
+  }
+
+  log(type, data) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      type,
+      data
+    };
+    this.logs.push(entry);
+    console.log(`[${type}]`, data);
+  }
+
+  exportLogs() {
+    return JSON.stringify(this.logs, null, 2);
+  }
+}
+```
+
+For additional support, refer to the [API Documentation](./api.md) and [User Guide](./user-guide.md).

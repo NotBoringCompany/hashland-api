@@ -249,320 +249,273 @@ Before bidding, ensure:
    - Blockchain transaction (if applicable)
    - Asset visible in your collection
 
-3. **Notifications**
-   - Win confirmation email
-   - In-app achievement
-   - Social sharing options
+3. **Confirmation**
+   - Email confirmation sent
+   - Transaction details provided
+   - Support contact information
 
-### Failed Bids
+### What Happens to Other Bidders
 
-**When Outbid**:
-1. Immediate notification
-2. HASH returned from hold
-3. Option to bid again
-4. Auction continues
+**Unsuccessful Bidders**:
+- HASH funds automatically released from hold
+- Outbid notification sent
+- Transaction history updated
+- Opportunity to participate in other auctions
 
-**When Auction Ends**:
-1. Final result notification
-2. HASH refund processed
-3. Transaction history updated
-4. Participation recorded
+## Account Management
 
-## Managing Your Account
-
-### HASH Balance
-
-**Viewing Balance**:
-```
-Profile → Wallet → HASH Balance
-- Current HASH: Available for use
-- Hold HASH: Temporarily held for bids
-- Total HASH: Combined balance
-```
-
-**Transaction History**:
-- All HASH movements
-- Categorized by type
-- Searchable and filterable
-- Export capabilities
+### HASH Balance Management
 
 **Adding HASH**:
 ```
-Wallet → Add HASH
-- Purchase options
-- Payment methods
-- Instant credit
-- Security verification
+Navigate to: Account → Balance
+Click: "Add HASH"
+Select: Payment method
+Enter: Desired amount
+Confirm: Transaction
 ```
 
-### Auction History
+**Balance Types**:
+- **Available**: Ready for immediate use
+- **Hold**: Reserved for active bids
+- **Total**: Available + Hold amounts
 
-**Participation Records**:
-- Auctions joined
-- Bids placed
-- Wins and losses
-- Total spent
+**Transaction History**:
+- Complete record of all HASH movements
+- Auction entry fees
+- Bid placements and refunds
+- Account deposits and withdrawals
 
-**Analytics**:
-- Success rate
-- Average bid amount
-- Favorite categories
+### Profile Settings
+
+**Account Information**:
+- Username and display preferences
+- Email notification settings
+- Security and privacy options
+- Connected payment methods
+
+**Notification Preferences**:
+- Email notifications for outbids
+- Auction ending warnings
+- Whitelist confirmations
+- System announcements
+
+### Security Features
+
+**Account Security**:
+- Strong password requirements
+- Two-factor authentication (2FA)
+- Login activity monitoring
+- Device management
+
+**Transaction Security**:
+- Confirmation for large transactions
+- Spending limits and controls
+- Fraud detection and prevention
+- Secure payment processing
+
+## Auction History and Analytics
+
+### Personal Statistics
+
+**Bidding Summary**:
+- Total auctions participated
+- Successful wins vs. losses
+- Average bid amounts
+- Total HASH spent
+
+**Performance Metrics**:
+- Win rate percentage
+- Favorite auction categories
+- Most active time periods
 - Spending patterns
 
-### Notifications
+### Auction Archives
 
-**Notification Types**:
+**Past Auctions**:
+- Complete history of participated auctions
+- Detailed bid progression
+- Final outcomes and prices
+- NFT collection gained
+
+**Search and Filter**:
+- Filter by date range
+- Sort by auction type
+- Search by NFT name or category
+- Filter by outcome (won/lost)
+
+## Mobile App Features
+
+### Real-time Notifications
+
+**Push Notifications**:
+- Instant outbid alerts
+- Auction ending warnings
 - Whitelist confirmations
-- Auction start alerts
-- Outbid notifications
-- Ending warnings
-- Win/loss results
+- System updates
 
-**Preferences**:
-```
-Settings → Notifications
-- Email preferences
-- In-app alerts
-- WebSocket updates
-- SMS notifications (optional)
-```
+**Mobile-Optimized Interface**:
+- Touch-friendly bidding controls
+- Optimized for various screen sizes
+- Offline capability for viewing history
+- Quick access to active auctions
+
+### Mobile-Specific Features
+
+**Quick Actions**:
+- One-tap bid increments
+- Favorite auction shortcuts
+- Emergency stop/pause bidding
+- Fast balance checks
 
 ## Troubleshooting
 
 ### Common Issues
 
-**Can't Join Whitelist**:
-- Check HASH balance for entry fee
-- Verify auction is in whitelist phase
-- Ensure spots are still available
-- Confirm you haven't already joined
+**Connection Problems**:
+1. **Slow Loading**: Check internet connection
+2. **WebSocket Disconnected**: Refresh browser/app
+3. **Failed Bids**: Verify HASH balance
+4. **Login Issues**: Reset password if needed
 
-**Bid Rejected**:
-- Verify bid amount meets minimum
-- Check auction is still active
-- Ensure you're whitelisted
-- Confirm sufficient HASH balance
+**Bidding Problems**:
+1. **Bid Rejected**: Check minimum increment
+2. **Insufficient Balance**: Add more HASH
+3. **Not Whitelisted**: Join whitelist first
+4. **Auction Ended**: Check auction status
 
-**Connection Issues**:
-- Refresh browser page
-- Check internet connection
-- Try different browser
-- Contact support if persistent
-
-### Error Messages
-
-**"Insufficient HASH Balance"**:
-```
-Solution:
-1. Check current balance
-2. Add more HASH to account
-3. Wait for pending transactions
-4. Try smaller bid amount
-```
-
-**"Not Whitelisted"**:
-```
-Solution:
-1. Join current whitelist (if open)
-2. Wait for next auction
-3. Check whitelist status
-4. Contact support if error
-```
-
-**"Bid Too Low"**:
-```
-Solution:
-1. Check current highest bid
-2. Add minimum increment
-3. Use suggested bid amount
-4. Consider buy-now option
-```
+**Payment Issues**:
+1. **Payment Failed**: Contact support
+2. **Balance Not Updated**: Allow processing time
+3. **Refund Missing**: Check transaction history
+4. **Duplicate Charges**: Report immediately
 
 ### Getting Help
 
 **Support Channels**:
-- Help Center: Comprehensive FAQ
-- Live Chat: Real-time support
-- Email: support@auction.com
-- Community: User forums
+- **Help Center**: Comprehensive FAQ and guides
+- **Live Chat**: Real-time support during business hours
+- **Email Support**: Response within 24 hours
+- **Community Forum**: User-to-user assistance
 
-**Emergency Contacts**:
-- Technical Issues: tech@auction.com
-- Account Problems: accounts@auction.com
-- Billing Questions: billing@auction.com
+**Emergency Support**:
+- **Critical Issues**: Immediate response line
+- **Technical Problems**: Escalated support team
+- **Account Security**: Dedicated security team
+- **Payment Disputes**: Financial support specialists
 
-## Best Practices
+### Best Practices
 
-### Successful Bidding
-
-**Preparation**:
-- Research NFT and artist
-- Set maximum bid limit
-- Ensure adequate HASH balance
-- Monitor auction from start
-
-**Timing**:
-- Join whitelist early
-- Place initial bid to show interest
-- Save major bids for final minutes
-- Have backup bid amounts ready
-
-**Strategy**:
-- Don't reveal maximum early
-- Use psychological bid amounts
-- Monitor competitor patterns
-- Stay calm under pressure
-
-### Security Tips
+**Successful Bidding**:
+1. **Research**: Study auction history and trends
+2. **Budget**: Set spending limits before bidding
+3. **Timing**: Understand auction dynamics
+4. **Patience**: Don't chase every auction
 
 **Account Security**:
-- Use strong, unique password
-- Enable two-factor authentication
-- Never share login credentials
-- Log out from public devices
+1. **Strong Passwords**: Use unique, complex passwords
+2. **2FA**: Enable two-factor authentication
+3. **Regular Monitoring**: Check account activity
+4. **Secure Devices**: Use trusted devices only
 
-**Transaction Safety**:
-- Verify auction details before bidding
-- Double-check bid amounts
-- Keep transaction records
-- Report suspicious activity
-
-**Privacy Protection**:
-- Review privacy settings
-- Control information sharing
-- Be cautious with personal data
-- Use secure internet connections
-
-### Financial Management
-
-**Budget Planning**:
-- Set monthly auction budget
-- Track spending patterns
-- Reserve emergency HASH
-- Plan for multiple auctions
-
-**Risk Management**:
-- Never bid more than you can afford
-- Diversify across different auctions
-- Don't chase losses
-- Take breaks between sessions
+**HASH Management**:
+1. **Budget Planning**: Only spend what you can afford
+2. **Balance Monitoring**: Keep track of hold amounts
+3. **Transaction Records**: Save important receipts
+4. **Regular Reviews**: Analyze spending patterns
 
 ## Advanced Features
 
-### Watchlists
-
-**Create Watchlists**:
-```
-Auctions → Create Watchlist
-- Add favorite auctions
-- Set custom alerts
-- Track price movements
-- Share with friends
-```
-
-**Watchlist Benefits**:
-- Quick access to favorites
-- Custom notification settings
-- Price trend analysis
-- Social features
-
-### Analytics Dashboard
-
-**Personal Statistics**:
-- Win/loss ratios
-- Average bid amounts
-- Category preferences
-- Time-based patterns
-
-**Market Insights**:
-- Popular NFT categories
-- Price trends
-- Bidding patterns
-- Auction success rates
-
 ### API Access
 
-**For Developers**:
-- RESTful API endpoints
-- WebSocket connections
+**Developer API**:
+- Programmatic auction access
+- Automated bidding capabilities
 - Real-time data feeds
 - Custom integrations
 
-**Use Cases**:
-- Automated bidding bots
-- Portfolio tracking apps
-- Market analysis tools
-- Custom notifications
+**Webhook Notifications**:
+- Custom notification endpoints
+- Real-time auction updates
+- Bid confirmations
+- System alerts
 
-## Mobile Experience
+### Analytics Dashboard
 
-### Mobile App Features
+**Advanced Metrics**:
+- Detailed bidding analytics
+- Market trend analysis
+- ROI calculations
+- Performance benchmarking
 
-**Core Functionality**:
-- Full auction participation
-- Real-time notifications
-- Touch-optimized bidding
-- Offline capability
+**Custom Reports**:
+- Personalized auction reports
+- Export capabilities
+- Historical trend analysis
+- Comparative performance
 
-**Mobile-Specific**:
-- Push notifications
-- Camera integration
-- Location services
-- Biometric authentication
+## Community and Social Features
 
-### Mobile Best Practices
+### Auction Communities
 
-**Bidding on Mobile**:
-- Use stable internet connection
-- Keep app updated
-- Enable push notifications
-- Have backup device ready
-
-**Security on Mobile**:
-- Use app lock features
-- Avoid public WiFi for bidding
-- Keep device software updated
-- Use official app only
-
-## Community Features
-
-### Social Integration
-
-**Share Achievements**:
-- Auction wins
-- Rare NFT acquisitions
-- Milestone celebrations
-- Collection showcases
-
-**Follow Other Users**:
+**Follow Other Bidders**:
 - Track successful bidders
-- Learn from experts
-- Build auction networks
-- Share strategies
+- Learn from experienced users
+- Community leaderboards
+- Social bidding features
 
-### Forums and Discussion
-
-**Community Topics**:
-- Auction strategies
-- NFT discussions
-- Technical support
-- Platform feedback
-
-**Expert Content**:
-- Bidding tutorials
+**Discussion Forums**:
+- Auction-specific discussions
+- Strategy sharing
 - Market analysis
-- Artist spotlights
-- Success stories
+- Community events
 
-## Conclusion
+### Social Features
 
-The Auction System provides a comprehensive platform for NFT auctions with innovative features like whitelist access, real-time bidding, and HASH currency integration. Success in auctions comes from:
+**Sharing Capabilities**:
+- Share auction links
+- Celebrate wins publicly
+- Build bidding reputation
+- Connect with other collectors
 
-- **Preparation**: Research, planning, and adequate funding
-- **Strategy**: Smart bidding timing and amount decisions
-- **Technology**: Leveraging real-time features and mobile capabilities
-- **Community**: Learning from others and sharing experiences
+**Community Events**:
+- Special auction events
+- Community challenges
+- Exclusive previews
+- Educational webinars
 
-Remember that auction participation should be enjoyable and within your financial means. Use the tools and features provided to enhance your experience while maintaining responsible bidding practices.
+---
 
-For additional support or questions not covered in this guide, please contact our support team or visit the Help Center for the most up-to-date information. 
+## Getting Started Checklist
+
+### Before Your First Auction
+
+- [ ] Create and verify your account
+- [ ] Complete profile setup
+- [ ] Add HASH to your balance
+- [ ] Review auction rules and guidelines
+- [ ] Practice with small auctions
+- [ ] Set up notification preferences
+- [ ] Enable account security features
+
+### During Auction Participation
+
+- [ ] Join whitelists early
+- [ ] Monitor your balance
+- [ ] Set bidding budgets
+- [ ] Use real-time features
+- [ ] Stay informed about auction progress
+- [ ] Have backup payment methods ready
+
+### After Auction Completion
+
+- [ ] Review transaction history
+- [ ] Confirm NFT transfers
+- [ ] Analyze bidding performance
+- [ ] Plan for future auctions
+- [ ] Provide feedback if needed
+- [ ] Update budget and strategy
+
+**Welcome to the exciting world of NFT auctions! Start your journey today and discover unique digital assets through competitive bidding.**
+
+For technical issues or questions not covered in this guide, please contact our support team through the help center or live chat feature.

@@ -1,176 +1,84 @@
 # Auction System API Documentation
 
-## Overview
+This document provides comprehensive API reference for the Auction System, including endpoints for auction management, whitelist operations, bidding, and real-time WebSocket functionality.
 
-The Auction System provides a comprehensive RESTful API for managing NFT auctions with whitelist functionality, real-time bidding, and automated lifecycle management.
+## Table of Contents
 
-**Base URL**: `/api/v1`  
-**Authentication**: JWT Bearer Token  
-**Content-Type**: `application/json`
+1. [Authentication](#authentication)
+2. [Base URL & Versioning](#base-url--versioning)
+3. [Error Handling](#error-handling)
+4. [Rate Limiting](#rate-limiting)
+5. [Auction Management](#auction-management)
+6. [Whitelist Management](#whitelist-management)
+7. [Bidding System](#bidding-system)
+8. [Auction Lifecycle](#auction-lifecycle-management)
+9. [Queue System](#queue-system)
+10. [WebSocket Events](#websocket-events)
+11. [Admin Operations](#admin-operations)
 
 ## Authentication
 
-All API endpoints require authentication via JWT Bearer token:
+All API endpoints require authentication using JWT tokens.
 
-```http
-Authorization: Bearer <your-jwt-token>
+**Headers Required**:
 ```
-
-### Getting a Token
-
-```http
-POST /auth/login
+Authorization: Bearer <jwt_token>
 Content-Type: application/json
+```
 
+**Authentication Flow**:
+1. Obtain JWT token from auth service
+2. Include token in Authorization header
+3. Token contains operator information for permission checks
+
+## Base URL & Versioning
+
+**Base URL**: `https://api.hashland.com/v1`  
+**Current Version**: v1  
+**Protocol**: HTTPS only
+
+## Error Handling
+
+**Standard Error Response**:
+```json
 {
-  "username": "your-username",
-  "password": "your-password"
+  "statusCode": 400,
+  "message": "Validation failed",
+  "error": "Bad Request",
+  "details": [
+    {
+      "field": "amount",
+      "message": "Amount must be greater than current highest bid"
+    }
+  ],
+  "timestamp": "2023-01-01T00:00:00.000Z",
+  "path": "/auctions/60f1b2b3b3b3b3b3b3b3b3b4/bids"
 }
 ```
 
-**Response**:
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expires_in": 86400,
-  "user": {
-    "id": "60f1b2b3b3b3b3b3b3b3b3b3",
-    "username": "your-username"
-  }
-}
+**HTTP Status Codes**:
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request (validation errors)
+- `401` - Unauthorized (invalid/missing token)
+- `403` - Forbidden (insufficient permissions)
+- `404` - Not Found
+- `409` - Conflict (business rule violation)
+- `429` - Too Many Requests (rate limiting)
+- `500` - Internal Server Error
+
+## Rate Limiting
+
+**Limits**:
+- General API: 100 requests/minute per IP
+- Bidding endpoints: 30 requests/minute per user
+- WebSocket connections: 5 connections/minute per IP
+
+**Rate Limit Headers**:
 ```
-
-## NFT Management
-
-### Create NFT
-
-**Endpoint**: `POST /nfts`  
-**Auth**: Required (Admin)
-
-**Request Body**:
-```json
-{
-  "title": "Amazing Digital Art",
-  "description": "A unique piece of digital artwork",
-  "imageUrl": "https://example.com/nft-image.jpg",
-  "metadata": {
-    "attributes": [
-      {
-        "trait_type": "Color",
-        "value": "Blue"
-      },
-      {
-        "trait_type": "Rarity",
-        "value": "Legendary"
-      }
-    ],
-    "rarity": "Legendary",
-    "collection": "Digital Art Collection"
-  }
-}
-```
-
-**Response** `201 Created`:
-```json
-{
-  "_id": "60f1b2b3b3b3b3b3b3b3b3b3",
-  "title": "Amazing Digital Art",
-  "description": "A unique piece of digital artwork",
-  "imageUrl": "https://example.com/nft-image.jpg",
-  "metadata": {
-    "attributes": [
-      {
-        "trait_type": "Color",
-        "value": "Blue"
-      },
-      {
-        "trait_type": "Rarity",
-        "value": "Legendary"
-      }
-    ],
-    "rarity": "Legendary",
-    "collection": "Digital Art Collection"
-  },
-  "status": "draft",
-  "createdAt": "2023-01-01T00:00:00.000Z",
-  "updatedAt": "2023-01-01T00:00:00.000Z"
-}
-```
-
-### Get NFTs
-
-**Endpoint**: `GET /nfts`  
-**Auth**: Required
-
-**Query Parameters**:
-- `page` (number): Page number (default: 1)
-- `limit` (number): Items per page (default: 20, max: 100)
-- `status` (string): Filter by status (`draft`, `active`, `sold`, `cancelled`)
-- `collection` (string): Filter by collection name
-
-**Response** `200 OK`:
-```json
-[
-  {
-    "_id": "60f1b2b3b3b3b3b3b3b3b3b3",
-    "title": "Amazing Digital Art",
-    "status": "active",
-    "metadata": {
-      "rarity": "Legendary"
-    },
-    "createdAt": "2023-01-01T00:00:00.000Z"
-  }
-]
-```
-
-### Get NFT by ID
-
-**Endpoint**: `GET /nfts/:id`  
-**Auth**: Required
-
-**Response** `200 OK`:
-```json
-{
-  "_id": "60f1b2b3b3b3b3b3b3b3b3b3",
-  "title": "Amazing Digital Art",
-  "description": "A unique piece of digital artwork",
-  "imageUrl": "https://example.com/nft-image.jpg",
-  "metadata": {
-    "attributes": [
-      {
-        "trait_type": "Color",
-        "value": "Blue"
-      }
-    ],
-    "rarity": "Legendary",
-    "collection": "Digital Art Collection"
-  },
-  "status": "active",
-  "createdAt": "2023-01-01T00:00:00.000Z",
-  "updatedAt": "2023-01-01T00:00:00.000Z"
-}
-```
-
-### Update NFT Status
-
-**Endpoint**: `PATCH /nfts/:id/status`  
-**Auth**: Required (Admin)
-
-**Request Body**:
-```json
-{
-  "status": "active"
-}
-```
-
-**Response** `200 OK`:
-```json
-{
-  "_id": "60f1b2b3b3b3b3b3b3b3b3b3",
-  "title": "Amazing Digital Art",
-  "status": "active",
-  "updatedAt": "2023-01-01T00:00:00.000Z"
-}
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1640995200
 ```
 
 ## Auction Management
@@ -183,7 +91,7 @@ Content-Type: application/json
 **Request Body**:
 ```json
 {
-  "nftId": "60f1b2b3b3b3b3b3b3b3b3b3",
+  "nft": "60f1b2b3b3b3b3b3b3b3b3b3",
   "title": "Amazing Art Auction",
   "description": "Auction for amazing digital artwork",
   "startingPrice": 100,
@@ -207,7 +115,7 @@ Content-Type: application/json
 ```json
 {
   "_id": "60f1b2b3b3b3b3b3b3b3b3b4",
-  "nftId": "60f1b2b3b3b3b3b3b3b3b3b3",
+  "nft": "60f1b2b3b3b3b3b3b3b3b3b3",
   "title": "Amazing Art Auction",
   "description": "Auction for amazing digital artwork",
   "startingPrice": 100,
@@ -275,7 +183,7 @@ Content-Type: application/json
 ```json
 {
   "_id": "60f1b2b3b3b3b3b3b3b3b3b4",
-  "nftId": {
+  "nft": {
     "_id": "60f1b2b3b3b3b3b3b3b3b3b3",
     "title": "Amazing Digital Art",
     "imageUrl": "https://example.com/nft-image.jpg"
@@ -321,8 +229,8 @@ Content-Type: application/json
 ```json
 {
   "_id": "60f1b2b3b3b3b3b3b3b3b3b6",
-  "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4",
-  "operatorId": "60f1b2b3b3b3b3b3b3b3b3b5",
+  "auction": "60f1b2b3b3b3b3b3b3b3b3b4",
+  "operator": "60f1b2b3b3b3b3b3b3b3b3b5",
   "entryFeePaid": 25,
   "paymentTransactionId": "tx_abc123",
   "status": "confirmed",
@@ -364,7 +272,7 @@ Content-Type: application/json
 [
   {
     "_id": "60f1b2b3b3b3b3b3b3b3b3b6",
-    "operatorId": {
+    "operator": {
       "_id": "60f1b2b3b3b3b3b3b3b3b3b5",
       "username": "user123"
     },
@@ -399,8 +307,8 @@ Content-Type: application/json
 ```json
 {
   "_id": "60f1b2b3b3b3b3b3b3b3b3b7",
-  "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4",
-  "bidderId": "60f1b2b3b3b3b3b3b3b3b3b5",
+  "auction": "60f1b2b3b3b3b3b3b3b3b3b4",
+  "bidder": "60f1b2b3b3b3b3b3b3b3b3b5",
   "amount": 150,
   "bidType": "regular",
   "status": "confirmed",
@@ -577,179 +485,331 @@ Content-Type: application/json
     "delayed": 0
   },
   "redisConnection": "connected",
-  "lastProcessed": "2023-01-01T15:30:45.000Z",
-  "averageProcessingTime": 234
+  "lastProcessed": "2023-01-01T15:45:00.000Z",
+  "avgProcessingTime": 150,
+  "throughput": {
+    "perMinute": 45,
+    "perHour": 2700
+  }
 }
 ```
 
-### Get Queue Metrics
+### Queue Bid Processing
 
-**Endpoint**: `GET /queue/metrics`  
+**Endpoint**: `POST /auctions/:id/bids/queue`  
+**Auth**: Required
+
+**Request Body**:
+```json
+{
+  "amount": 175,
+  "bidType": "regular",
+  "metadata": {
+    "source": "api",
+    "priority": "normal"
+  }
+}
+```
+
+**Response** `202 Accepted`:
+```json
+{
+  "jobId": "job_bid_abc123xyz",
+  "message": "Bid queued for processing",
+  "queuePosition": 3,
+  "estimatedProcessTime": "2023-01-01T15:47:30.000Z",
+  "auction": "60f1b2b3b3b3b3b3b3b3b3b4",
+  "bidder": "60f1b2b3b3b3b3b3b3b3b3b5"
+}
+```
+
+### Get Queue Status
+
+**Endpoint**: `GET /queue/jobs/:jobId`  
+**Auth**: Required
+
+**Response** `200 OK`:
+```json
+{
+  "jobId": "job_bid_abc123xyz",
+  "status": "processing",
+  "progress": 75,
+  "data": {
+    "auction": "60f1b2b3b3b3b3b3b3b3b3b4",
+    "bidder": "60f1b2b3b3b3b3b3b3b3b3b5",
+    "amount": 175
+  },
+  "result": null,
+  "error": null,
+  "createdAt": "2023-01-01T15:46:00.000Z",
+  "processedAt": "2023-01-01T15:46:15.000Z",
+  "completedAt": null
+}
+```
+
+## WebSocket Events
+
+### Connection
+
+**Namespace**: `/auction`  
+**Auth**: JWT token via query parameter or handshake auth
+
+**Connection URL**:
+```
+wss://api.hashland.com/auction?token=<jwt_token>
+```
+
+### Event Types
+
+#### Client → Server Events
+
+**join_auction**:
+```json
+{
+  "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4"
+}
+```
+
+**leave_auction**:
+```json
+{
+  "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4"
+}
+```
+
+**place_bid**:
+```json
+{
+  "bidder": "60f1b2b3b3b3b3b3b3b3b3b5",
+  "amount": 200,
+  "bidType": "regular",
+  "metadata": {
+    "note": "Final bid!"
+  }
+}
+```
+
+**get_auction_status**:
+```json
+{
+  "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4"
+}
+```
+
+#### Server → Client Events
+
+**connection_confirmed**:
+```json
+{
+  "message": "Connected to auction system",
+  "operator": "60f1b2b3b3b3b3b3b3b3b3b5",
+  "timestamp": "2023-01-01T15:50:00.000Z"
+}
+```
+
+**auction_status**:
+```json
+{
+  "auction": {
+    "_id": "60f1b2b3b3b3b3b3b3b3b3b4",
+    "title": "Amazing Art Auction",
+    "currentHighestBid": 250,
+    "status": "auction_active",
+    "timeRemaining": 3600000
+  },
+  "timestamp": "2023-01-01T15:50:00.000Z"
+}
+```
+
+**new_bid**:
+```json
+{
+  "bid": {
+    "_id": "60f1b2b3b3b3b3b3b3b3b3b8",
+    "bidder": {
+      "_id": "60f1b2b3b3b3b3b3b3b3b3b6",
+      "username": "newbidder"
+    },
+    "amount": 275,
+    "createdAt": "2023-01-01T15:51:00.000Z"
+  },
+  "auction": {
+    "currentHighestBid": 275,
+    "totalBids": 16
+  },
+  "timestamp": "2023-01-01T15:51:00.000Z"
+}
+```
+
+**bid_placed**:
+```json
+{
+  "bid": {
+    "_id": "60f1b2b3b3b3b3b3b3b3b3b8",
+    "amount": 275,
+    "status": "confirmed"
+  },
+  "message": "Bid placed successfully",
+  "queued": false,
+  "timestamp": "2023-01-01T15:51:00.000Z"
+}
+```
+
+**bid_outbid**:
+```json
+{
+  "previousBid": {
+    "_id": "60f1b2b3b3b3b3b3b3b3b3b7",
+    "amount": 250
+  },
+  "newHighestBid": 275,
+  "newLeader": "newbidder",
+  "timestamp": "2023-01-01T15:51:00.000Z"
+}
+```
+
+**auction_ending_soon**:
+```json
+{
+  "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4",
+  "minutesLeft": 5,
+  "timestamp": "2023-01-01T15:55:00.000Z"
+}
+```
+
+**auction_ended**:
+```json
+{
+  "auction": {
+    "_id": "60f1b2b3b3b3b3b3b3b3b3b4",
+    "status": "ended",
+    "finalPrice": 275,
+    "winner": {
+      "_id": "60f1b2b3b3b3b3b3b3b3b3b6",
+      "username": "newbidder"
+    }
+  },
+  "timestamp": "2023-01-01T16:00:00.000Z"
+}
+```
+
+**error**:
+```json
+{
+  "message": "Insufficient balance for bid",
+  "timestamp": "2023-01-01T15:52:00.000Z"
+}
+```
+
+## Admin Operations
+
+### Get System Statistics
+
+**Endpoint**: `GET /admin/stats`  
 **Auth**: Required (Admin)
 
 **Response** `200 OK`:
 ```json
 {
-  "active": 3,
-  "waiting": 0,
-  "completed": 1247,
-  "failed": 2,
-  "delayed": 0,
-  "processingRate": 45.2,
-  "averageWaitTime": 123,
-  "failureRate": 0.16
+  "auctions": {
+    "total": 156,
+    "active": 8,
+    "completed": 142,
+    "draft": 6
+  },
+  "bids": {
+    "total": 4567,
+    "today": 89,
+    "avgPerAuction": 29.3
+  },
+  "users": {
+    "totalParticipants": 1203,
+    "activeToday": 45,
+    "whitelistSuccess": 0.87
+  },
+  "revenue": {
+    "totalVolume": 125600,
+    "whitelistFees": 3250,
+    "avgAuctionValue": 805.12
+  }
 }
 ```
 
-## Error Responses
+### Emergency Stop Auction
 
-### Error Format
+**Endpoint**: `POST /admin/auctions/:id/emergency-stop`  
+**Auth**: Required (Admin)
 
-All API errors follow a consistent format:
-
+**Request Body**:
 ```json
 {
-  "statusCode": 400,
-  "message": "Validation failed",
-  "error": "Bad Request",
-  "details": [
-    {
-      "field": "amount",
-      "message": "Amount must be greater than current highest bid"
-    }
+  "reason": "Technical issue detected",
+  "refundBids": true,
+  "notifyParticipants": true
+}
+```
+
+**Response** `200 OK`:
+```json
+{
+  "success": true,
+  "message": "Auction stopped successfully",
+  "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4",
+  "stoppedAt": "2023-01-01T15:55:00.000Z",
+  "refundsProcessed": 15,
+  "participantsNotified": 28
+}
+```
+
+### Bulk Operations
+
+**Endpoint**: `POST /admin/auctions/bulk`  
+**Auth**: Required (Admin)
+
+**Request Body**:
+```json
+{
+  "operation": "extend_whitelist",
+  "auctionIds": [
+    "60f1b2b3b3b3b3b3b3b3b3b4",
+    "60f1b2b3b3b3b3b3b3b3b3b5"
   ],
-  "timestamp": "2023-01-01T15:30:00.000Z",
-  "path": "/auctions/60f1b2b3b3b3b3b3b3b3b3b4/bids"
-}
-```
-
-### Common Error Codes
-
-| Status Code | Error Type | Description |
-|-------------|------------|-------------|
-| 400 | Bad Request | Invalid input data or business logic violation |
-| 401 | Unauthorized | Missing or invalid authentication token |
-| 403 | Forbidden | Insufficient permissions for the operation |
-| 404 | Not Found | Requested resource does not exist |
-| 409 | Conflict | Resource state conflict (e.g., already exists) |
-| 422 | Unprocessable Entity | Valid syntax but semantically incorrect |
-| 429 | Too Many Requests | Rate limit exceeded |
-| 500 | Internal Server Error | Unexpected server error |
-
-### Specific Error Cases
-
-#### Bidding Errors
-
-```json
-{
-  "statusCode": 400,
-  "message": "Bid amount too low",
-  "error": "INSUFFICIENT_BID_AMOUNT",
-  "details": {
-    "minimumRequired": 160,
-    "provided": 150,
-    "currentHighestBid": 150,
-    "minIncrement": 10
+  "parameters": {
+    "extensionMinutes": 30
   }
 }
 ```
 
-#### Whitelist Errors
-
+**Response** `200 OK`:
 ```json
 {
-  "statusCode": 403,
-  "message": "Not whitelisted for this auction",
-  "error": "NOT_WHITELISTED",
-  "details": {
-    "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4",
-    "whitelistStatus": "not_joined"
-  }
+  "success": true,
+  "processed": 2,
+  "failed": 0,
+  "results": [
+    {
+      "auctionId": "60f1b2b3b3b3b3b3b3b3b3b4",
+      "status": "success",
+      "newEndTime": "2023-12-01T18:30:00.000Z"
+    },
+    {
+      "auctionId": "60f1b2b3b3b3b3b3b3b3b3b5", 
+      "status": "success",
+      "newEndTime": "2023-12-01T18:30:00.000Z"
+    }
+  ]
 }
 ```
 
-#### Balance Errors
+---
 
-```json
-{
-  "statusCode": 400,
-  "message": "Insufficient HASH balance",
-  "error": "INSUFFICIENT_BALANCE",
-  "details": {
-    "required": 150,
-    "available": 100,
-    "currency": "HASH"
-  }
-}
-```
+## Support
 
-## Rate Limiting
+For API support or technical questions:
+- **Documentation**: [https://docs.hashland.com/auction-api](https://docs.hashland.com/auction-api)
+- **Status Page**: [https://status.hashland.com](https://status.hashland.com)
+- **Support**: [api-support@hashland.com](mailto:api-support@hashland.com)
 
-The API implements rate limiting to ensure fair usage:
-
-| Endpoint Type | Rate Limit | Window |
-|---------------|------------|---------|
-| Authentication | 5 requests | 1 minute |
-| Bidding | 10 requests | 1 minute |
-| General API | 100 requests | 1 minute |
-| Admin Operations | 50 requests | 1 minute |
-
-Rate limit headers are included in responses:
-
-```http
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 87
-X-RateLimit-Reset: 1672531200
-```
-
-## Pagination
-
-All list endpoints support pagination:
-
-**Request Parameters**:
-- `page`: Page number (default: 1)
-- `limit`: Items per page (default: 20, max: 100)
-
-**Response Headers**:
-```http
-X-Total-Count: 247
-X-Page-Count: 13
-X-Current-Page: 1
-X-Per-Page: 20
-```
-
-## Data Types
-
-### Auction Status
-- `draft`: Auction created but not started
-- `whitelist_open`: Whitelist registration is active
-- `whitelist_closed`: Whitelist closed, auction not started
-- `auction_active`: Auction is live and accepting bids
-- `ended`: Auction completed
-
-### Bid Types
-- `regular`: Standard bid
-- `buy_now`: Immediate purchase at buy-now price
-
-### NFT Status
-- `draft`: NFT created but not active
-- `active`: NFT available for auction
-- `in_auction`: NFT currently in an active auction
-- `sold`: NFT has been sold
-- `cancelled`: NFT listing cancelled
-
-## WebSocket Events
-
-For real-time functionality, see [WebSocket Documentation](./websocket.md).
-
-## SDKs and Examples
-
-For code examples and SDKs, see the [examples directory](../examples/).
-
-## Changelog
-
-### v1.0.0
-- Initial API release
-- Complete auction lifecycle support
-- Real-time bidding via WebSocket
-- Queue-based high-frequency bid processing 
+**Rate Limits & Quotas**: Contact support for enterprise limits  
+**SLA**: 99.9% uptime guarantee  
+**Maintenance Windows**: Sundays 02:00-04:00 UTC
