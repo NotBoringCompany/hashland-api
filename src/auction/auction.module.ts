@@ -55,6 +55,9 @@ import { BidProcessor } from './processors/bid.processor';
 // Filters
 import { AuctionExceptionFilter } from './filters/auction-exception.filter';
 
+// Seeders
+import { AuctionSeeder } from './seeders/auction.seeder';
+
 @Module({
   imports: [
     ConfigModule,
@@ -106,6 +109,7 @@ import { AuctionExceptionFilter } from './filters/auction-exception.filter';
     BidProcessor,
     AuctionLifecycleService,
     AuctionExceptionFilter,
+    AuctionSeeder,
   ],
   exports: [
     MongooseModule,
@@ -116,6 +120,7 @@ import { AuctionExceptionFilter } from './filters/auction-exception.filter';
     AuctionNotificationService,
     BidQueueService,
     AuctionLifecycleService,
+    AuctionSeeder,
   ],
 })
 export class AuctionModule {}
