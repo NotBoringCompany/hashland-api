@@ -142,7 +142,6 @@ export class AuctionGateway
       // Validate auction exists
       const auction = await this.auctionService.getAuctionById(
         new Types.ObjectId(auctionId),
-        true,
       );
 
       if (!auction) {
@@ -358,7 +357,6 @@ export class AuctionGateway
         // Get updated auction data
         const updatedAuction = await this.auctionService.getAuctionById(
           new Types.ObjectId(auctionId),
-          true,
         );
 
         // Broadcast bid to all users in auction room
@@ -408,7 +406,6 @@ export class AuctionGateway
 
       const auction = await this.auctionService.getAuctionById(
         new Types.ObjectId(auctionId),
-        true,
       );
 
       if (!auction) {

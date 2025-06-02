@@ -202,7 +202,6 @@ export class BidProcessor {
       // Get updated auction data
       const auction = await this.auctionService.getAuctionById(
         new Types.ObjectId(auctionId),
-        true,
       );
 
       if (!auction) {
