@@ -14,6 +14,8 @@ import { NotificationGateway } from './gateways/notification.gateway';
 import { NotificationProcessor } from './processors/notification.processor';
 import { NotificationTemplateAdminController } from './controllers/notification-template-admin.controller';
 import { NotificationQueueAdminController } from './controllers/notification-queue-admin.controller';
+import { NotificationController } from './controllers/notification.controller';
+import { NotificationAdminController } from './controllers/notification-admin.controller';
 import {
   Notification,
   NotificationSchema,
@@ -62,6 +64,8 @@ import { RedisModule } from 'src/common/redis.module';
     RedisModule,
   ],
   controllers: [
+    NotificationController,
+    NotificationAdminController,
     NotificationTemplateAdminController,
     NotificationQueueAdminController,
   ],
