@@ -11,6 +11,7 @@ import {
   ValidationPipe,
   UseGuards,
   Request,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -306,15 +307,38 @@ export class AuctionController {
     description: 'Auction history retrieved successfully',
     type: PaginatedResponse.withType(AuctionHistory),
   })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'Bad request - validation failed',
+    type: ApiResponse,
+  })
   async getAuctionHistory(
     @Query() query: GetAuctionHistoryQueryDto,
     @Request() req,
   ): Promise<PaginatedResponse<AuctionHistory>> {
-    // Ensure operatorId is always set from authenticated user
-    const filters = {
-      ...query,
-      operatorId: req.user.operatorId,
-    };
+    const authenticatedOperatorId = req.user.operatorId;
+
+    // Validation logic
+    if (!query.operatorId && !query.auctionId) {
+      throw new BadRequestException(
+        'Either operatorId or auctionId must be provided',
+      );
+    }
+
+    // If operatorId is provided, it must match the authenticated user's operatorId
+    if (query.operatorId && query.operatorId !== authenticatedOperatorId) {
+      throw new BadRequestException(
+        'Access denied: operatorId must match authenticated user',
+      );
+    }
+
+    // Build filters based on provided query parameters
+    const filters = { ...query };
+
+    // Only include operatorId if explicitly provided in query
+    if (query.operatorId) {
+      filters.operatorId = query.operatorId;
+    }
 
     const result = await this.auctionService.getAuctionHistories(filters);
 
