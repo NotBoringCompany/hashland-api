@@ -17,6 +17,15 @@ import { AuctionAction } from '../schemas/auction-history.schema';
  */
 export class GetAuctionHistoryQueryDto {
   @ApiProperty({
+    description: 'Auction ID to filter history for',
+    example: '507f1f77bcf86cd799439011',
+    required: false,
+  })
+  @IsOptional()
+  @IsMongoId()
+  auctionId?: string;
+
+  @ApiProperty({
     description: 'Page number for pagination',
     example: 1,
     required: false,
@@ -43,13 +52,15 @@ export class GetAuctionHistoryQueryDto {
   limit?: number = 50;
 
   @ApiProperty({
-    description: 'Filter by auction action type',
+    description: 'Filter by auction action types',
     enum: AuctionAction,
+    isArray: true,
     required: false,
+    example: ['bid_placed', 'auction_won'],
   })
   @IsOptional()
-  @IsEnum(AuctionAction)
-  action?: AuctionAction;
+  @IsEnum(AuctionAction, { each: true })
+  actions?: AuctionAction[];
 
   @ApiProperty({
     description: 'Filter by operator ID who performed the action',

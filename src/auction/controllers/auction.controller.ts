@@ -9,6 +9,8 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,6 +19,7 @@ import {
   ApiQuery,
   ApiParam,
   ApiBody,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { AuctionService } from '../services/auction.service';
@@ -34,6 +37,7 @@ import {
 import { ApiResponse } from '../../common/dto/response.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 import { AdminProtected } from '../../auth/admin';
+import { JwtAuthGuard } from '../../auth/jwt/jwt-auth.guard';
 
 /**
  * Controller for auction management in the auction system
@@ -291,39 +295,28 @@ export class AuctionController {
   }
 
   /**
-   * Get auction history
+   * Get auction history for authenticated operator
    */
-  @Get(':id/history')
-  @ApiOperation({ summary: 'Get auction history' })
-  @ApiParam({ name: 'id', description: 'Auction ID' })
+  @Get('histories')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get auction history for authenticated operator' })
   @SwaggerApiResponse({
     status: 200,
     description: 'Auction history retrieved successfully',
     type: PaginatedResponse.withType(AuctionHistory),
   })
   async getAuctionHistory(
-    @Param('id') id: string,
     @Query() query: GetAuctionHistoryQueryDto,
+    @Request() req,
   ): Promise<PaginatedResponse<AuctionHistory>> {
-    const result = await this.auctionService.getAuctionHistory(
-      new Types.ObjectId(id),
-      query.page || 1,
-      query.limit || 50,
-      {
-        action: query.action,
-        operatorId: query.operatorId,
-        timestampAfter: query.timestampAfter,
-        timestampBefore: query.timestampBefore,
-        minAmount: query.minAmount,
-        maxAmount: query.maxAmount,
-        createdAfter: query.createdAfter,
-        createdBefore: query.createdBefore,
-        sortBy: query.sortBy,
-        sortOrder: query.sortOrder,
-        populateAuction: query.populateAuction,
-        populateOperator: query.populateOperator,
-      },
-    );
+    // Ensure operatorId is always set from authenticated user
+    const filters = {
+      ...query,
+      operatorId: req.user.operatorId,
+    };
+
+    const result = await this.auctionService.getAuctionHistories(filters);
 
     return new PaginatedResponse(
       HttpStatus.OK,

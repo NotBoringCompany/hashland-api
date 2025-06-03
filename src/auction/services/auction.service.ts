@@ -28,6 +28,9 @@ import { OperatorService } from 'src/operators/operator.service';
 // Queue service
 import { BidQueueService } from '../services/bid-queue.service';
 
+// DTOs
+import { GetAuctionHistoryQueryDto } from '../dto/get-auction-history-query.dto';
+
 /**
  * Service for managing auctions in the auction system
  */
@@ -664,88 +667,72 @@ export class AuctionService {
   }
 
   /**
-   * Get auction history
+   * Get auction histories
    */
-  async getAuctionHistory(
-    auctionId: Types.ObjectId,
-    page = 1,
-    limit = 50,
-    filters?: {
-      action?: string;
-      operatorId?: string;
-      timestampAfter?: string;
-      timestampBefore?: string;
-      minAmount?: number;
-      maxAmount?: number;
-      createdAfter?: string;
-      createdBefore?: string;
-      sortBy?: string;
-      sortOrder?: 'asc' | 'desc';
-      populateAuction?: boolean;
-      populateOperator?: boolean;
-    },
-  ): Promise<{
+  async getAuctionHistories(filters: GetAuctionHistoryQueryDto): Promise<{
     history: AuctionHistory[];
     total: number;
     page: number;
     totalPages: number;
   }> {
     try {
-      const filter: any = { auctionId };
+      const filter: any = {};
 
-      if (filters) {
-        // Action filter
-        if (filters.action) {
-          filter.action = filters.action;
+      // Only filter by auctionId if provided
+      if (filters.auctionId) {
+        filter.auctionId = new Types.ObjectId(filters.auctionId);
+      }
+
+      // Actions filter (support multiple actions)
+      if (filters.actions && filters.actions.length > 0) {
+        filter.action = { $in: filters.actions };
+      }
+
+      // Operator filter
+      if (filters.operatorId) {
+        filter.operatorId = new Types.ObjectId(filters.operatorId);
+      }
+
+      // Timestamp range filters
+      if (filters.timestampAfter || filters.timestampBefore) {
+        filter.timestamp = {};
+        if (filters.timestampAfter) {
+          filter.timestamp.$gte = new Date(filters.timestampAfter);
         }
-
-        // Operator filter
-        if (filters.operatorId) {
-          filter.operatorId = new Types.ObjectId(filters.operatorId);
-        }
-
-        // Timestamp range filters
-        if (filters.timestampAfter || filters.timestampBefore) {
-          filter.timestamp = {};
-          if (filters.timestampAfter) {
-            filter.timestamp.$gte = new Date(filters.timestampAfter);
-          }
-          if (filters.timestampBefore) {
-            filter.timestamp.$lte = new Date(filters.timestampBefore);
-          }
-        }
-
-        // Amount range filters (for bid-related actions)
-        if (
-          filters.minAmount !== undefined ||
-          filters.maxAmount !== undefined
-        ) {
-          filter['details.amount'] = {};
-          if (filters.minAmount !== undefined) {
-            filter['details.amount'].$gte = filters.minAmount;
-          }
-          if (filters.maxAmount !== undefined) {
-            filter['details.amount'].$lte = filters.maxAmount;
-          }
-        }
-
-        // Created date range filters
-        if (filters.createdAfter || filters.createdBefore) {
-          filter.createdAt = {};
-          if (filters.createdAfter) {
-            filter.createdAt.$gte = new Date(filters.createdAfter);
-          }
-          if (filters.createdBefore) {
-            filter.createdAt.$lte = new Date(filters.createdBefore);
-          }
+        if (filters.timestampBefore) {
+          filter.timestamp.$lte = new Date(filters.timestampBefore);
         }
       }
 
+      // Amount range filters (for bid-related actions)
+      if (filters.minAmount !== undefined || filters.maxAmount !== undefined) {
+        filter['details.amount'] = {};
+        if (filters.minAmount !== undefined) {
+          filter['details.amount'].$gte = filters.minAmount;
+        }
+        if (filters.maxAmount !== undefined) {
+          filter['details.amount'].$lte = filters.maxAmount;
+        }
+      }
+
+      // Created date range filters
+      if (filters.createdAfter || filters.createdBefore) {
+        filter.createdAt = {};
+        if (filters.createdAfter) {
+          filter.createdAt.$gte = new Date(filters.createdAfter);
+        }
+        if (filters.createdBefore) {
+          filter.createdAt.$lte = new Date(filters.createdBefore);
+        }
+      }
+
+      const page = filters.page || 1;
+      const limit = filters.limit || 50;
       const skip = (page - 1) * limit;
 
       // Build sort object
-      const sortField = filters?.sortBy || 'timestamp';
-      const sortDirection = filters?.sortOrder === 'asc' ? 1 : -1;
+      const sortField = filters.sortBy || 'timestamp';
+      const sortDirection = filters.sortOrder === 'asc' ? 1 : -1;
       const sort: any = {};
       sort[sortField] = sortDirection;
 
@@ -756,10 +743,10 @@ export class AuctionService {
         .limit(limit);
 
       // Conditional population
-      if (filters?.populateAuction) {
+      if (filters.populateAuction) {
         query = query.populate('auction');
       }
-      if (filters?.populateOperator !== false) {
+      if (filters.populateOperator !== false) {
         query = query.populate('operator', '_id username');
       }
 
@@ -778,10 +765,10 @@ export class AuctionService {
       };
     } catch (error) {
       this.logger.error(
-        `(getAuctionHistory) Error getting auction history: ${error.message}`,
+        `(getAuctionHistories) Error getting auction histories: ${error.message}`,
         error.stack,
       );
-      throw new InternalServerErrorException('Failed to get auction history');
+      throw new InternalServerErrorException('Failed to get auction histories');
     }
   }
 
