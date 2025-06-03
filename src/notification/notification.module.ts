@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { JwtModule } from '@nestjs/jwt';
+import { BullModule } from '@nestjs/bull';
 import { NotificationService } from './services/notification.service';
-import { NotificationPreferenceService } from './services/notification-preference.service';
+import { NotificationTemplateService } from './services/notification-template.service';
+import { NotificationTemplateEngineService } from './services/notification-template-engine.service';
 import { NotificationGatewayService } from './services/notification-gateway.service';
 import { NotificationAnalyticsService } from './services/notification-analytics.service';
+import { NotificationPreferenceService } from './services/notification-preference.service';
 import { NotificationGateway } from './gateways/notification.gateway';
+import { NotificationTemplateAdminController } from './controllers/notification-template-admin.controller';
 import {
   Notification,
   NotificationSchema,
@@ -18,10 +21,10 @@ import {
   NotificationPreference,
   NotificationPreferenceSchema,
 } from './schemas/notification-preference.schema';
-import { RedisService } from 'src/common/redis.service';
+import { RedisModule } from 'src/common/redis.module';
 
 /**
- * Notification module providing comprehensive notification system
+ * Notification module with comprehensive notification system
  */
 @Module({
   imports: [
@@ -33,25 +36,28 @@ import { RedisService } from 'src/common/redis.service';
         schema: NotificationPreferenceSchema,
       },
     ]),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'default-secret',
-      signOptions: { expiresIn: '7d' },
+    BullModule.registerQueue({
+      name: 'notification',
     }),
+    RedisModule,
   ],
+  controllers: [NotificationTemplateAdminController],
   providers: [
     NotificationService,
-    NotificationPreferenceService,
+    NotificationTemplateService,
+    NotificationTemplateEngineService,
+    NotificationGateway,
     NotificationGatewayService,
     NotificationAnalyticsService,
-    NotificationGateway,
-    RedisService,
+    NotificationPreferenceService,
   ],
   exports: [
     NotificationService,
-    NotificationPreferenceService,
+    NotificationTemplateService,
+    NotificationTemplateEngineService,
     NotificationGatewayService,
     NotificationAnalyticsService,
-    NotificationGateway,
+    NotificationPreferenceService,
   ],
 })
 export class NotificationModule {}
