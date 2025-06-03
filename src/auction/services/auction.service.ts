@@ -144,7 +144,7 @@ export class AuctionService {
       let query = this.auctionModel.findById(auctionId);
 
       query = query.populate('nft');
-      query = query.populate('currentWinner', '_id username');
+      query = query.populate('currentWinner', '_id usernameData');
 
       const auction = await query.exec();
       if (!auction) {
@@ -339,7 +339,7 @@ export class AuctionService {
       if (filters?.populateNFT) {
         query = query.populate('nft');
       }
-      query = query.populate('currentWinner', '_id username');
+      query = query.populate('currentWinner', '_id usernameData');
 
       const [auctions, total] = await Promise.all([
         query.exec(),
@@ -747,7 +747,7 @@ export class AuctionService {
         query = query.populate('auction');
       }
       if (filters.populateOperator !== false) {
-        query = query.populate('operator', '_id username');
+        query = query.populate('operator', '_id usernameData');
       }
 
       const [history, total] = await Promise.all([
