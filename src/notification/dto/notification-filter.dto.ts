@@ -10,7 +10,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import {
@@ -395,4 +395,4 @@ export class UnreadCountDto {
   @IsOptional()
   @IsEnum(NotificationPriority)
   minPriority?: NotificationPriority;
-} 
+}
