@@ -744,7 +744,12 @@ export class AuctionService {
 
       // Conditional population
       if (filters.populateAuction) {
-        query = query.populate('auction').populate('auction.nft');
+        query = query.populate({
+          path: 'auction',
+          populate: {
+            path: 'nft',
+          },
+        });
       }
       if (filters.populateOperator !== false) {
         query = query.populate('operator', '_id usernameData');
