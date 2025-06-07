@@ -57,6 +57,7 @@ jobs:
           echo "MIXPANEL_PROJECT_TOKEN=${{ secrets.MIXPANEL_PROJECT_TOKEN }}" >> .env
           echo "ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}" >> .env
           echo "HASHLAND_URL=${{ secrets.HASHLAND_URL }}" >> .env
+          echo "WONDERVERSE_API_URL=${{ secrets.WONDERVERSE_API_URL }}" >> .env
   
       - name: Deploy with Docker Compose
         run: |
