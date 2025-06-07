@@ -15,14 +15,14 @@ import {
 import { AuctionLifecycleService } from '../services/auction-lifecycle.service';
 import { AuctionStatus } from '../schemas/auction.schema';
 import { ApiResponse } from '../../common/dto/response.dto';
-import { AdminProtected } from '../../auth/admin';
+import { WonderverseProtected } from '../../common/auth';
 
 /**
  * Controller for auction lifecycle management
  */
 @ApiTags('Auction Lifecycle')
 @Controller('auctions')
-@AdminProtected()
+@WonderverseProtected(3)
 export class LifecycleController {
   constructor(private readonly lifecycleService: AuctionLifecycleService) {}
 

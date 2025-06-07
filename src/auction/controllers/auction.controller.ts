@@ -37,8 +37,8 @@ import {
 } from '../dto';
 import { ApiResponse } from '../../common/dto/response.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
-import { AdminProtected } from '../../auth/admin';
 import { JwtAuthGuard } from '../../auth/jwt/jwt-auth.guard';
+import { WonderverseProtected } from '../../common/auth';
 
 /**
  * Controller for auction management in the auction system
@@ -53,7 +53,7 @@ export class AuctionController {
    * Create a new auction
    */
   @Post()
-  @AdminProtected()
+  @WonderverseProtected(3) // Admin level access
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a new auction' })
   @ApiBody({ type: CreateAuctionDto })
@@ -271,7 +271,7 @@ export class AuctionController {
    * End an auction
    */
   @Post(':id/end')
-  @AdminProtected()
+  @WonderverseProtected(3) // Admin level access
   @ApiOperation({ summary: 'End an auction' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
   @SwaggerApiResponse({

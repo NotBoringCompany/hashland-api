@@ -18,14 +18,14 @@ import {
 import { BidQueueService } from '../services/bid-queue.service';
 import { QueueMetricsDto } from '../dto/queue.dto';
 import { ApiResponse } from '../../common/dto/response.dto';
-import { AdminProtected } from '../../auth/admin';
+import { WonderverseProtected } from '../../common/auth';
 
 /**
  * Controller for queue monitoring and management
  */
 @ApiTags('Queue Management')
 @Controller('queue')
-@AdminProtected()
+@WonderverseProtected(3)
 export class QueueController {
   constructor(private readonly queueService: BidQueueService) {}
 
