@@ -110,12 +110,15 @@ export class WonderverseAuthGuard implements CanActivate {
    */
   private async verifyToken(token: string): Promise<WonderverseCreds> {
     try {
-      const response = await axios.get(`${this.wonderverseApiUrl}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await axios.get(
+        `${this.wonderverseApiUrl}/api/auth/me`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          timeout: 10000, // 10 second timeout
         },
-        timeout: 10000, // 10 second timeout
-      });
+      );
 
       const result: WonderverseResponse<WonderverseCreds> = response.data;
 
