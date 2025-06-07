@@ -24,7 +24,7 @@ import { WonderverseProtected } from '../../common/auth';
  * Controller for queue monitoring and management
  */
 @ApiTags('Queue Management')
-@Controller('queue')
+@Controller('auction-queues')
 @WonderverseProtected(3)
 export class QueueController {
   constructor(private readonly queueService: BidQueueService) {}

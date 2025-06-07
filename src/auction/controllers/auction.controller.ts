@@ -106,6 +106,8 @@ export class AuctionController {
    * Get all auctions with pagination and filtering
    */
   @Get()
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get all auctionss with pagination and filtering' })
   @SwaggerApiResponse({
     status: 200,
@@ -160,6 +162,8 @@ export class AuctionController {
    * Get auction by ID
    */
   @Get(':id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get auction by ID' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
   @ApiQuery({
@@ -194,6 +198,8 @@ export class AuctionController {
    * Join auction whitelist
    */
   @Post(':id/whitelist')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Join auction whitelist' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
@@ -233,6 +239,8 @@ export class AuctionController {
    * Place a bid on an auction
    */
   @Post(':id/bids')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Place a bid on an auction' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
@@ -358,6 +366,8 @@ export class AuctionController {
    * Place a bid via queue (for high-frequency scenarios)
    */
   @Post(':id/bid/queue')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Place a bid via queue',
     description:
@@ -419,6 +429,8 @@ export class AuctionController {
    * Check if auction should use queue
    */
   @Get(':id/queue-status')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Check if auction should use queue',
     description:
