@@ -9,7 +9,6 @@ import {
   HttpStatus,
   UsePipes,
   ValidationPipe,
-  UseGuards,
   Request,
   BadRequestException,
 } from '@nestjs/common';
@@ -20,7 +19,6 @@ import {
   ApiQuery,
   ApiParam,
   ApiBody,
-  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { AuctionService } from '../services/auction.service';
@@ -37,8 +35,7 @@ import {
 } from '../dto';
 import { ApiResponse } from '../../common/dto/response.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
-import { JwtAuthGuard } from '../../auth/jwt/jwt-auth.guard';
-import { WonderverseProtected } from '../../common/auth';
+import { WonderverseProtected, CombinedAuth } from '../../common/auth';
 
 /**
  * Controller for auction management in the auction system
@@ -106,8 +103,7 @@ export class AuctionController {
    * Get all auctions with pagination and filtering
    */
   @Get()
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @ApiOperation({ summary: 'Get all auctionss with pagination and filtering' })
   @SwaggerApiResponse({
     status: 200,
@@ -162,8 +158,7 @@ export class AuctionController {
    * Get auction by ID
    */
   @Get(':id')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @ApiOperation({ summary: 'Get auction by ID' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
   @ApiQuery({
@@ -198,8 +193,7 @@ export class AuctionController {
    * Join auction whitelist
    */
   @Post(':id/whitelist')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Join auction whitelist' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
@@ -239,8 +233,7 @@ export class AuctionController {
    * Place a bid on an auction
    */
   @Post(':id/bids')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Place a bid on an auction' })
   @ApiParam({ name: 'id', description: 'Auction ID' })
@@ -307,8 +300,7 @@ export class AuctionController {
    * Get auction history for authenticated operator
    */
   @Get('histories')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @ApiOperation({ summary: 'Get auction history for authenticated operator' })
   @SwaggerApiResponse({
     status: 200,
@@ -324,7 +316,9 @@ export class AuctionController {
     @Query() query: GetAuctionHistoryQueryDto,
     @Request() req,
   ): Promise<PaginatedResponse<AuctionHistory>> {
-    const authenticatedOperatorId = req.user.operatorId;
+    // Get operator ID based on authentication type
+    const authenticatedOperatorId =
+      req.authType === 'jwt' ? req.user.operatorId : req.wonderverseCreds.id;
 
     // Validation logic
     if (!query.operatorId && !query.auctionId) {
@@ -366,8 +360,7 @@ export class AuctionController {
    * Place a bid via queue (for high-frequency scenarios)
    */
   @Post(':id/bid/queue')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @ApiOperation({
     summary: 'Place a bid via queue',
     description:
@@ -429,8 +422,7 @@ export class AuctionController {
    * Check if auction should use queue
    */
   @Get(':id/queue-status')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @ApiOperation({
     summary: 'Check if auction should use queue',
     description:

@@ -13,7 +13,6 @@ import {
   DefaultValuePipe,
   UsePipes,
   ValidationPipe,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,7 +21,6 @@ import {
   ApiQuery,
   ApiParam,
   ApiBody,
-  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { Types } from 'mongoose';
 import { NFTService } from '../services/nft.service';
@@ -30,8 +28,7 @@ import { NFT, NFTStatus } from '../schemas/nft.schema';
 import { CreateNFTDto, UpdateNFTDto, UpdateNFTStatusDto } from '../dto';
 import { ApiResponse } from '../../common/dto/response.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
-import { WonderverseProtected } from '../../common/auth';
-import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
+import { WonderverseProtected, CombinedAuth } from '../../common/auth';
 
 /**
  * Controller for NFT management in the auction system
@@ -71,8 +68,7 @@ export class NFTController {
    * Get all NFTs with pagination and filtering
    */
   @Get()
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @ApiOperation({ summary: 'Get all NFTs with pagination and filtering' })
   @ApiQuery({
     name: 'page',
@@ -123,8 +119,7 @@ export class NFTController {
    * Get NFT by ID
    */
   @Get(':id')
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @CombinedAuth()
   @ApiOperation({ summary: 'Get NFT by ID' })
   @ApiParam({ name: 'id', description: 'NFT ID' })
   @SwaggerApiResponse({
