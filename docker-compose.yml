@@ -28,7 +28,6 @@ services:
     volumes:
       - .:/app
       - ./logs:/app/logs # For storing Winston logs
-      - hashland-node-modules:/app/node_modules
     environment:
       - NODE_ENV=development
       - PORT=8080
@@ -107,6 +106,4 @@ volumes:
   hashland-mongo-keyfile:
     name: hashland-mongo-keyfile
   hashland-redis-data:
-    name: hashland-redis-data
-  hashland-node-modules:
-    name: hashland-node-modules 
+    name: hashland-redis-data 
