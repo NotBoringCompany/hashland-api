@@ -29,9 +29,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: npm ci
-
       - name: Ensure logs folder exists # For Winston logs
         run: mkdir -p ./logs
 
@@ -64,5 +61,4 @@ jobs:
   
       - name: Deploy with Docker Compose
         run: |
-          docker-compose build
           docker-compose up -d 

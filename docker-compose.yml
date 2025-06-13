@@ -27,6 +27,7 @@ services:
       - "8080:8080"
     volumes:
       - .:/app
+      - /app/node_modules
       - ./logs:/app/logs # For storing Winston logs
     environment:
       - NODE_ENV=development

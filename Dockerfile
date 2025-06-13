@@ -6,9 +6,7 @@ COPY package*.json ./
 COPY tsconfig*.json ./
 COPY nest-cli.json ./
 
-# Clear npm cache and install dependencies with exact versions
-RUN npm cache clean --force
-RUN npm ci --only=production=false
+RUN npm install
 
 COPY . .
 
