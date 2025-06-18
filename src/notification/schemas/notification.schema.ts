@@ -50,7 +50,6 @@ export class Notification extends Document {
   @Prop({
     type: String,
     enum: NotificationType,
-    required: true,
     index: true,
   })
   type: NotificationType;
@@ -81,7 +80,6 @@ export class Notification extends Document {
   @Prop({
     type: Types.ObjectId,
     ref: Operator.name,
-    required: true,
     index: true,
   })
   recipientId: Types.ObjectId;
@@ -105,7 +103,6 @@ export class Notification extends Document {
   @Prop({
     type: Types.ObjectId,
     ref: Operator.name,
-    required: false,
     index: true,
   })
   senderId?: Types.ObjectId;
@@ -138,39 +135,35 @@ export class Notification extends Document {
       type: {
         type: String,
         enum: NotificationContentType,
-        required: true,
       },
       data: {
-        title: { type: String, required: true },
-        message: { type: String, required: true },
+        title: { type: String },
+        message: { type: String },
         metadata: { type: Map, of: String, default: {} },
         actions: [
           {
-            id: { type: String, required: true },
-            label: { type: String, required: true },
+            id: { type: String },
+            label: { type: String },
             type: {
               type: String,
               enum: ['button', 'link', 'dismiss'],
-              required: true,
             },
-            url: { type: String, required: false },
-            action: { type: String, required: false },
+            url: { type: String },
+            action: { type: String },
             style: {
               type: String,
               enum: ['primary', 'secondary', 'danger', 'success'],
-              required: false,
             },
           },
         ],
         template: {
-          templateId: { type: String, required: false },
+          templateId: { type: String },
           variables: { type: Map, of: String, default: {} },
         },
-        imageUrl: { type: String, required: false },
-        iconUrl: { type: String, required: false },
+        imageUrl: { type: String },
+        iconUrl: { type: String },
       },
     },
-    required: true,
   })
   content: NotificationContent;
 
@@ -195,17 +188,16 @@ export class Notification extends Document {
         channel: {
           type: String,
           enum: NotificationChannel,
-          required: true,
         },
         status: {
           type: String,
           enum: NotificationStatus,
           default: NotificationStatus.PENDING,
         },
-        sentAt: { type: Date, required: false },
-        deliveredAt: { type: Date, required: false },
-        readAt: { type: Date, required: false },
-        failureReason: { type: String, required: false },
+        sentAt: { type: Date },
+        deliveredAt: { type: Date },
+        readAt: { type: Date },
+        failureReason: { type: String },
         retryCount: { type: Number, default: 0 },
       },
     ],
@@ -237,7 +229,6 @@ export class Notification extends Document {
   })
   @Prop({
     type: Date,
-    required: false,
   })
   readAt?: Date;
 
@@ -251,7 +242,6 @@ export class Notification extends Document {
   })
   @Prop({
     type: Date,
-    required: false,
     index: true,
   })
   expiresAt?: Date;
@@ -266,7 +256,6 @@ export class Notification extends Document {
   })
   @Prop({
     type: Types.ObjectId,
-    required: false,
     index: true,
   })
   relatedEntityId?: Types.ObjectId;
@@ -281,7 +270,6 @@ export class Notification extends Document {
   })
   @Prop({
     type: String,
-    required: false,
   })
   relatedEntityType?: string;
 
@@ -298,19 +286,17 @@ export class Notification extends Document {
   })
   @Prop({
     type: {
-      scheduledFor: { type: Date, required: false },
+      scheduledFor: { type: Date },
       timezone: { type: String, default: 'UTC' },
       recurring: {
         pattern: {
           type: String,
           enum: ['daily', 'weekly', 'monthly'],
-          required: false,
         },
-        interval: { type: Number, required: false },
-        endDate: { type: Date, required: false },
+        interval: { type: Number },
+        endDate: { type: Date },
       },
     },
-    required: false,
   })
   schedule?: NotificationSchedule;
 
