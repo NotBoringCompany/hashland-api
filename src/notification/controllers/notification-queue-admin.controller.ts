@@ -277,8 +277,7 @@ export class NotificationQueueAdminController {
         name: job.name || 'notification',
         data: job.data || {},
         opts: job.opts || {},
-        progress:
-          job.progress && typeof job.progress === 'number' ? job.progress : 0,
+        progress: job.progress() || 0,
         attemptsMade: job.attemptsMade || 0,
         timestamp: job.timestamp || Date.now(),
         processedOn: job.processedOn || undefined,
