@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
 import { OperatorModule } from '../operators/operator.module';
+import { NotificationModule } from '../notification/notification.module';
 
 // Queue configuration
 import { QUEUE_NAMES } from './config/queue.config';
@@ -92,6 +93,9 @@ import { AuctionSeeder } from './seeders/auction.seeder';
 
     // Import operator module for currency operations
     OperatorModule,
+
+    // Import notification module for notification services
+    NotificationModule,
   ],
   controllers: [
     AuctionController,
