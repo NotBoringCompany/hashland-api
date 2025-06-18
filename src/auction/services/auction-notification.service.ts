@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AuctionGateway } from '../gateways/auction.gateway';
@@ -24,6 +24,7 @@ export class AuctionNotificationService {
   constructor(
     @InjectModel(AuctionWhitelist.name)
     private whitelistModel: Model<AuctionWhitelist>,
+    @Inject(forwardRef(() => AuctionGateway))
     private readonly auctionGateway: AuctionGateway,
     private readonly notificationDispatcher: NotificationDispatcherService,
   ) {}

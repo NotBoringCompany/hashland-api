@@ -29,7 +29,7 @@ import { OperatorService } from 'src/operators/operator.service';
 import { BidQueueService } from '../services/bid-queue.service';
 
 // Notification service
-import { AuctionNotificationService } from '../services/auction-notification.service';
+// import { AuctionNotificationService } from '../services/auction-notification.service';
 
 // DTOs
 import { GetAuctionHistoryQueryDto } from '../dto/get-auction-history-query.dto';
@@ -51,7 +51,8 @@ export class AuctionService {
     @InjectModel(NFT.name) private nftModel: Model<NFT>,
     private operatorService: OperatorService,
     private bidQueueService: BidQueueService,
-    private auctionNotificationService: AuctionNotificationService,
+    // @Inject(forwardRef(() => AuctionNotificationService))
+    // private auctionNotificationService: AuctionNotificationService,
   ) {}
 
   /**
@@ -582,13 +583,13 @@ export class AuctionService {
 
           // Notify the outbid user
           if (previousWinningBid) {
-            await this.auctionNotificationService.notifyBidOutbid(
-              auction.currentWinner,
-              auctionId.toString(),
-              previousWinningBid,
-              bid,
-              auction,
-            );
+            // await this.auctionNotificationService.notifyBidOutbid(
+            //   auction.currentWinner,
+            //   auctionId.toString(),
+            //   previousWinningBid,
+            //   bid,
+            //   auction,
+            // );
           }
         }
 
@@ -673,12 +674,12 @@ export class AuctionService {
 
         // Notify the winner
         if (winningBid) {
-          await this.auctionNotificationService.notifyAuctionWon(
-            auction.currentWinner,
-            auctionId.toString(),
-            auction,
-            winningBid,
-          );
+          // await this.auctionNotificationService.notifyAuctionWon(
+          //   auction.currentWinner,
+          //   auctionId.toString(),
+          //   auction,
+          //   winningBid,
+          // );
         }
 
         // Transfer HASH from hold to deducted for winner
