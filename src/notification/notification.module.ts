@@ -29,6 +29,7 @@ import {
   NotificationPreferenceSchema,
 } from './schemas/notification-preference.schema';
 import { RedisModule } from 'src/common/redis.module';
+import { JwtModule } from '@nestjs/jwt';
 
 /**
  * Notification module with comprehensive notification system including queue processing
@@ -45,11 +46,6 @@ import { RedisModule } from 'src/common/redis.module';
     ]),
     BullModule.registerQueue({
       name: 'notification',
-      redis: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD,
-      },
       defaultJobOptions: {
         removeOnComplete: 100,
         removeOnFail: 50,
@@ -61,6 +57,13 @@ import { RedisModule } from 'src/common/redis.module';
       },
     }),
     ScheduleModule.forRoot(),
+
+    // JWT module for WebSocket authentication
+    JwtModule.register({
+      secret: process.env.JWT_SECRET || 'default-secret',
+      signOptions: { expiresIn: '24h' },
+    }),
+
     RedisModule,
   ],
   controllers: [
