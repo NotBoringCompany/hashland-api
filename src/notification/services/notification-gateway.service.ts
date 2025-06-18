@@ -232,7 +232,7 @@ export class NotificationGatewayService {
           // Send to user's room
           server
             .to(`user:${userIdStr}`)
-            .emit('notification', notificationResponse);
+            .emit('new_notification', notificationResponse);
 
           // Track delivery
           await this.trackDelivery(
@@ -290,7 +290,7 @@ export class NotificationGatewayService {
       };
 
       // Broadcast to all connected users
-      server.emit('notification', notificationResponse);
+      server.emit('new_notification', notificationResponse);
 
       // Track delivery for all connected users
       for (const [userIdStr] of this.userRooms) {

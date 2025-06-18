@@ -218,10 +218,11 @@ export class BidProcessor {
         auction.currentWinner.toString() !== bid.bidderId.toString()
       ) {
         await this.notificationService.notifyBidOutbid(
-          auction.currentWinner.toString(),
+          new Types.ObjectId(auction.currentWinner),
           auctionId,
           null, // Previous bid (would need to fetch)
           bid,
+          auction,
         );
       }
     } catch (error) {

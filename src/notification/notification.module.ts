@@ -88,6 +88,7 @@ import { JwtModule } from '@nestjs/jwt';
     NotificationService,
     NotificationTemplateService,
     NotificationTemplateEngineService,
+    NotificationGateway,
     NotificationGatewayService,
     NotificationAnalyticsService,
     NotificationPreferenceService,

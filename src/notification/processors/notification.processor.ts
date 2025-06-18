@@ -11,6 +11,7 @@ import { NotificationService } from '../services/notification.service';
 import { NotificationTemplateEngineService } from '../services/notification-template-engine.service';
 import { NotificationAnalyticsService } from '../services/notification-analytics.service';
 import { NotificationTemplateService } from '../services/notification-template.service';
+import { NotificationGateway } from '../gateways/notification.gateway';
 import { CreateNotificationDto } from '../dto/create-notification.dto';
 import {
   NotificationPriority,
@@ -73,6 +74,7 @@ export class NotificationProcessor {
     private readonly templateEngineService: NotificationTemplateEngineService,
     private readonly analyticsService: NotificationAnalyticsService,
     private readonly templateService: NotificationTemplateService,
+    private readonly notificationGateway: NotificationGateway,
   ) {}
 
   /**
@@ -131,13 +133,27 @@ export class NotificationProcessor {
       // Track delivery time and analytics
       const deliveryTime = Date.now() - startTime;
 
-      // Track analytics (WebSocket delivery will be handled by the gateway separately)
+      // Track analytics
       await this.analyticsService.trackDelivery(
         createdNotification._id,
         userId,
         NotificationChannel.IN_APP,
         deliveryTime,
       );
+
+      // Send WebSocket notification if user is connected
+      if (finalNotification.channels?.includes(NotificationChannel.WEBSOCKET)) {
+        try {
+          await this.notificationGateway.sendNotificationToUsers(
+            createdNotification,
+            [userId],
+          );
+        } catch (wsError) {
+          this.logger.warn(
+            `Failed to send WebSocket notification: ${wsError.message}`,
+          );
+        }
+      }
 
       this.logger.log(
         `Notification ${createdNotification._id} processed successfully for user ${userId} (${deliveryTime}ms)`,
