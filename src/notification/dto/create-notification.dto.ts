@@ -129,7 +129,10 @@ export class NotificationTargetDto {
   @IsOptional()
   @IsArray()
   @IsMongoId({ each: true })
-  @Transform(({ value }) => value?.map((id: string) => new Types.ObjectId(id)))
+  @Transform(
+    ({ value }) => value?.map((id: string) => new Types.ObjectId(id)),
+    { toClassOnly: true },
+  )
   userIds?: Types.ObjectId[];
 
   @ApiPropertyOptional({
@@ -222,7 +225,7 @@ export class CreateNotificationDto {
     example: '507f1f77bcf86cd799439012',
   })
   @IsMongoId()
-  @Transform(({ value }) => new Types.ObjectId(value))
+  @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
   recipientId: Types.ObjectId;
 
   @ApiPropertyOptional({
@@ -231,7 +234,9 @@ export class CreateNotificationDto {
   })
   @IsOptional()
   @IsMongoId()
-  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined))
+  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
+    toClassOnly: true,
+  })
   senderId?: Types.ObjectId;
 
   @ApiProperty({
@@ -267,7 +272,9 @@ export class CreateNotificationDto {
   })
   @IsOptional()
   @IsMongoId()
-  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined))
+  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
+    toClassOnly: true,
+  })
   relatedEntityId?: Types.ObjectId;
 
   @ApiPropertyOptional({
@@ -322,7 +329,9 @@ export class CreateBulkNotificationDto {
   })
   @IsOptional()
   @IsMongoId()
-  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined))
+  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
+    toClassOnly: true,
+  })
   senderId?: Types.ObjectId;
 
   @ApiProperty({

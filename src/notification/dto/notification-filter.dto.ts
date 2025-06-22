@@ -83,7 +83,7 @@ export class NotificationFilterDto {
   })
   @IsOptional()
   @IsMongoId()
-  @Transform(({ value }) => new Types.ObjectId(value))
+  @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
   senderId?: Types.ObjectId;
 
   @ApiPropertyOptional({
@@ -92,7 +92,7 @@ export class NotificationFilterDto {
   })
   @IsOptional()
   @IsMongoId()
-  @Transform(({ value }) => new Types.ObjectId(value))
+  @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
   relatedEntityId?: Types.ObjectId;
 
   @ApiPropertyOptional({
@@ -250,7 +250,10 @@ export class MarkNotificationsReadDto {
   @IsOptional()
   @IsArray()
   @IsMongoId({ each: true })
-  @Transform(({ value }) => value?.map((id: string) => new Types.ObjectId(id)))
+  @Transform(
+    ({ value }) => value?.map((id: string) => new Types.ObjectId(id)),
+    { toClassOnly: true },
+  )
   notificationIds?: Types.ObjectId[];
 
   @ApiPropertyOptional({
