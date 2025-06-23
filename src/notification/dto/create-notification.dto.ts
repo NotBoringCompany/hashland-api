@@ -5,13 +5,11 @@ import {
   IsObject,
   IsArray,
   ValidateNested,
-  IsMongoId,
   IsNumber,
   IsDateString,
 } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Types } from 'mongoose';
 import {
   NotificationType,
   NotificationPriority,
@@ -128,12 +126,8 @@ export class NotificationTargetDto {
   })
   @IsOptional()
   @IsArray()
-  @IsMongoId({ each: true })
-  @Transform(
-    ({ value }) => value?.map((id: string) => new Types.ObjectId(id)),
-    { toClassOnly: true },
-  )
-  userIds?: Types.ObjectId[];
+  @IsString({ each: true })
+  userIds?: string[];
 
   @ApiPropertyOptional({
     description: 'User roles to target',
@@ -224,20 +218,16 @@ export class CreateNotificationDto {
     description: 'The recipient user ID',
     example: '507f1f77bcf86cd799439012',
   })
-  @IsMongoId()
-  @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
-  recipientId: Types.ObjectId;
+  @IsString()
+  recipientId: string;
 
   @ApiPropertyOptional({
     description: 'The sender user ID (optional for system notifications)',
     example: '507f1f77bcf86cd799439013',
   })
   @IsOptional()
-  @IsMongoId()
-  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
-    toClassOnly: true,
-  })
-  senderId?: Types.ObjectId;
+  @IsString()
+  senderId?: string;
 
   @ApiProperty({
     description: 'The content of the notification',
@@ -271,11 +261,8 @@ export class CreateNotificationDto {
     example: '507f1f77bcf86cd799439014',
   })
   @IsOptional()
-  @IsMongoId()
-  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
-    toClassOnly: true,
-  })
-  relatedEntityId?: Types.ObjectId;
+  @IsString()
+  relatedEntityId?: string;
 
   @ApiPropertyOptional({
     description: 'Type of the related entity',
@@ -328,11 +315,8 @@ export class CreateBulkNotificationDto {
     example: '507f1f77bcf86cd799439013',
   })
   @IsOptional()
-  @IsMongoId()
-  @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
-    toClassOnly: true,
-  })
-  senderId?: Types.ObjectId;
+  @IsString()
+  senderId?: string;
 
   @ApiProperty({
     description: 'The content of the notification',
@@ -392,6 +376,5 @@ export class CreateBulkNotificationDto {
   })
   @IsOptional()
   @IsNumber()
-  @Transform(({ value }) => parseInt(value, 10))
   maxRecipients?: number;
 }

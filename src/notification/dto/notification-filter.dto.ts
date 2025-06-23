@@ -5,14 +5,12 @@ import {
   IsBoolean,
   IsNumber,
   IsDateString,
-  IsMongoId,
   IsArray,
   Min,
   Max,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Types } from 'mongoose';
 import {
   NotificationType,
   NotificationPriority,
@@ -82,18 +80,16 @@ export class NotificationFilterDto {
     example: '507f1f77bcf86cd799439013',
   })
   @IsOptional()
-  @IsMongoId()
-  @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
-  senderId?: Types.ObjectId;
+  @IsString()
+  senderId?: string;
 
   @ApiPropertyOptional({
     description: 'Filter by related entity ID',
     example: '507f1f77bcf86cd799439014',
   })
   @IsOptional()
-  @IsMongoId()
-  @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
-  relatedEntityId?: Types.ObjectId;
+  @IsString()
+  relatedEntityId?: string;
 
   @ApiPropertyOptional({
     description: 'Filter by related entity type',
@@ -249,12 +245,8 @@ export class MarkNotificationsReadDto {
   })
   @IsOptional()
   @IsArray()
-  @IsMongoId({ each: true })
-  @Transform(
-    ({ value }) => value?.map((id: string) => new Types.ObjectId(id)),
-    { toClassOnly: true },
-  )
-  notificationIds?: Types.ObjectId[];
+  @IsString({ each: true })
+  notificationIds?: string[];
 
   @ApiPropertyOptional({
     description: 'Mark all notifications as read (ignores notificationIds)',

@@ -62,16 +62,30 @@ export class NotificationService {
   ) {}
 
   /**
+   * Helper method to convert string to ObjectId
+   */
+  private parseObjectId(id: string): Types.ObjectId {
+    return new Types.ObjectId(id);
+  }
+
+  /**
    * Create a new notification
    */
   async create(
     createNotificationDto: CreateNotificationDto,
   ): Promise<Notification> {
     try {
+      // Parse string IDs to ObjectIds
+      const recipientId = this.parseObjectId(createNotificationDto.recipientId);
+      const senderId = createNotificationDto.senderId
+        ? this.parseObjectId(createNotificationDto.senderId)
+        : undefined;
+      const relatedEntityId = createNotificationDto.relatedEntityId
+        ? this.parseObjectId(createNotificationDto.relatedEntityId)
+        : undefined;
+
       // Check user preferences
-      const preferences = await this.getUserPreferences(
-        createNotificationDto.recipientId,
-      );
+      const preferences = await this.getUserPreferences(recipientId);
 
       if (!this.shouldSendNotification(createNotificationDto, preferences)) {
         this.logger.warn(
@@ -97,6 +111,9 @@ export class NotificationService {
 
       const notification = new this.notificationModel({
         ...createNotificationDto,
+        recipientId,
+        senderId,
+        relatedEntityId,
         delivery,
         analytics: {
           impressions: 0,
@@ -150,7 +167,7 @@ export class NotificationService {
           const notificationDto: CreateNotificationDto = {
             type: createBulkDto.type,
             priority: createBulkDto.priority,
-            recipientId,
+            recipientId: recipientId.toString(),
             senderId: createBulkDto.senderId,
             content: createBulkDto.content,
             channels: createBulkDto.channels,
@@ -292,8 +309,11 @@ export class NotificationService {
           query.createdAt = { $lt: markReadDto.createdBefore };
         }
       } else if (markReadDto.notificationIds?.length) {
+        const notificationObjectIds = markReadDto.notificationIds.map((id) =>
+          this.parseObjectId(id),
+        );
         query = {
-          _id: { $in: markReadDto.notificationIds },
+          _id: { $in: notificationObjectIds },
           recipientId: userId,
           isRead: false,
         };
@@ -507,11 +527,11 @@ export class NotificationService {
     }
 
     if (filterDto.senderId) {
-      query.senderId = filterDto.senderId;
+      query.senderId = this.parseObjectId(filterDto.senderId);
     }
 
     if (filterDto.relatedEntityId) {
-      query.relatedEntityId = filterDto.relatedEntityId;
+      query.relatedEntityId = this.parseObjectId(filterDto.relatedEntityId);
     }
 
     if (filterDto.relatedEntityType) {
@@ -630,7 +650,7 @@ export class NotificationService {
     // This would integrate with the Operator service to resolve recipients
     // For now, return userIds if provided
     if (target.userIds?.length) {
-      return target.userIds;
+      return target.userIds.map((id: string) => this.parseObjectId(id));
     }
 
     // TODO: Implement criteria-based recipient resolution
