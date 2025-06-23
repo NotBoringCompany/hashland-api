@@ -48,7 +48,7 @@ export class NotificationDispatcherService {
       const priority = options?.priority || notification.priority;
       const jobData: NotificationJobData = {
         notification,
-        userId: notification.recipientId,
+        userId: new Types.ObjectId(notification.recipientId),
         templateId,
         templateContext,
         priority,
@@ -105,7 +105,7 @@ export class NotificationDispatcherService {
       const priority = options?.priority || notification.priority;
       const jobData: NotificationJobData = {
         notification,
-        userId: notification.recipientId,
+        userId: new Types.ObjectId(notification.recipientId),
         templateId,
         templateContext,
         priority,

@@ -75,7 +75,7 @@ export class AuctionNotificationService {
       const notification: CreateNotificationDto = {
         type: NotificationType.AUCTION_BID,
         priority: NotificationPriority.HIGH,
-        recipientId: outbidUserId,
+        recipientId: outbidUserId.toString(),
         content: {
           type: NotificationContentType.ACTION,
           data: {
@@ -107,7 +107,7 @@ export class AuctionNotificationService {
           },
         },
         channels: [NotificationChannel.IN_APP, NotificationChannel.WEBSOCKET],
-        relatedEntityId: new Types.ObjectId(auctionId),
+        relatedEntityId: auctionId,
         relatedEntityType: 'auction',
         metadata: {
           source: 'auction_system',
@@ -159,7 +159,7 @@ export class AuctionNotificationService {
           notification: {
             type: NotificationType.AUCTION_WHITELIST,
             priority: NotificationPriority.HIGH,
-            recipientId: userId,
+            recipientId: userId.toString(),
             content: {
               type: NotificationContentType.ACTION,
               data: {
@@ -194,7 +194,7 @@ export class AuctionNotificationService {
               NotificationChannel.IN_APP,
               NotificationChannel.WEBSOCKET,
             ],
-            relatedEntityId: new Types.ObjectId(auctionId),
+            relatedEntityId: auctionId,
             relatedEntityType: 'auction',
             metadata: {
               source: 'auction_system',
@@ -240,7 +240,7 @@ export class AuctionNotificationService {
       const notification: CreateNotificationDto = {
         type: NotificationType.AUCTION_BID,
         priority: NotificationPriority.CRITICAL,
-        recipientId: winnerId,
+        recipientId: winnerId.toString(),
         content: {
           type: NotificationContentType.ACTION,
           data: {
@@ -272,7 +272,7 @@ export class AuctionNotificationService {
           },
         },
         channels: [NotificationChannel.IN_APP, NotificationChannel.WEBSOCKET],
-        relatedEntityId: new Types.ObjectId(auctionId),
+        relatedEntityId: auctionId,
         relatedEntityType: 'auction',
         metadata: {
           source: 'auction_system',
@@ -336,7 +336,7 @@ export class AuctionNotificationService {
               priority: isWinner
                 ? NotificationPriority.CRITICAL
                 : NotificationPriority.MEDIUM,
-              recipientId: userId,
+              recipientId: userId.toString(),
               content: {
                 type: NotificationContentType.ACTION,
                 data: {
@@ -374,7 +374,7 @@ export class AuctionNotificationService {
                 NotificationChannel.IN_APP,
                 NotificationChannel.WEBSOCKET,
               ],
-              relatedEntityId: new Types.ObjectId(auctionId),
+              relatedEntityId: auctionId,
               relatedEntityType: 'auction',
               metadata: {
                 source: 'auction_system',

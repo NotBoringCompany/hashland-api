@@ -123,7 +123,7 @@ export class NotificationProcessor {
       // Create notification in database with proper DTO structure
       const createDto: CreateNotificationDto = {
         ...finalNotification,
-        recipientId: userId,
+        recipientId: userId.toString(),
         priority,
       };
 
@@ -218,7 +218,7 @@ export class NotificationProcessor {
         // Create notification in database with proper DTO structure
         const createDto: CreateNotificationDto = {
           ...finalNotification,
-          recipientId: userId,
+          recipientId: userId.toString(),
           priority,
           metadata: {
             ...finalNotification.metadata,

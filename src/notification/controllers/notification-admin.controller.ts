@@ -228,7 +228,7 @@ export class NotificationAdminController {
         'System notification created successfully',
         {
           jobId,
-          recipientId: createDto.recipientId.toString(),
+          recipientId: createDto.recipientId,
         },
       );
     } catch (error) {
@@ -676,7 +676,7 @@ export class NotificationAdminController {
       const baseNotification: CreateNotificationDto = {
         type: 'custom' as any,
         priority: (priority as any) || 'medium',
-        recipientId: new Types.ObjectId(recipientId),
+        recipientId: recipientId,
         content: {
           type: 'template' as any,
           data: {
