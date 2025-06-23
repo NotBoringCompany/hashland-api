@@ -5,6 +5,7 @@ import {
   IsObject,
   IsArray,
   ValidateNested,
+  IsMongoId,
   IsNumber,
   IsDateString,
 } from 'class-validator';
@@ -127,7 +128,7 @@ export class NotificationTargetDto {
   })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @IsMongoId({ each: true })
   @Transform(
     ({ value }) => value?.map((id: string) => new Types.ObjectId(id)),
     { toClassOnly: true },
@@ -223,7 +224,7 @@ export class CreateNotificationDto {
     description: 'The recipient user ID',
     example: '507f1f77bcf86cd799439012',
   })
-  @IsString()
+  @IsMongoId()
   @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
   recipientId: Types.ObjectId;
 
@@ -232,7 +233,7 @@ export class CreateNotificationDto {
     example: '507f1f77bcf86cd799439013',
   })
   @IsOptional()
-  @IsString()
+  @IsMongoId()
   @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
     toClassOnly: true,
   })
@@ -270,7 +271,7 @@ export class CreateNotificationDto {
     example: '507f1f77bcf86cd799439014',
   })
   @IsOptional()
-  @IsString()
+  @IsMongoId()
   @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
     toClassOnly: true,
   })
@@ -327,7 +328,7 @@ export class CreateBulkNotificationDto {
     example: '507f1f77bcf86cd799439013',
   })
   @IsOptional()
-  @IsString()
+  @IsMongoId()
   @Transform(({ value }) => (value ? new Types.ObjectId(value) : undefined), {
     toClassOnly: true,
   })
