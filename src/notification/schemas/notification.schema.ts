@@ -131,37 +131,13 @@ export class Notification extends Document {
     },
   })
   @Prop({
-    type: {
-      type: {
-        type: String,
-        enum: NotificationContentType,
-      },
+    type: Object,
+    default: {
+      type: NotificationContentType.TEXT,
       data: {
-        title: { type: String },
-        message: { type: String },
-        metadata: { type: Map, of: String, default: {} },
-        actions: [
-          {
-            id: { type: String },
-            label: { type: String },
-            type: {
-              type: String,
-              enum: ['button', 'link', 'dismiss'],
-            },
-            url: { type: String },
-            action: { type: String },
-            style: {
-              type: String,
-              enum: ['primary', 'secondary', 'danger', 'success'],
-            },
-          },
-        ],
-        template: {
-          templateId: { type: String },
-          variables: { type: Map, of: String, default: {} },
-        },
-        imageUrl: { type: String },
-        iconUrl: { type: String },
+        title: '',
+        message: '',
+        metadata: {},
       },
     },
   })
