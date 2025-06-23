@@ -116,7 +116,7 @@ export class NotificationGateway
   }
 
   /**
-   * Mark a single notification as read
+   * Mark a notification as read
    */
   @SubscribeMessage('mark-notification-read')
   async handleMarkNotificationRead(
@@ -127,10 +127,8 @@ export class NotificationGateway
       const userId = await this.getUserIdFromClient(client);
       if (!userId) return;
 
-      const notificationId = new Types.ObjectId(data.notificationId);
-
       const result = await this.notificationService.markAsRead(userId, {
-        notificationIds: [notificationId],
+        notificationIds: [data.notificationId],
       });
 
       if (result.modifiedCount > 0) {
@@ -142,7 +140,10 @@ export class NotificationGateway
         client.emit('notification-read', response);
 
         // Track read analytics
-        await this.analyticsService.trackRead(notificationId, userId);
+        await this.analyticsService.trackRead(
+          new Types.ObjectId(data.notificationId),
+          userId,
+        );
 
         // Update unread count
         await this.gatewayService.updateUnreadCountForUser(this.server, userId);
@@ -183,9 +184,7 @@ export class NotificationGateway
       };
 
       if (data.notificationIds?.length) {
-        markReadDto.notificationIds = data.notificationIds.map(
-          (id) => new Types.ObjectId(id),
-        );
+        markReadDto.notificationIds = data.notificationIds;
       }
 
       if (data.createdBefore) {
@@ -241,8 +240,10 @@ export class NotificationGateway
       const userId = await this.getUserIdFromClient(client);
       if (!userId) return;
 
-      const notificationId = new Types.ObjectId(data.notificationId);
-      await this.notificationService.delete(notificationId, userId);
+      await this.notificationService.delete(
+        new Types.ObjectId(data.notificationId),
+        userId,
+      );
 
       const response: NotificationDeletedResponse = {
         notificationId: data.notificationId,
@@ -306,13 +307,17 @@ export class NotificationGateway
       const userId = await this.getUserIdFromClient(client);
       if (!userId) return;
 
-      const notificationId = new Types.ObjectId(data.notificationId);
-
       // Track analytics properly using the analytics service
       if (data.actionType === 'click') {
-        await this.analyticsService.trackClick(notificationId, userId);
+        await this.analyticsService.trackClick(
+          new Types.ObjectId(data.notificationId),
+          userId,
+        );
       } else if (data.actionType === 'conversion') {
-        await this.analyticsService.trackConversion(notificationId, userId);
+        await this.analyticsService.trackConversion(
+          new Types.ObjectId(data.notificationId),
+          userId,
+        );
       }
 
       this.logger.debug(

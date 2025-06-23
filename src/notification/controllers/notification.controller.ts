@@ -571,7 +571,7 @@ export class NotificationController {
       // Override recipient to current user
       const testNotification = {
         ...createDto,
-        recipientId: userId,
+        recipientId: userId.toString(),
       };
 
       const jobId =
