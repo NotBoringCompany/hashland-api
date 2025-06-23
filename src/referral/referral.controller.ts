@@ -62,7 +62,7 @@ export class ReferralController {
   async getUserReferralData(
     @Request() req,
   ): Promise<ApiResponse<ReferralStatsResponseDto>> {
-    const operatorId = new Types.ObjectId(req.user.userId);
+    const operatorId = new Types.ObjectId(req.user.operatorId);
     return this.referralService.getReferralStats(operatorId);
   }
 
@@ -169,7 +169,7 @@ export class ReferralController {
   ): Promise<ApiResponse<StarterCodeResponseDto>> {
     // If createdBy is not provided, use the authenticated user
     if (!createStarterCodeDto.createdBy) {
-      createStarterCodeDto.createdBy = req.user.userId;
+      createStarterCodeDto.createdBy = req.user.operatorId;
     }
     return this.referralService.createStarterCode(createStarterCodeDto);
   }
@@ -229,7 +229,7 @@ export class ReferralController {
   ): Promise<ApiResponse<{ success: boolean }>> {
     // If operatorId is not provided, use the authenticated user
     if (!useStarterCodeDto.operatorId) {
-      useStarterCodeDto.operatorId = req.user.userId;
+      useStarterCodeDto.operatorId = req.user.operatorId;
     }
     return this.referralService.useStarterCode(useStarterCodeDto);
   }

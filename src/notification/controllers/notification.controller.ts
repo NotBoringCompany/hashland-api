@@ -101,7 +101,7 @@ export class NotificationController {
     @Query() filterDto: NotificationFilterDto,
   ): Promise<PaginatedResponse<Notification>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
       const result = await this.notificationService.findAll(userId, filterDto);
 
       this.logger.log(
@@ -120,7 +120,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to get notifications for user ${req.user.userId}: ${error.message}`,
+        `Failed to get notifications for user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -155,7 +155,7 @@ export class NotificationController {
     @Param('id') id: string,
   ): Promise<ApiResponse<Notification>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
       const notificationId = new Types.ObjectId(id);
 
       const notification = await this.notificationService.findOne(
@@ -174,7 +174,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to get notification ${id} for user ${req.user.userId}: ${error.message}`,
+        `Failed to get notification ${id} for user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -203,7 +203,7 @@ export class NotificationController {
     ApiResponse<{ modifiedCount: number; notifications: Notification[] }>
   > {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
       const result = await this.notificationService.markAsRead(
         userId,
         markReadDto,
@@ -228,7 +228,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to mark notifications as read for user ${req.user.userId}: ${error.message}`,
+        `Failed to mark notifications as read for user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -253,7 +253,7 @@ export class NotificationController {
     @Request() req: any,
   ): Promise<ApiResponse<{ modifiedCount: number }>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
       const markAllDto: MarkNotificationsReadDto = { markAll: true };
 
       const result = await this.notificationService.markAsRead(
@@ -272,7 +272,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to mark all notifications as read for user ${req.user.userId}: ${error.message}`,
+        `Failed to mark all notifications as read for user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -307,7 +307,7 @@ export class NotificationController {
     @Param('id') id: string,
   ): Promise<ApiResponse<null>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
       const notificationId = new Types.ObjectId(id);
 
       await this.notificationService.delete(notificationId, userId);
@@ -320,7 +320,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to delete notification ${id} for user ${req.user.userId}: ${error.message}`,
+        `Failed to delete notification ${id} for user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -357,7 +357,7 @@ export class NotificationController {
     @Query() countDto: UnreadCountDto,
   ): Promise<ApiResponse<any>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
       const result = await this.notificationService.getUnreadCount(
         userId,
         countDto,
@@ -374,7 +374,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to get unread count for user ${req.user.userId}: ${error.message}`,
+        `Failed to get unread count for user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -419,7 +419,7 @@ export class NotificationController {
     @Query() filterDto: NotificationFilterDto,
   ): Promise<PaginatedResponse<Notification>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
 
       // Override to include read notifications for history
       const historyFilter = {
@@ -449,7 +449,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to get notification history for user ${req.user.userId}: ${error.message}`,
+        `Failed to get notification history for user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -480,7 +480,7 @@ export class NotificationController {
     @Param('id') id: string,
   ): Promise<ApiResponse<null>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
       const notificationId = new Types.ObjectId(id);
 
       await this.analyticsService.trackClick(notificationId, userId);
@@ -492,7 +492,7 @@ export class NotificationController {
       return new ApiResponse(HttpStatus.OK, 'Click tracked successfully', null);
     } catch (error) {
       this.logger.error(
-        `Failed to track click for notification ${id} by user ${req.user.userId}: ${error.message}`,
+        `Failed to track click for notification ${id} by user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -523,7 +523,7 @@ export class NotificationController {
     @Param('id') id: string,
   ): Promise<ApiResponse<null>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
       const notificationId = new Types.ObjectId(id);
 
       await this.analyticsService.trackConversion(notificationId, userId);
@@ -539,7 +539,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to track conversion for notification ${id} by user ${req.user.userId}: ${error.message}`,
+        `Failed to track conversion for notification ${id} by user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
@@ -566,7 +566,7 @@ export class NotificationController {
     @Body() createDto: CreateNotificationDto,
   ): Promise<ApiResponse<{ jobId: string; recipientId: string }>> {
     try {
-      const userId = new Types.ObjectId(req.user.userId);
+      const userId = new Types.ObjectId(req.user.operatorId);
 
       // Override recipient to current user
       const testNotification = {
@@ -591,7 +591,7 @@ export class NotificationController {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to send test notification to user ${req.user.userId}: ${error.message}`,
+        `Failed to send test notification to user ${req.user.operatorId}: ${error.message}`,
         error.stack,
       );
       throw error;
