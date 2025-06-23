@@ -5,7 +5,6 @@ import {
   IsBoolean,
   IsNumber,
   IsDateString,
-  IsMongoId,
   IsArray,
   Min,
   Max,
@@ -82,7 +81,7 @@ export class NotificationFilterDto {
     example: '507f1f77bcf86cd799439013',
   })
   @IsOptional()
-  @IsMongoId()
+  @IsString()
   @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
   senderId?: Types.ObjectId;
 
@@ -91,7 +90,7 @@ export class NotificationFilterDto {
     example: '507f1f77bcf86cd799439014',
   })
   @IsOptional()
-  @IsMongoId()
+  @IsString()
   @Transform(({ value }) => new Types.ObjectId(value), { toClassOnly: true })
   relatedEntityId?: Types.ObjectId;
 
@@ -249,7 +248,7 @@ export class MarkNotificationsReadDto {
   })
   @IsOptional()
   @IsArray()
-  @IsMongoId({ each: true })
+  @IsString({ each: true })
   @Transform(
     ({ value }) => value?.map((id: string) => new Types.ObjectId(id)),
     { toClassOnly: true },
