@@ -12,23 +12,16 @@ import { Logger, OnModuleInit } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { NotificationService } from '../services/notification.service';
 import { NotificationGatewayService } from '../services/notification-gateway.service';
-import { NotificationPreferenceService } from '../services/notification-preference.service';
 import { NotificationAnalyticsService } from '../services/notification-analytics.service';
 import {
   MarkNotificationReadRequest,
   MarkNotificationsReadRequest,
   DeleteNotificationRequest,
   TrackNotificationActionRequest,
-  UpdatePreferencesRequest,
   NotificationErrorResponse,
   NotificationReadResponse,
   NotificationDeletedResponse,
-  UserPreferencesUpdatedResponse,
 } from '../types/notification-websocket.types';
-import {
-  NotificationChannel,
-  NotificationPriority,
-} from '../types/notification.types';
 
 /**
  * WebSocket Gateway for handling real-time notification delivery and interactions
@@ -56,7 +49,6 @@ export class NotificationGateway
   constructor(
     private readonly notificationService: NotificationService,
     private readonly gatewayService: NotificationGatewayService,
-    private readonly preferenceService: NotificationPreferenceService,
     private readonly analyticsService: NotificationAnalyticsService,
   ) {}
 
@@ -332,148 +324,6 @@ export class NotificationGateway
         error: 'TRACK_ACTION_ERROR',
         message: 'Failed to track notification action',
         code: 'TRACK_001',
-        details: error.message,
-      } as NotificationErrorResponse);
-    }
-  }
-
-  /**
-   * Update user notification preferences
-   */
-  @SubscribeMessage('update-preferences')
-  async handleUpdatePreferences(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: UpdatePreferencesRequest,
-  ): Promise<void> {
-    try {
-      const userId = await this.getUserIdFromClient(client);
-      if (!userId) return;
-
-      // Get current preferences or create default
-      let preferences = await this.preferenceService.findByUserId(userId);
-      if (!preferences) {
-        preferences = await this.preferenceService.create({
-          userId,
-          globalSettings: {
-            enabled: true,
-            maxPerDay: 50,
-            batchDelivery: false,
-            markAsReadOnView: true,
-          },
-          typePreferences: [],
-          quietHours: {
-            enabled: false,
-            startTime: '22:00',
-            endTime: '08:00',
-            timezone: 'UTC',
-            overrideForCritical: true,
-          },
-        });
-      }
-
-      // Update preferences based on request
-      if (typeof data.enabled !== 'undefined') {
-        preferences.globalSettings.enabled = data.enabled;
-      }
-
-      if (data.types?.length) {
-        for (const typeUpdate of data.types) {
-          const existingIndex = preferences.typePreferences.findIndex(
-            (pref) => pref.type === typeUpdate.type,
-          );
-
-          if (existingIndex >= 0) {
-            preferences.typePreferences[existingIndex].enabled =
-              typeUpdate.enabled;
-            if (typeUpdate.channels) {
-              preferences.typePreferences[existingIndex].channels =
-                typeUpdate.channels;
-            }
-          } else {
-            preferences.typePreferences.push({
-              type: typeUpdate.type,
-              enabled: typeUpdate.enabled,
-              channels: typeUpdate.channels || [NotificationChannel.IN_APP],
-              minPriority: NotificationPriority.LOW,
-            });
-          }
-        }
-      }
-
-      if (data.quietHours) {
-        preferences.quietHours = {
-          ...preferences.quietHours,
-          ...data.quietHours,
-          timezone: data.quietHours.timezone || preferences.quietHours.timezone,
-        };
-      }
-
-      await preferences.save();
-
-      const response: UserPreferencesUpdatedResponse = {
-        userId: userId.toString(),
-        preferences: {
-          globalSettings: preferences.globalSettings,
-          typePreferences: preferences.typePreferences,
-          quietHours: preferences.quietHours,
-        },
-      };
-
-      client.emit('preferences-updated', response);
-
-      this.logger.debug(`Preferences updated for user ${userId}`);
-    } catch (error) {
-      this.logger.error(
-        `Error updating preferences: ${error.message}`,
-        error.stack,
-      );
-      client.emit('error', {
-        error: 'PREFERENCES_UPDATE_ERROR',
-        message: 'Failed to update preferences',
-        code: 'PREF_001',
-        details: error.message,
-      } as NotificationErrorResponse);
-    }
-  }
-
-  /**
-   * Get user notification preferences
-   */
-  @SubscribeMessage('get-preferences')
-  async handleGetPreferences(@ConnectedSocket() client: Socket): Promise<void> {
-    try {
-      const userId = await this.getUserIdFromClient(client);
-      if (!userId) return;
-
-      const preferences = await this.preferenceService.findByUserId(userId);
-
-      if (preferences) {
-        const response: UserPreferencesUpdatedResponse = {
-          userId: userId.toString(),
-          preferences: {
-            globalSettings: preferences.globalSettings,
-            typePreferences: preferences.typePreferences,
-            quietHours: preferences.quietHours,
-          },
-        };
-
-        client.emit('preferences', response);
-      } else {
-        client.emit('error', {
-          error: 'PREFERENCES_NOT_FOUND',
-          message: 'User preferences not found',
-          code: 'PREF_002',
-        } as NotificationErrorResponse);
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error getting preferences: ${error.message}`,
-        error.stack,
-      );
-      client.emit('error', {
-        error: 'PREFERENCES_GET_ERROR',
-        message: 'Failed to get preferences',
-        code: 'PREF_003',
         details: error.message,
       } as NotificationErrorResponse);
     }

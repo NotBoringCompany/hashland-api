@@ -7,7 +7,6 @@ import { NotificationTemplateService } from './services/notification-template.se
 import { NotificationTemplateEngineService } from './services/notification-template-engine.service';
 import { NotificationGatewayService } from './services/notification-gateway.service';
 import { NotificationAnalyticsService } from './services/notification-analytics.service';
-import { NotificationPreferenceService } from './services/notification-preference.service';
 import { NotificationDispatcherService } from './services/notification-dispatcher.service';
 import { NotificationQueueMonitorService } from './services/notification-queue-monitor.service';
 import { NotificationGateway } from './gateways/notification.gateway';
@@ -24,10 +23,6 @@ import {
   NotificationTemplate,
   NotificationTemplateSchema,
 } from './schemas/notification-template.schema';
-import {
-  NotificationPreference,
-  NotificationPreferenceSchema,
-} from './schemas/notification-preference.schema';
 import { RedisModule } from 'src/common/redis.module';
 import { JwtModule } from '@nestjs/jwt';
 
@@ -39,10 +34,6 @@ import { JwtModule } from '@nestjs/jwt';
     MongooseModule.forFeature([
       { name: Notification.name, schema: NotificationSchema },
       { name: NotificationTemplate.name, schema: NotificationTemplateSchema },
-      {
-        name: NotificationPreference.name,
-        schema: NotificationPreferenceSchema,
-      },
     ]),
     BullModule.registerQueue({
       name: 'notification',
@@ -79,7 +70,6 @@ import { JwtModule } from '@nestjs/jwt';
     NotificationGateway,
     NotificationGatewayService,
     NotificationAnalyticsService,
-    NotificationPreferenceService,
     NotificationDispatcherService,
     NotificationQueueMonitorService,
     NotificationProcessor,
@@ -91,7 +81,6 @@ import { JwtModule } from '@nestjs/jwt';
     NotificationGateway,
     NotificationGatewayService,
     NotificationAnalyticsService,
-    NotificationPreferenceService,
     NotificationDispatcherService,
     NotificationQueueMonitorService,
   ],

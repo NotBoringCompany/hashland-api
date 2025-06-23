@@ -7,7 +7,6 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types, FilterQuery } from 'mongoose';
 import { Notification } from '../schemas/notification.schema';
-import { NotificationPreference } from '../schemas/notification-preference.schema';
 import {
   CreateNotificationDto,
   CreateBulkNotificationDto,
@@ -57,8 +56,6 @@ export class NotificationService {
   constructor(
     @InjectModel(Notification.name)
     private readonly notificationModel: Model<Notification>,
-    @InjectModel(NotificationPreference.name)
-    private readonly preferenceModel: Model<NotificationPreference>,
   ) {}
 
   /**
@@ -83,18 +80,6 @@ export class NotificationService {
       const relatedEntityId = createNotificationDto.relatedEntityId
         ? this.parseObjectId(createNotificationDto.relatedEntityId)
         : undefined;
-
-      // Check user preferences
-      const preferences = await this.getUserPreferences(recipientId);
-
-      if (!this.shouldSendNotification(createNotificationDto, preferences)) {
-        this.logger.warn(
-          `Notification blocked by user preferences: ${createNotificationDto.recipientId}`,
-        );
-        throw new BadRequestException(
-          'Notification blocked by user preferences',
-        );
-      }
 
       // Set default channels if not provided
       const channels = createNotificationDto.channels || [
@@ -581,64 +566,6 @@ export class NotificationService {
     }
 
     return query;
-  }
-
-  /**
-   * Get user notification preferences
-   */
-  private async getUserPreferences(
-    userId: Types.ObjectId,
-  ): Promise<NotificationPreference | null> {
-    return this.preferenceModel.findOne({ userId }).exec();
-  }
-
-  /**
-   * Check if notification should be sent based on user preferences
-   */
-  private shouldSendNotification(
-    notificationDto: CreateNotificationDto,
-    preferences: NotificationPreference | null,
-  ): boolean {
-    if (!preferences || !preferences.globalSettings.enabled) {
-      return false;
-    }
-
-    const typePreference = preferences.typePreferences.find(
-      (pref) => pref.type === notificationDto.type,
-    );
-
-    if (typePreference && !typePreference.enabled) {
-      return false;
-    }
-
-    // Check quiet hours
-    if (preferences.quietHours.enabled) {
-      const now = new Date();
-      // Simplified quiet hours check (would need proper timezone handling)
-      const currentHour = now.getUTCHours();
-      const startHour = parseInt(
-        preferences.quietHours.startTime.split(':')[0],
-      );
-      const endHour = parseInt(preferences.quietHours.endTime.split(':')[0]);
-
-      if (
-        (startHour <= endHour &&
-          currentHour >= startHour &&
-          currentHour < endHour) ||
-        (startHour > endHour &&
-          (currentHour >= startHour || currentHour < endHour))
-      ) {
-        // Check if this is a critical notification that overrides quiet hours
-        if (
-          notificationDto.priority !== NotificationPriority.CRITICAL ||
-          !preferences.quietHours.overrideForCritical
-        ) {
-          return false;
-        }
-      }
-    }
-
-    return true;
   }
 
   /**
