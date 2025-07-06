@@ -21,6 +21,7 @@ import { AdminModule } from './admin/admin.module';
 import { MixpanelModule } from './mixpanel/mixpanel.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { AuctionModule } from './auction/auction.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { AuctionModule } from './auction/auction.module';
     AdminModule,
     MixpanelModule,
     TelegramModule,
+    NotificationModule,
     AuctionModule,
   ],
   controllers: [AppController],

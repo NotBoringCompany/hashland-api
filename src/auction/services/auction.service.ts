@@ -28,6 +28,9 @@ import { OperatorService } from 'src/operators/operator.service';
 // Queue service
 import { BidQueueService } from '../services/bid-queue.service';
 
+// Notification service
+// import { AuctionNotificationService } from '../services/auction-notification.service';
+
 // DTOs
 import { GetAuctionHistoryQueryDto } from '../dto/get-auction-history-query.dto';
 
@@ -48,6 +51,8 @@ export class AuctionService {
     @InjectModel(NFT.name) private nftModel: Model<NFT>,
     private operatorService: OperatorService,
     private bidQueueService: BidQueueService,
+    // @Inject(forwardRef(() => AuctionNotificationService))
+    // private auctionNotificationService: AuctionNotificationService,
   ) {}
 
   /**
@@ -551,8 +556,14 @@ export class AuctionService {
 
       // Update auction if this is the highest bid
       if (amount > auction.currentHighestBid) {
-        // Mark previous winner's bid as outbid
+        // Mark previous winner's bid as outbid and notify them
         if (auction.currentWinner) {
+          const previousWinningBid = await this.bidModel.findOne({
+            auctionId,
+            bidderId: auction.currentWinner,
+            status: BidStatus.WINNING,
+          });
+
           await this.bidModel.updateMany(
             {
               auctionId,
@@ -569,6 +580,17 @@ export class AuctionService {
             AuctionAction.BID_OUTBID,
             { amount: auction.currentHighestBid, newAmount: amount },
           );
+
+          // Notify the outbid user
+          if (previousWinningBid) {
+            // await this.auctionNotificationService.notifyBidOutbid(
+            //   auction.currentWinner,
+            //   auctionId.toString(),
+            //   previousWinningBid,
+            //   bid,
+            //   auction,
+            // );
+          }
         }
 
         // Update auction
@@ -635,6 +657,13 @@ export class AuctionService {
 
       // Process winner if there is one
       if (auction.currentWinner) {
+        // Get the winning bid
+        const winningBid = await this.bidModel.findOne({
+          auctionId,
+          bidderId: auction.currentWinner,
+          status: BidStatus.WINNING,
+        });
+
         // Record auction won
         await this.recordHistory(
           auctionId,
@@ -642,6 +671,16 @@ export class AuctionService {
           AuctionAction.AUCTION_WON,
           { amount: auction.currentHighestBid },
         );
+
+        // Notify the winner
+        if (winningBid) {
+          // await this.auctionNotificationService.notifyAuctionWon(
+          //   auction.currentWinner,
+          //   auctionId.toString(),
+          //   auction,
+          //   winningBid,
+          // );
+        }
 
         // Transfer HASH from hold to deducted for winner
         // This would be handled by the payment processing system
