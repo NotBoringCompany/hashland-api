@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { HashbearService } from './hashbear.service';
 import { ConfigService } from '@nestjs/config';
@@ -21,43 +21,6 @@ export class HashbearController {
     @Body('adminPassword') adminPassword: string,
     @Body('count') count: number,
   ) {
-    if (adminPassword !== this.configService.get('ADMIN_PASSWORD')) {
-      throw new UnauthorizedException(
-        '(generateCollection) Invalid admin password',
-      );
-    }
-
-    const results = [];
-
-    for (let tokenId = 1; tokenId <= count; tokenId++) {
-      try {
-        // Generate traits
-        const traits = await this.hashbearService.generateHashbear();
-
-        // Composite image
-        const imagePath = await this.hashbearService.compositeHashbear(
-          traits,
-          tokenId,
-        );
-
-        // // Generate and save metadata
-        // const metadata = this.hashbearService.generateMetadata(traits, tokenId);
-        // this.hashbearService.saveMetadata(metadata, tokenId);
-
-        results.push({
-          tokenId,
-          traits,
-          imagePath,
-          // metadata,
-        });
-      } catch (error) {
-        console.error(`Failed to generate token ${tokenId}:`, error);
-      }
-    }
-
-    return {
-      message: `Generated ${results.length} Hashbear NFTs`,
-      results,
-    };
+    return this.hashbearService.generateCollection(adminPassword, count);
   }
 }

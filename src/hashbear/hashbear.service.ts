@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { createCanvas, loadImage } from 'canvas';
 import path from 'path';
 import {
@@ -25,6 +30,52 @@ export class HashbearService {
   private readonly logger = new Logger(HashbearService.name);
   private readonly assetsPath = path.join(__dirname, '../../assets');
   private readonly outputPath = path.join(__dirname, '../../assets/output');
+
+  async generateCollection(
+    adminPassword: string,
+    count: number,
+  ): Promise<{ message: string; results: any[] }> {
+    if (adminPassword !== process.env.ADMIN_PASSWORD) {
+      throw new UnauthorizedException(
+        '(generateCollection) Invalid admin password',
+      );
+    }
+
+    const results = [];
+
+    for (let tokenId = 1; tokenId <= count; tokenId++) {
+      try {
+        // Generate traits
+        const traits = await this.generateHashbear();
+
+        // Composite image
+        const imagePath = await this.compositeHashbear(traits, tokenId);
+
+        // Generate and save metadata
+        const metadata = this.generateMetadata(traits, tokenId);
+        this.saveMetadata(metadata, tokenId);
+
+        results.push({
+          tokenId,
+          traits,
+          imagePath,
+          metadata,
+        });
+      } catch (error) {
+        this.logger.error(`Failed to generate token ${tokenId}:`, error);
+        throw new BadRequestException(
+          `(generateCollection)Failed to generate token ${tokenId}: ${error.message}`,
+        );
+      }
+    }
+
+    this.logger.log(`Generated ${results.length} Hashbear NFTs`);
+
+    return {
+      message: `Generated ${results.length} Hashbear NFTs`,
+      results,
+    };
+  }
 
   /**
    * Composites the various layers of a Hashbear NFT.
