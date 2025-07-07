@@ -1,11 +1,15 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, UnauthorizedException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { HashbearService } from './hashbear.service';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('Hashbear')
 @Controller('hashbear')
 export class HashbearController {
-  constructor(private readonly hashbearService: HashbearService) {}
+  constructor(
+    private readonly hashbearService: HashbearService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @ApiOperation({
     summary: 'Generate a collection of Hashbear NFTs',
@@ -13,7 +17,16 @@ export class HashbearController {
       'Generates a specified number of Hashbear NFTs with unique traits and composite images.',
   })
   @Post('generate-collection')
-  async generateCollection(@Body() { count }: { count: number }) {
+  async generateCollection(
+    @Body('adminPassword') adminPassword: string,
+    @Body('count') count: number,
+  ) {
+    if (adminPassword !== this.configService.get('ADMIN_PASSWORD')) {
+      throw new UnauthorizedException(
+        '(generateCollection) Invalid admin password',
+      );
+    }
+
     const results = [];
 
     for (let tokenId = 1; tokenId <= count; tokenId++) {
